@@ -2,6 +2,14 @@
 
 基于 LangGraph 的企业级 RAG 问答系统，支持多文档管理、Hybrid Search、Rerank 和 Agent 工具调用。
 
+## 项目状态文档
+
+- [完整交接包](HANDOFF.md)
+- [当前状态](STATUS.md)
+- [技术决策](DECISIONS.md)
+- [后续任务](TODO.md)
+- [架构说明](docs/architecture.md)
+
 ## 技术栈
 
 | 层级 | 技术 |
@@ -109,6 +117,8 @@ docker-compose up -d
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+Copy-Item .env.example .env
+# 编辑 .env，只把真实 DeepSeek Key 写入 LLM_API_KEY
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
 ```
 
@@ -123,14 +133,18 @@ python -m venv .venv
 | 方法与路径 | 输入 | 当前响应 |
 |------------|------|----------|
 | `GET /health` | 无 | `200 {"status": "ok"}` |
-| `POST /chat` | `{"message": "..."}` | `501 Not Implemented`，Day 3 实现 |
+| `POST /chat` | `{"message": "...", "stream": false}` | 完整 JSON 回答 |
+| `POST /chat` | `{"message": "...", "stream": true}` | SSE 流式回答，结束标记为 `[DONE]` |
 | `POST /documents/upload` | 无 | `501 Not Implemented`，Day 4 实现 |
+
+LLM 使用 OpenAI-compatible 接口。当前默认配置为 `deepseek-v4-flash`，
+并通过 `LLM_EXTRA_BODY` 关闭思考模式；真实 `LLM_API_KEY` 只写入本地 `.env`。
 
 ## TODO
 
 - [x] 项目初始化，目录结构
 - [x] FastAPI 后端骨架
-- [ ] 接入 LLM API（流式输出）
+- [x] 接入 LLM API（流式输出）
 - [ ] 文档上传与解析（PDF / MD / TXT）
 - [ ] 文本切分（RecursiveCharacterTextSplitter）
 - [ ] Embedding 生成（批量 + 重试）

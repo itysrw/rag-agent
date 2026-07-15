@@ -79,11 +79,11 @@ rag-agent/
 
 ### Day 3 — 接入大模型 API
 
-- [ ] 选定模型：DeepSeek / 通义千问 / OpenAI（任选，都是 OpenAI-compatible）
-- [ ] 封装 `LLMClient`，支持同步和流式输出
-- [ ] `/chat` 接口能正常返回模型回答
-- [ ] 实现流式输出（SSE 或 streaming response）
-- [ ] 写单元测试验证流式和非流式
+- [x] 选定模型：DeepSeek / 通义千问 / OpenAI（任选，都是 OpenAI-compatible）
+- [x] 封装 `LLMClient`，支持同步和流式输出
+- [x] `/chat` 接口能正常返回模型回答
+- [x] 实现流式输出（SSE 或 streaming response）
+- [x] 写单元测试验证流式和非流式
 
 **产出**：`/chat` 可以对话，支持流式返回
 
@@ -378,7 +378,7 @@ rag-agent/
 |----|---------|------|
 | Day 1 | 已完成 | 已完成边界、目录、README、Mermaid 架构图与 GitHub 远端配置 |
 | Day 2 | 已完成 | 三个固定路由、应用配置与 Loguru 已实现；真实 HTTP 验收通过，pytest 1 passed |
-| Day 3 | | |
+| Day 3 | 已完成 | DeepSeek OpenAI-compatible JSON/SSE 链路已实现；错误分层与流关闭测试通过，pytest 12 passed、1 warning，真实 JSON/SSE API 均返回 200 |
 | Day 4 | | |
 | Day 5 | | |
 | Day 6 | | |

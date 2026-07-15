@@ -1,0 +1,98 @@
+# 技术决策记录
+
+更新时间：2026-07-15（America/New_York）
+
+## D-001：以 25 天计划控制范围
+
+- 状态：已确认
+- 决策：`PLAN.md` 是每日范围和顺序的唯一计划基线。
+- 原因：避免在早期同时引入数据库、检索、Agent 和前端，确保每个阶段可验收。
+- 影响：未经用户明确要求不得跨 Day 实现；未经明确授权不得修改 `PLAN.md`。
+
+## D-002：Day 2 起使用模块化 FastAPI 结构
+
+- 状态：已确认
+- 决策：入口位于 `backend/app/main.py`，路由位于 `backend/app/api/`，配置位于
+  `backend/app/core/`，服务位于 `backend/app/services/`。
+- 原因：后续 LLM、文档、检索和 Agent 可独立演进，避免所有逻辑堆积在 `main.py`。
+
+## D-003：Day 3 只接 DeepSeek
+
+- 状态：已确认
+- 决策：Day 3 不同时接入 OpenAI API 或通义千问。
+- 原因：用户已有 DeepSeek 额度；一次只验证一个供应商可降低配置、计费和测试复杂度。
+- 已否决：Day 3 同时接 DeepSeek 和千问。
+
+## D-004：使用 `deepseek-v4-flash`
+
+- 状态：已确认
+- 决策：模型名为 `deepseek-v4-flash`，Base URL 为 `https://api.deepseek.com`。
+- 原因：DeepSeek 官方说明 `deepseek-chat` 和 `deepseek-reasoner` 将于北京时间
+  2026-07-24 23:59 停用；V4 Flash 成本低、支持兼容接口、流式和工具调用。
+- 已否决：继续使用 `.env.example` 原来的 `deepseek-chat`。
+
+## D-005：Day 3 默认关闭 DeepSeek 思考模式
+
+- 状态：已确认
+- 决策：`LLM_EXTRA_BODY={"thinking":{"type":"disabled"}}`。
+- 原因：Day 3 的目标是普通对话和 SSE；默认思考会增加 `reasoning_content`、解析复杂度、延迟和费用。
+- 影响：以后需要推理时可通过配置启用，不应改写客户端。
+
+## D-006：LLM 客户端保持 OpenAI-compatible
+
+- 状态：已确认
+- 决策：`LLMClient` 使用 OpenAI Python SDK 的 `chat.completions.create`，只依赖
+  API Key、Base URL、model、timeout 和不透明 `extra_body`。
+- 原因：未来切换通义千问或 OpenAI-compatible 服务时不重写客户端。
+- 禁止：在 `LLMClient` 中根据 `provider == "deepseek"` 编写分支。
+
+## D-007：同一个 `/chat` 支持两种响应模式
+
+- 状态：已确认
+- 决策：`stream=false` 返回完整 JSON，`stream=true` 返回 SSE。
+- 原因：保持接口数量小，并直接满足 Day 3 的非流式和流式要求。
+- SSE 契约：增量为 `data: {"delta":"..."}`，最终为 `data: [DONE]`。
+
+## D-008：同步 SDK 调用运行在 FastAPI 同步路由中
+
+- 状态：已确认
+- 决策：`chat()` 使用普通 `def`；FastAPI 在线程池运行同步路由。
+- 原因：OpenAI-compatible 同步 SDK 足够满足 Day 3，避免阻塞事件循环，也不提前引入异步客户端双实现。
+
+## D-009：配置和上游错误不得泄露供应商细节
+
+- 状态：已确认
+- 决策：缺少 Key 返回通用 `503`；普通上游失败返回通用 `502`；流错误返回通用 SSE error。
+- 原因：避免将凭据、供应商响应体或内部异常暴露给调用方。
+
+## D-010：真实 API 与单元测试分离
+
+- 状态：已确认
+- 决策：pytest 使用 `StubLLMClient` 和 fake SDK，不消耗外部额度；真实 DeepSeek 调用是独立验收步骤。
+- 原因：测试必须稳定、快速、可离线运行，不能依赖账户余额或网络。
+
+## D-011：ChatGPT Plus 不等于 OpenAI API 额度
+
+- 状态：已确认
+- 决策：当前 ChatGPT Plus 仅作为开发辅助，不作为项目后端 API 来源。
+- 原因：ChatGPT 与 OpenAI API 分开管理和计费；用户尚未确认 OpenAI API 余额。
+
+## D-012：Day 6 Embedding 供应商延后决定
+
+- 状态：待确认
+- 候选：OpenAI、阿里云百炼/通义千问、本地 `BAAI/bge-small-zh-v1.5`。
+- 原因：当前没有文档语料、运行环境和质量/成本测试，不能提前做可靠选择。
+- 禁止：在 Day 3 提前实现 Embedding。
+
+## D-013：Day 18 千问对比是可选评测亮点
+
+- 状态：待确认
+- 决策候选：在评测阶段增加千问与 DeepSeek 的质量、延迟和成本对比。
+- 原因：通义千问在中文、长文本和阿里云模型生态方面有价值，但现在接入会扩大 Day 3 范围。
+- 禁止：未到 Day 18 且未获确认前实现该对比。
+
+## D-014：阶段检查点必须写入交接文档
+
+- 状态：已确认
+- 决策：每个阶段更新 `STATUS.md`、`HANDOFF.md`、必要时更新 `DECISIONS.md`，并指定唯一下一步。
+- 原因：跨会话时不能依赖聊天记忆推断精确项目状态。
