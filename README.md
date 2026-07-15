@@ -16,30 +16,57 @@
 
 ## 架构图
 
-> TODO: 插入架构图截图
+```mermaid
+flowchart TB
+    user["用户"] --> ui["Streamlit 前端"]
+    ui -->|"上传文档 / 发起问答"| api["FastAPI API"]
 
-```
-用户请求
-    │
-    ▼
-FastAPI 后端
-    │
-    ├─► LangGraph Agent
-    │       ├─► search_knowledge_base
-    │       ├─► get_document_detail
-    │       └─► list_documents
-    │
-    ├─► 检索链路
-    │       ├─► 向量检索 (Qdrant)
-    │       ├─► BM25 关键词检索
-    │       ├─► RRF 融合
-    │       └─► Rerank
-    │
-    └─► LLM 生成 (DeepSeek / OpenAI-compatible)
+    subgraph ingest["文档入库链路"]
+        parser["PDF / Markdown / TXT 解析"] --> splitter["Chunk 切分"]
+        splitter --> embedding["Embedding"]
+        embedding --> vector_store["Qdrant 向量索引"]
+        splitter --> metadata_store["PostgreSQL 文档与 Chunk 元数据"]
+    end
 
-文档处理链路
-文件上传 → 文本解析 → Chunk 切分 → Embedding → 写入 Qdrant + PostgreSQL
+    api --> parser
+    api --> agent["LangGraph Agent"]
+
+    subgraph tools["Agent 工具"]
+        search_tool["search_knowledge_base"]
+        detail_tool["get_document_detail"]
+        list_tool["list_documents"]
+    end
+
+    agent --> search_tool
+    agent --> detail_tool
+    agent --> list_tool
+    detail_tool --> metadata_store
+    list_tool --> metadata_store
+
+    subgraph retrieval["检索与生成链路"]
+        vector_search["Qdrant 向量检索"]
+        bm25["BM25 关键词检索"]
+        rrf["RRF 融合"]
+        rerank["Rerank"]
+        llm["OpenAI-compatible LLM"]
+
+        vector_search --> rrf
+        bm25 --> rrf
+        rrf --> rerank
+        rerank --> llm
+    end
+
+    search_tool --> vector_search
+    search_tool --> bm25
+    vector_store --> vector_search
+    metadata_store --> bm25
+    llm -->|"答案、引用来源、工具轨迹"| api
+    api --> ui
 ```
+
+问答链路：用户问题 → Agent 选择工具 → Hybrid Search → Rerank → LLM 生成带引用答案。
+
+入库链路：上传文件 → 文本解析 → Chunk 切分 → 生成 Embedding → 写入 Qdrant 与 PostgreSQL。
 
 ## 核心功能
 
@@ -61,6 +88,8 @@ FastAPI 后端
 | 评测集大小 | 50 条 |
 
 ## 快速启动
+
+> 当前处于项目初始化阶段，以下命令将在 Docker Compose 完成后可用。
 
 ```bash
 # 复制环境变量

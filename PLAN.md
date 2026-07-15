@@ -31,11 +31,12 @@
 
 ### Day 1 — 项目边界与架构
 
-- [ ] 建 GitHub 仓库，初始化 `.gitignore`
-- [ ] 写 README 初稿（项目介绍、技术栈、TODO list）
-- [ ] 画架构图（draw.io 或 Excalidraw，截图放进 README）
-- [ ] 明确功能边界：文档上传 · 切分 · 向量检索 · RAG 问答 · Agent 工具调用 · 评测 · Docker 部署
-- [ ] 建好目录结构（见下方参考）
+- [x] 初始化本地 Git 仓库和 `.gitignore`
+- [x] 关联 GitHub 远端仓库
+- [x] 写 README 初稿（项目介绍、技术栈、TODO list）
+- [x] 使用 Mermaid 绘制架构图并放入 README
+- [x] 明确功能边界：文档上传 · 切分 · 向量检索 · RAG 问答 · Agent 工具调用 · 评测 · Docker 部署
+- [x] 建好目录结构（见下方参考）
 
 **产出**：README 有架构图和 TODO，目录结构建好
 
@@ -50,9 +51,10 @@ rag-agent/
 │   │   ├── core/         # 配置、日志
 │   │   ├── services/     # LLM、embedding、检索
 │   │   ├── models/       # DB 模型
-│   │   └── agent/        # LangGraph agent
+│   │   ├── agent/        # LangGraph agent
+│   │   └── main.py       # FastAPI 应用入口（Day 2 创建）
 │   ├── tests/
-│   └── main.py
+│   └── requirements.txt  # Python 依赖（Day 2 创建）
 ├── frontend/             # Streamlit
 ├── eval/                 # 评测脚本和数据集
 ├── docker-compose.yml
@@ -374,7 +376,7 @@ rag-agent/
 
 | 天 | 完成情况 | 备注 |
 |----|---------|------|
-| Day 1 | | |
+| Day 1 | 已完成 | 已完成边界、目录、README、Mermaid 架构图与 GitHub 远端配置 |
 | Day 2 | | |
 | Day 3 | | |
 | Day 4 | | |
