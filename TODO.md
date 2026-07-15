@@ -2,53 +2,44 @@
 
 更新时间：2026-07-15（America/New_York）
 
-## P0：当前唯一任务——暂停并等待用户指令
+## P0：报告 Day 4 检查点并等待用户指令
 
-Day 3 代码、12 项测试、真实 DeepSeek 非流式/SSE 验收和本地提交检查点均已完成，提交为 `177ad2b`。当前没有获准继续执行的开发任务。
+Day 4 上传、分页解析、安全存储、PostgreSQL 持久化、真实 PDF 验收和全量回归均已完成。
+`PLAN.md` 已按用户授权同步，Day 4 已形成本地提交检查点，尚未推送。
 
-恢复工作时严格按以下顺序执行：
+当前允许的下一选择均需用户单独明确：
 
-1. 完整阅读 `HANDOFF.md`、`STATUS.md`、`DECISIONS.md`、`TODO.md`、`AGENTS.md`、`README.md` 和当前任务相关代码。
-2. 只读运行 `git status --short --branch` 与 `git log -1 --oneline`。
-3. 预期基线：`master`、HEAD `177ad2b`、无上游跟踪；仅 `HANDOFF.md`、`STATUS.md`、`TODO.md` 为未暂存的交接刷新。
-4. 向用户复述状态、缺失或矛盾信息，并给出最多 5 个步骤。
-5. 等待用户明确选择：提交交接刷新、推送 Day 3、开始 Day 4，或继续暂停。
+1. 推送当前本地检查点并配置上游；
+2. 按 `PLAN.md` 开始 Day 5；
+3. 继续暂停。
 
-当前禁止：未经授权修改代码、提交交接刷新、推送或开始 Day 4。
+当前禁止：自行推送、修改检查点或开始 Day 5。
 
-## Day 3 验收记录
+## Day 4 最终验收记录
 
-- 真实非流式状态码：`200`
-- 真实非流式 model：`deepseek-v4-flash`
-- 真实非流式 answer 是否非空：是
-- 真实 SSE 状态码：`200`
-- SSE Content-Type：`text/event-stream; charset=utf-8`
-- SSE 是否出现 delta：是，共 3 个
-- SSE 是否以 `[DONE]` 结束：是
-- SSE error 事件：无
-- pytest：`12 passed, 1 warning`
-- `pip check`：`No broken requirements found.`
-- 密钥泄漏检查：未发现；`.env` 被忽略且未跟踪，`.env.example` 为占位符
-- 日志检查：未发现 API Key、Authorization、Bearer 或请求正文
-- Day 4 边界：`POST /documents/upload` 仍为 `501`
-- `git diff --check`：通过，仅有 LF/CRLF 非阻断提示
+- 上传协议：multipart，必填 `file`
+- 类型：PDF、Markdown、TXT
+- 限制：20 MiB、500 PDF 页、1 MiB 读取块
+- 分页：PDF 空白页保留，`\f` 序列化；文本文件为第 1 页
+- 存储：UUID `.part` → 解析 → `flush` → `os.replace` → `commit`
+- 失败补偿：rollback 并清理临时/最终文件
+- 数据库：PostgreSQL 16、SQLAlchemy 2.x、psycopg 3、UUID 主键
+- 建表：显式 `python -m backend.app.models.init_db`
+- 真实 PDF/PostgreSQL 往返：通过
+- 全量 pytest：`44 passed, 1 warning`
+- `pip check`、compileall、Compose、差异和密钥检查：通过
+- `GET /health` 与 Day 3 `/chat`：回归通过
 
-## P1：仅在用户明确要求后开始 Day 4
+## P1：仅在用户明确要求后开始 Day 5
 
-Day 4 范围以 `PLAN.md` 为准：
-
-- 安装 `pypdf2` 或 `pdfminer.six`、`python-multipart`；
-- 支持 PDF、Markdown、TXT 上传与文本提取；
-- Docker 启动 PostgreSQL；
-- 创建 `documents` 表；
-- 保存文档元数据和上传文件。
-
-开始条件：Day 3 检查点已经满足；仍需用户明确要求开始 Day 4，并先处理或明确保留当前三份未提交的交接刷新。
+Day 5 必须严格按 `PLAN.md` 实现文本切分和 chunks 表，不得提前进入 Embedding 或 Qdrant。
 
 ## 延后且待确认
 
-- Day 6 Embedding：OpenAI、通义千问或本地 BGE；
-- Day 18：是否增加千问质量/成本对比；
-- pytest `.pytest_cache` 权限警告的根因与是否修复；
-- 是否为 `master` 配置上游并推送；
-- 是否增加 `.gitattributes` 统一行尾。
+- 孤儿文件启动清理任务；
+- 首次表结构变更时引入 Alembic；
+- pytest `.pytest_cache` 权限警告；
+- `.gitattributes` 行尾规范；
+- Day 6 Embedding 供应商；
+- Day 18 千问质量/成本对比；
+- 是否配置 `master` 上游并推送。

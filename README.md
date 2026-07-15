@@ -17,7 +17,7 @@
 | 后端框架 | Python 3.11 · FastAPI · Uvicorn |
 | Agent 编排 | LangGraph |
 | 向量数据库 | Qdrant |
-| 关系数据库 | PostgreSQL |
+| 关系数据库 | PostgreSQL · SQLAlchemy 2.x · psycopg 3 |
 | 检索增强 | Hybrid Search (向量 + BM25) · Rerank |
 | 前端 | Streamlit |
 | 部署 | Docker · Docker Compose |
@@ -97,18 +97,15 @@ flowchart TB
 
 ## 快速启动
 
-> 当前处于项目初始化阶段，以下命令将在 Docker Compose 完成后可用。
+> 完整的一键启动将在 Day 21 完成。Day 4 当前只编排 PostgreSQL。
 
-```bash
-# 复制环境变量
-cp .env.example .env
-# 编辑 .env 填入 API Key
-
-# 一键启动
-docker-compose up -d
+```powershell
+Copy-Item .env.example .env
+# 编辑 .env，设置 LLM_API_KEY 和本地 PostgreSQL 密码
+docker compose up -d postgres
+.\.venv\Scripts\python.exe -m backend.app.models.init_db
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
 ```
-
-访问 `http://localhost:8501` 打开前端页面。
 
 ## 本地开发
 
@@ -135,17 +132,22 @@ Copy-Item .env.example .env
 | `GET /health` | 无 | `200 {"status": "ok"}` |
 | `POST /chat` | `{"message": "...", "stream": false}` | 完整 JSON 回答 |
 | `POST /chat` | `{"message": "...", "stream": true}` | SSE 流式回答，结束标记为 `[DONE]` |
-| `POST /documents/upload` | 无 | `501 Not Implemented`，Day 4 实现 |
+| `POST /documents/upload` | `multipart/form-data`，字段 `file` | 成功返回 `201` 文档元数据；支持 PDF / MD / TXT |
 
 LLM 使用 OpenAI-compatible 接口。当前默认配置为 `deepseek-v4-flash`，
 并通过 `LLM_EXTRA_BODY` 关闭思考模式；真实 `LLM_API_KEY` 只写入本地 `.env`。
+
+文档上传按 1 MiB 分块写入临时文件，实际大小上限为 20 MiB；PDF 最多 500 页。
+PDF 按页提取并以 `\f` 保存页边界，Markdown/TXT 使用 UTF-8 并视为第 1 页。
+数据库表必须通过 `python -m backend.app.models.init_db` 显式创建，应用启动和
+`GET /health` 不依赖 PostgreSQL。
 
 ## TODO
 
 - [x] 项目初始化，目录结构
 - [x] FastAPI 后端骨架
 - [x] 接入 LLM API（流式输出）
-- [ ] 文档上传与解析（PDF / MD / TXT）
+- [x] 文档上传与解析（PDF / MD / TXT）
 - [ ] 文本切分（RecursiveCharacterTextSplitter）
 - [ ] Embedding 生成（批量 + 重试）
 - [ ] Qdrant 向量存储与检索

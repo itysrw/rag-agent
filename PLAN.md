@@ -91,12 +91,12 @@ rag-agent/
 
 ### Day 4 — 文档上传与解析
 
-- [ ] 安装依赖：`pypdf2` 或 `pdfminer.six`，`python-multipart`
-- [ ] 支持上传 PDF / Markdown / TXT
-- [ ] 提取文本内容
-- [ ] 用 Docker 启动 PostgreSQL，建 `documents` 表
-- [ ] 上传后存储文档元信息（filename、size、status、created_at）
-- [ ] 本地保存文件（`/data/uploads/`）
+- [x] 安装依赖：`pypdf`、`python-multipart`
+- [x] 支持上传 PDF / Markdown / TXT
+- [x] 提取文本内容
+- [x] 用 Docker 启动 PostgreSQL，建 `documents` 表
+- [x] 上传后存储文档元信息（filename、size、status、created_at）
+- [x] 本地保存文件（`/data/uploads/`）
 
 **产出**：上传一个 PDF 后，数据库里能看到文档记录
 
@@ -379,7 +379,7 @@ rag-agent/
 | Day 1 | 已完成 | 已完成边界、目录、README、Mermaid 架构图与 GitHub 远端配置 |
 | Day 2 | 已完成 | 三个固定路由、应用配置与 Loguru 已实现；真实 HTTP 验收通过，pytest 1 passed |
 | Day 3 | 已完成 | DeepSeek OpenAI-compatible JSON/SSE 链路已实现；错误分层与流关闭测试通过，pytest 12 passed、1 warning，真实 JSON/SSE API 均返回 200 |
-| Day 4 | | |
+| Day 4 | 已完成 | multipart 分块上传、分页解析、安全文件存储与 PostgreSQL 持久化已实现；真实 PDF/PostgreSQL 验收通过，pytest 44 passed、1 warning |
 | Day 5 | | |
 | Day 6 | | |
 | Day 7 | | |

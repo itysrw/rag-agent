@@ -4,7 +4,7 @@
 
 本文区分“当前已实现架构”和“最终目标架构”。目标组件不代表已经完成。
 
-## 当前已实现架构（Day 3 未提交状态）
+## 当前已实现架构（Day 4 已验收）
 
 ```mermaid
 flowchart LR
@@ -12,7 +12,7 @@ flowchart LR
 
     api --> health["GET /health\napi/health.py"]
     api --> chat["POST /chat\napi/chat.py"]
-    api --> upload["POST /documents/upload\nDay 4 占位 501"]
+    api --> upload["POST /documents/upload\nmultipart · PDF/MD/TXT"]
 
     chat --> dependency["require_llm_client()"]
     dependency --> cache["get_llm_client()\nlru_cache"]
@@ -26,7 +26,16 @@ flowchart LR
 
     settings --> env[".env\n本地且不提交"]
     middleware["请求日志中间件\nmethod/path/status/latency"] --> api
+
+    upload --> storage["分块存储\nUUID.part → UUID.ext"]
+    storage --> parser["PDF 分页 / UTF-8 文本解析"]
+    parser --> pages["extracted_text\n以 form-feed 保留页边界"]
+    pages --> session["SQLAlchemy 同步事务"]
+    session --> postgres["PostgreSQL documents 表"]
 ```
+
+上图中的上传接口已替换 Day 2 占位实现；真实分页 PDF、磁盘文件和 PostgreSQL
+往返验收已经通过，`PLAN.md` 已按授权同步并形成本地 Day 4 检查点。
 
 ## 当前请求流程
 
@@ -47,10 +56,22 @@ flowchart LR
 5. 流对象在完成、中断或异常时尝试 `close()`；
 6. 流中上游错误输出通用 `event: error`，此时 HTTP headers 可能已经是 `200`，这是 SSE 的正常限制。
 
+### 文档上传 `/documents/upload`
+
+1. 同步路由在线程池中读取 `UploadFile.file`，每次最多 1 MiB；
+2. 同时验证安全文件名、扩展名、MIME 与可解析内容，实际大小不得超过 20 MiB；
+3. 文件先写为服务端 UUID 对应的 `.part`，PDF 最多 500 页；
+4. PDF 每页形成一个 `PageText`，空白页保留；所有页均无文本时返回 `400`；
+5. 页文本以 `\f` 拼接后写入 `documents.extracted_text`；
+6. 数据库事务 `flush` 后使用 `os.replace` 原子移动到最终路径，再提交事务；
+7. 任一异常都会回滚并清理临时文件和已移动文件。移动后进程立即崩溃仍可能留下孤儿文件，属于已知残余风险。
+
 ## 配置边界
 
 应用配置：`Settings`，环境变量前缀 `APP_`。
 LLM 配置：`LLMSettings`，环境变量前缀 `LLM_`。
+PostgreSQL 配置：`DatabaseSettings`，环境变量前缀 `POSTGRES_`。
+上传配置：`DocumentSettings`，相对目录从仓库根目录解析，不依赖当前工作目录。
 
 `LLMClient` 不知道供应商名称。DeepSeek 的思考开关通过
 `LLM_EXTRA_BODY={"thinking":{"type":"disabled"}}` 作为不透明扩展透传。
@@ -59,8 +80,6 @@ LLM 配置：`LLMSettings`，环境变量前缀 `LLM_`。
 
 以下均属于未来计划，当前不得视为已完成：
 
-- 文件解析和上传存储；
-- PostgreSQL 表和数据库连接；
 - 文本切分；
 - Embedding；
 - Qdrant；
@@ -99,3 +118,7 @@ flowchart TB
 - `models/` 留给数据库模型；
 - `agent/` 留给 Day 13-16 LangGraph；
 - 不得为未来组件提前加入未经计划验证的抽象。
+
+数据库不会在 FastAPI lifespan 或 `/health` 中初始化。Day 4 使用
+`python -m backend.app.models.init_db` 显式执行 `Base.metadata.create_all()`；首次需要修改
+既有表结构前再引入迁移工具。

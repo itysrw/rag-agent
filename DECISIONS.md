@@ -96,3 +96,34 @@
 - 状态：已确认
 - 决策：每个阶段更新 `STATUS.md`、`HANDOFF.md`、必要时更新 `DECISIONS.md`，并指定唯一下一步。
 - 原因：跨会话时不能依赖聊天记忆推断精确项目状态。
+
+## D-015：Day 4 保留 PDF 页边界
+
+- 状态：已确认
+- 决策：解析层返回一基页码的 `PageText` 列表；PDF 空白页也必须保留，存库时以 `\f` 拼接。
+- 原因：Day 5 需要在页内切分并写入 chunk page，Day 8 需要可靠生成来源页码。
+- 文本文件：Markdown/TXT 使用 UTF-8（支持 BOM）并视为第 1 页。
+- 失败：只有全部页面均为空白时返回 `400`；扫描 PDF 的 OCR 不属于 Day 4。
+
+## D-016：Day 4 使用同步 SQLAlchemy 2.x 与 psycopg 3
+
+- 状态：已确认
+- 决策：上传路由为普通 `def`，使用同步 Session 和 `postgresql+psycopg` 驱动。
+- 原因：FastAPI 在线程池执行同步路由，可容纳同步文件 I/O、pypdf 与数据库操作，并为后续表扩展保留 ORM 模型。
+- 数据库初始化：仅通过 `python -m backend.app.models.init_db` 显式执行，不得放入应用启动或 `/health`。
+
+## D-017：文档主键、状态和文本字段
+
+- 状态：已确认
+- 决策：`documents` 使用 PostgreSQL UUID 主键，成功状态为 `ready`，增加 `extracted_text TEXT`。
+- 不增加：`storage_path`、`content_type`、`error_message`。
+- 路径：统一由存储服务根据 UUID 与标准化扩展名推导。
+- 失败记录：Day 4 不保存；解析或持久化失败时回滚并清理文件。
+
+## D-018：Day 4 上传资源与错误契约
+
+- 状态：已确认
+- 限制：实际上传字节最多 20 MiB、PDF 最多 500 页、读取块为 1 MiB。
+- HTTP：成功 `201`；无效内容 `400`；超限 `413`；不支持类型 `415`；PostgreSQL 不可用 `503`；未预期存储错误 `500`。
+- 一致性：先写 UUID `.part`、解析、数据库 `flush`，再 `os.replace`，最后提交；异常时回滚并删除临时/最终文件。
+- 已知残余风险：进程恰好在移动后崩溃可能留下孤儿文件，后续可增加启动清理任务，但不在 Day 4 扩展。
