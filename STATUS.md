@@ -4,17 +4,17 @@
 
 ## 当前检查点
 
-**Day 1 至 Day 3 均已完成；Day 3 代码、单元测试和真实 DeepSeek 非流式/SSE 验收已形成本地提交检查点，尚未推送。**
+**Day 1 至 Day 3 均已完成；Day 3 已形成本地提交检查点，尚未推送。当前功能开发已按用户要求暂停。**
 
 ## Git 状态
 
 - 分支：`master`
-- HEAD：包含本文件的 Day 3 本地检查点；精确哈希使用 `git log -1 --oneline` 查询
+- HEAD：`177ad2bfece0fc7cc5c6b347f2b3f4ecfe612c55`
 - HEAD 摘要：`feat: complete Day 3 DeepSeek chat integration`
 - 远端：`origin https://github.com/itysrw/rag-agent.git`
 - 上游跟踪：未配置
-- 工作区：Day 3 提交完成后应为干净状态
-- 暂存区：Day 3 提交完成后应为空
+- 工作区：非干净；仅 `HANDOFF.md`、`STATUS.md`、`TODO.md` 有本次交接刷新，业务代码无新增修改
+- 暂存区：空；本次交接刷新尚未提交
 - `.env`：存在，被 `.gitignore` 忽略且未被 Git 跟踪；验收过程未读取或输出 Key
 
 ## 已完成并提交
@@ -70,7 +70,7 @@
 
 失败测试：无。
 
-警告：pytest 无法写入 `.pytest_cache`，`[WinError 5] 拒绝访问`。当前不影响测试通过，根因仍待确认。
+警告：pytest 无法写入 `.pytest_cache`，`[WinError 5] 拒绝访问`。最新受限运行显示路径为 `C:\Users\CodexSandboxOffline\.codex\.sandbox\cwd\be1beccfab9cc41a\.pytest_cache\v\cache\nodeids`；较早直接运行显示 `D:\2019\rag-agent\.pytest_cache\v\cache\nodeids`。当前不影响测试通过，根因仍待确认。
 
 依赖检查：`No broken requirements found.`
 
@@ -90,9 +90,10 @@ Python：`3.11.15`。
 ## 计划状态
 
 - 用户已明确授权按 `PLAN.md` 和规范文件修正 Day 3 状态；`PLAN.md` 的 Day 3 已勾选完成。
-- Day 3 已创建本地提交，但尚未推送。
-- 用户明确要求前不推送，也不开始 Day 4。
+- Day 3 本地提交：`177ad2b feat: complete Day 3 DeepSeek chat integration`。
+- 当前分支未配置上游，Day 3 尚未推送。
+- 用户明确要求前不提交本次交接刷新、不推送，也不开始 Day 4。
 
 ## 唯一下一步
 
-等待用户决定是否推送 Day 3 本地检查点；推送和开始 Day 4 都需要单独明确授权。
+保持暂停并等待用户明确指定下一动作。恢复时先只读核对本交接包和 Git 状态，再决定是否提交交接刷新、推送 Day 3 或开始 Day 4；三者均不得自行执行。
