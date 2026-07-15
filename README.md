@@ -102,10 +102,34 @@ docker-compose up -d
 
 访问 `http://localhost:8501` 打开前端页面。
 
+## 本地开发
+
+所有命令均从仓库根目录执行：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
+```
+
+启动后访问 `http://127.0.0.1:8000/docs` 查看接口文档，运行测试：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests -v
+```
+
+## 当前接口
+
+| 方法与路径 | 输入 | 当前响应 |
+|------------|------|----------|
+| `GET /health` | 无 | `200 {"status": "ok"}` |
+| `POST /chat` | `{"message": "..."}` | `501 Not Implemented`，Day 3 实现 |
+| `POST /documents/upload` | 无 | `501 Not Implemented`，Day 4 实现 |
+
 ## TODO
 
 - [x] 项目初始化，目录结构
-- [ ] FastAPI 后端骨架
+- [x] FastAPI 后端骨架
 - [ ] 接入 LLM API（流式输出）
 - [ ] 文档上传与解析（PDF / MD / TXT）
 - [ ] 文本切分（RecursiveCharacterTextSplitter）

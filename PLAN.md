@@ -67,11 +67,11 @@ rag-agent/
 
 ### Day 2 — FastAPI 后端骨架
 
-- [ ] 初始化 FastAPI 项目，安装依赖（`fastapi` `uvicorn` `python-dotenv` `loguru`）
-- [ ] 配置 `.env` 和 `.env.example`
-- [ ] 实现基础接口：`GET /health` · `POST /chat` · `POST /documents/upload`（占位）
-- [ ] 接入 loguru 日志
-- [ ] 写一个简单 pytest 测试验证 `/health`
+- [x] 初始化 FastAPI 项目，安装依赖（`fastapi` `uvicorn` `python-dotenv` `loguru`）
+- [x] 配置 `.env` 和 `.env.example`
+- [x] 实现基础接口：`GET /health` · `POST /chat` · `POST /documents/upload`（占位）
+- [x] 接入 loguru 日志
+- [x] 写一个简单 pytest 测试验证 `/health`
 
 **产出**：后端能启动，`/health` 返回 `{"status": "ok"}`
 
@@ -377,7 +377,7 @@ rag-agent/
 | 天 | 完成情况 | 备注 |
 |----|---------|------|
 | Day 1 | 已完成 | 已完成边界、目录、README、Mermaid 架构图与 GitHub 远端配置 |
-| Day 2 | | |
+| Day 2 | 已完成 | 三个固定路由、应用配置与 Loguru 已实现；真实 HTTP 验收通过，pytest 1 passed |
 | Day 3 | | |
 | Day 4 | | |
 | Day 5 | | |
