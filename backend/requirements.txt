@@ -10,3 +10,5 @@ pypdf>=6.12,<7
 python-multipart>=0.0.20,<1.0
 SQLAlchemy>=2.0,<2.1
 psycopg[binary]>=3,<4
+langchain-text-splitters>=1.1,<1.2
+tiktoken>=0.13,<0.14

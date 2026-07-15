@@ -12,12 +12,18 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.session import SessionTransactionState
 
-from backend.app.core.config import DocumentSettings, get_document_settings
+from backend.app.core.config import (
+    ChunkingSettings,
+    DocumentSettings,
+    get_chunking_settings,
+    get_document_settings,
+)
 from backend.app.core.database import (
     DatabaseConfigurationError,
     get_session_factory,
 )
 from backend.app.models.document import Document
+from backend.app.models.chunk import Chunk
 from backend.app.services.document_parser import (
     EncryptedPdfError,
     InvalidPdfError,
@@ -40,6 +46,7 @@ from backend.app.services.document_storage import (
     save_upload_to_part,
     validate_upload_metadata,
 )
+from backend.app.services.text_splitter import TextSplittingError, split_pages
 
 router = APIRouter()
 
@@ -77,6 +84,7 @@ def upload_document(
     file: Annotated[UploadFile, File(...)],
     session: Annotated[Session, Depends(require_database_session)],
     settings: Annotated[DocumentSettings, Depends(get_document_settings)],
+    chunking: Annotated[ChunkingSettings, Depends(get_chunking_settings)],
 ) -> DocumentUploadResponse:
     """Store, parse, and persist one supported document as one operation."""
     document_id = uuid4()
@@ -96,6 +104,12 @@ def upload_document(
             max_pdf_pages=settings.max_pdf_pages,
             read_chunk_size=settings.read_chunk_size,
         )
+        chunk_drafts = split_pages(
+            pages,
+            chunk_size=chunking.chunk_size,
+            chunk_overlap=chunking.chunk_overlap,
+            encoding_name=chunking.chunk_encoding_name,
+        )
 
         document = Document(
             id=document_id,
@@ -104,8 +118,20 @@ def upload_document(
             status="ready",
             extracted_text=serialize_pages(pages),
         )
+        chunks = [
+            Chunk(
+                doc_id=document_id,
+                chunk_index=draft.chunk_index,
+                content=draft.content,
+                page=draft.page,
+                chunk_metadata=draft.metadata,
+            )
+            for draft in chunk_drafts
+        ]
         with session.begin():
             session.add(document)
+            session.flush()
+            session.add_all(chunks)
             session.flush()
             promote_upload(paths)
             response = DocumentUploadResponse(
@@ -173,6 +199,13 @@ def upload_document(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The uploaded PDF is invalid or damaged.",
+        ) from exc
+    except TextSplittingError as exc:
+        _cleanup_failed_upload(session, paths, document_id)
+        logger.error("Document text splitting failed: {}", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The document could not be stored.",
         ) from exc
     except (OperationalError, TimeoutError) as exc:
         _cleanup_failed_upload(session, paths, document_id)

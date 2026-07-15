@@ -4,7 +4,7 @@
 
 本文区分“当前已实现架构”和“最终目标架构”。目标组件不代表已经完成。
 
-## 当前已实现架构（Day 4 已验收）
+## 当前已实现架构（Day 5 已验收，尚未提交）
 
 ```mermaid
 flowchart LR
@@ -29,13 +29,18 @@ flowchart LR
 
     upload --> storage["分块存储\nUUID.part → UUID.ext"]
     storage --> parser["PDF 分页 / UTF-8 文本解析"]
-    parser --> pages["extracted_text\n以 form-feed 保留页边界"]
-    pages --> session["SQLAlchemy 同步事务"]
-    session --> postgres["PostgreSQL documents 表"]
+    parser --> pages["PageText\n一基页码与空白页"]
+    pages --> splitter["RecursiveCharacterTextSplitter\no200k_base · 500/100 · 按页"]
+    pages --> document_text["documents.extracted_text\n以 form-feed 保留页边界"]
+    splitter --> chunks["有序 Chunk\ncontent · page · metadata"]
+    document_text --> session["SQLAlchemy 同步事务"]
+    chunks --> session
+    session --> postgres["PostgreSQL\ndocuments + chunks"]
 ```
 
-上图中的上传接口已替换 Day 2 占位实现；真实分页 PDF、磁盘文件和 PostgreSQL
-往返验收已经通过，`PLAN.md` 已按授权同步并形成本地 Day 4 检查点。
+上图中的上传接口已替换 Day 2 占位实现。Day 5 在不改变 `201` 响应字段的前提下，
+为新上传文档生成按页 Chunk。真实分页 PDF、磁盘、PostgreSQL JSONB、顺序和级联删除
+验收已经通过；Day 5 当前尚未提交，`PLAN.md` 未修改。
 
 ## 当前请求流程
 
@@ -62,9 +67,11 @@ flowchart LR
 2. 同时验证安全文件名、扩展名、MIME 与可解析内容，实际大小不得超过 20 MiB；
 3. 文件先写为服务端 UUID 对应的 `.part`，PDF 最多 500 页；
 4. PDF 每页形成一个 `PageText`，空白页保留；所有页均无文本时返回 `400`；
-5. 页文本以 `\f` 拼接后写入 `documents.extracted_text`；
-6. 数据库事务 `flush` 后使用 `os.replace` 原子移动到最终路径，再提交事务；
-7. 任一异常都会回滚并清理临时文件和已移动文件。移动后进程立即崩溃仍可能留下孤儿文件，属于已知残余风险。
+5. `split_pages()` 逐页使用 `o200k_base` 和 `RecursiveCharacterTextSplitter` 切分；
+   空白页不生成 Chunk，`chunk_index` 在文档内从 0 连续递增；
+6. 页文本以 `\f` 拼接后写入 `documents.extracted_text`，Chunk 写入 `chunks`；
+7. 同一事务先 flush Document，再 flush Chunks，随后 `os.replace`，最后提交；
+8. 任一异常都会回滚两张表并清理临时文件和已移动文件。移动后进程立即崩溃仍可能留下孤儿文件，属于已知残余风险。
 
 ## 配置边界
 
@@ -72,6 +79,8 @@ flowchart LR
 LLM 配置：`LLMSettings`，环境变量前缀 `LLM_`。
 PostgreSQL 配置：`DatabaseSettings`，环境变量前缀 `POSTGRES_`。
 上传配置：`DocumentSettings`，相对目录从仓库根目录解析，不依赖当前工作目录。
+切分配置：`ChunkingSettings`，环境变量为 `CHUNK_SIZE`、`CHUNK_OVERLAP`、
+`CHUNK_ENCODING_NAME`，默认 `500`、`100`、`o200k_base`。
 
 `LLMClient` 不知道供应商名称。DeepSeek 的思考开关通过
 `LLM_EXTRA_BODY={"thinking":{"type":"disabled"}}` 作为不透明扩展透传。
@@ -80,7 +89,6 @@ PostgreSQL 配置：`DatabaseSettings`，环境变量前缀 `POSTGRES_`。
 
 以下均属于未来计划，当前不得视为已完成：
 
-- 文本切分；
 - Embedding；
 - Qdrant；
 - BM25、RRF、Rerank；
@@ -119,6 +127,6 @@ flowchart TB
 - `agent/` 留给 Day 13-16 LangGraph；
 - 不得为未来组件提前加入未经计划验证的抽象。
 
-数据库不会在 FastAPI lifespan 或 `/health` 中初始化。Day 4 使用
-`python -m backend.app.models.init_db` 显式执行 `Base.metadata.create_all()`；首次需要修改
+数据库不会在 FastAPI lifespan 或 `/health` 中初始化。Day 5 继续使用
+`python -m backend.app.models.init_db` 显式执行 `Base.metadata.create_all()` 创建缺失的新表；首次需要修改
 既有表结构前再引入迁移工具。

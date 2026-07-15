@@ -127,3 +127,49 @@
 - HTTP：成功 `201`；无效内容 `400`；超限 `413`；不支持类型 `415`；PostgreSQL 不可用 `503`；未预期存储错误 `500`。
 - 一致性：先写 UUID `.part`、解析、数据库 `flush`，再 `os.replace`，最后提交；异常时回滚并删除临时/最终文件。
 - 已知残余风险：进程恰好在移动后崩溃可能留下孤儿文件，后续可增加启动清理任务，但不在 Day 4 扩展。
+
+## D-019：Day 5 使用 `o200k_base` 作为可复现 token 基准
+
+- 状态：已确认
+- 决策：文本切分和 300/500/800 对比统一使用 `tiktoken` 的 `o200k_base`。
+- 原因：默认 `len` 统计字符而不是 token；固定 tokenizer 才能复现实验和验证上限。
+- 边界：它不是 DeepSeek 或未来 Embedding 模型精确 tokenizer 的承诺；模型确定后仍需重新评估。
+- 特殊文本：使用 `disallowed_special=()`，将类似特殊 token 的字面量作为普通输入处理。
+
+## D-020：Day 5 按页独立切分，生产默认 `500/100`
+
+- 状态：已确认
+- 决策：使用独立的 `langchain-text-splitters` 包和 `RecursiveCharacterTextSplitter`；
+  每个 `PageText` 单独切分，空白页跳过，后续页码不得压缩。
+- 默认：`chunk_size=500`、`chunk_overlap=100`、`keep_separator="end"`。
+- 分隔优先级：段落、换行、中英文句末标点、分号、逗号、空格、单字符。
+- 原因：Chunk 不跨页才能为 Day 8 保留可靠引用；20% overlap 在语义边界附近保留上下文。
+- 禁止：不得将 300/500/800 的结构对比提前描述为检索质量结论。
+
+## D-021：Chunk 使用 UUID、显式顺序和 JSONB 元数据
+
+- 状态：已确认
+- 决策：`chunks.chunk_id` 为 UUID 主键；`chunk_index` 在文档内从 0 连续递增；
+  `(doc_id, chunk_index)` 唯一，`doc_id` 建索引并外键到 `documents.id`，`ON DELETE CASCADE`。
+- 元数据：数据库列名为 `metadata`，ORM 属性名为 `chunk_metadata`，避免与 SQLAlchemy
+  Declarative 的 `metadata` 保留属性冲突；PostgreSQL 使用 JSONB，SQLite 测试使用 JSON 变体。
+- 原因：UUID 只提供身份，不提供稳定顺序；显式顺序才能恢复文档内 Chunk 次序。
+
+## D-022：Document 与 Chunk 同事务、分两次 flush
+
+- 状态：已确认
+- 决策顺序：创建 Document/Chunk 草稿 → `session.add(document)` → 第一次 `flush()` →
+  `session.add_all(chunks)` → 第二次 `flush()` → `os.replace` → `commit`。
+- 原因：没有 ORM relationship 时，一次 flush 不能依赖对象添加顺序。真实 PostgreSQL 验收曾先插入
+  Chunk 并触发 `chunks_doc_id_fkey` 外键失败；先 flush Document 可显式保证父行存在。
+- 一致性：两次 flush 仍处于同一个事务中；第二次 flush、文件移动或 commit 失败都会整体回滚并清理文件。
+- 已否决：仅将 Document 和 Chunk 加入 Session 后执行一次 flush，并假设 SQLAlchemy 会自动按外键排序。
+
+## D-023：Day 5 仅创建新表，不回填也不引入迁移工具
+
+- 状态：已确认
+- 决策：`backend.app.models.init_db` 注册 `Document` 和 `Chunk`，继续用显式
+  `Base.metadata.create_all()` 创建缺失的全新 `chunks` 表。
+- 原因：Day 5 没有修改既有 `documents` 表；此阶段引入 Alembic 超出范围。
+- 限制：`create_all()` 不是迁移工具；首次修改已有表结构前仍需重新确认 Alembic。
+- 历史数据：只为新上传文档生成 chunks，不回填 Day 4 已有记录。

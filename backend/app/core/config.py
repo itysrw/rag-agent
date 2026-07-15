@@ -2,9 +2,9 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -89,6 +89,37 @@ class DocumentSettings(BaseSettings):
         return (PROJECT_ROOT / value).resolve()
 
 
+class ChunkingSettings(BaseSettings):
+    """Token-based text chunking settings for newly uploaded documents."""
+
+    chunk_size: int = Field(default=500, gt=0)
+    chunk_overlap: int = Field(default=100, ge=0)
+    chunk_encoding_name: str = "o200k_base"
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="",
+        extra="ignore",
+    )
+
+    @field_validator("chunk_encoding_name")
+    @classmethod
+    def validate_encoding_name(cls, value: str) -> str:
+        """Reject an empty tokenizer encoding name."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("chunk_encoding_name must not be empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_overlap(self) -> Self:
+        """Require overlap to be strictly smaller than the chunk size."""
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError("chunk_overlap must be smaller than chunk_size")
+        return self
+
+
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings."""
@@ -111,3 +142,9 @@ def get_database_settings() -> DatabaseSettings:
 def get_document_settings() -> DocumentSettings:
     """Return cached document storage and parser settings."""
     return DocumentSettings()
+
+
+@lru_cache
+def get_chunking_settings() -> ChunkingSettings:
+    """Return cached token-based text chunking settings."""
+    return ChunkingSettings()

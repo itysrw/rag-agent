@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+import backend.app.api.documents as documents_api_module
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 from sqlalchemy import Engine, create_engine, event, select
@@ -15,11 +16,18 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app.api.documents import require_database_session
-from backend.app.core.config import DocumentSettings, get_document_settings
+from backend.app.core.config import (
+    ChunkingSettings,
+    DocumentSettings,
+    get_chunking_settings,
+    get_document_settings,
+)
 from backend.app.core.database import Base
 from backend.app.main import app
+from backend.app.models.chunk import Chunk
 from backend.app.models.document import Document
 from backend.app.services.document_storage import build_upload_paths
+from backend.app.services.text_splitter import TextSplittingError
 from backend.tests.pdf_fixtures import build_text_pdf
 
 
@@ -60,6 +68,12 @@ def document_api(tmp_path: Path) -> Iterator[DocumentApiContext]:
         max_pdf_pages=500,
         read_chunk_size=1024,
     )
+    chunking = ChunkingSettings(
+        _env_file=None,
+        chunk_size=500,
+        chunk_overlap=100,
+        chunk_encoding_name="o200k_base",
+    )
 
     def override_session() -> Iterator[Session]:
         with session_factory() as session:
@@ -67,6 +81,7 @@ def document_api(tmp_path: Path) -> Iterator[DocumentApiContext]:
 
     app.dependency_overrides[require_database_session] = override_session
     app.dependency_overrides[get_document_settings] = lambda: settings
+    app.dependency_overrides[get_chunking_settings] = lambda: chunking
     try:
         with TestClient(app) as client:
             yield DocumentApiContext(client, settings, session_factory, engine)
@@ -89,6 +104,7 @@ def test_upload_pdf_returns_201_and_preserves_page_boundaries(
 
     assert response.status_code == 201
     body = response.json()
+    assert set(body) == {"id", "filename", "size", "status", "created_at"}
     assert body["filename"] == "Example.PDF"
     assert body["size"] == len(pdf)
     assert body["status"] == "ready"
@@ -96,10 +112,18 @@ def test_upload_pdf_returns_201_and_preserves_page_boundaries(
 
     with document_api.session_factory() as session:
         document = session.scalar(select(Document).where(Document.id == document_id))
+        chunks = session.scalars(
+            select(Chunk)
+            .where(Chunk.doc_id == document_id)
+            .order_by(Chunk.chunk_index)
+        ).all()
     assert document is not None
     assert document.extracted_text.count("\f") == 2
     assert "first" in document.extracted_text
     assert "third" in document.extracted_text
+    assert [chunk.page for chunk in chunks] == [1, 3]
+    assert [chunk.chunk_index for chunk in chunks] == [0, 1]
+    assert all(chunk.chunk_metadata["encoding_name"] == "o200k_base" for chunk in chunks)
 
     paths = build_upload_paths(document_api.settings.upload_dir, document_id, ".pdf")
     assert paths.final.read_bytes() == pdf
@@ -117,8 +141,13 @@ def test_upload_utf8_bom_text_succeeds(document_api: DocumentApiContext) -> None
     document_id = UUID(response.json()["id"])
     with document_api.session_factory() as session:
         document = session.get(Document, document_id)
+        chunks = session.scalars(
+            select(Chunk).where(Chunk.doc_id == document_id)
+        ).all()
     assert document is not None
     assert document.extracted_text == "hello"
+    assert len(chunks) == 1
+    assert chunks[0].page == 1
 
 
 def test_upload_requires_file_field(document_api: DocumentApiContext) -> None:
@@ -176,6 +205,7 @@ def test_bad_documents_return_400_and_leave_no_files(
     assert list(document_api.settings.upload_dir.glob("*")) == []
     with document_api.session_factory() as session:
         assert session.scalar(select(Document)) is None
+        assert session.scalar(select(Chunk)) is None
 
 
 def test_unsupported_extension_returns_415(document_api: DocumentApiContext) -> None:
@@ -206,6 +236,30 @@ def test_actual_size_limit_returns_413_and_cleans_part(
     assert list(document_api.settings.upload_dir.glob("*")) == []
 
 
+def test_split_failure_returns_500_and_leaves_no_rows_or_files(
+    document_api: DocumentApiContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tokenizer failure is safely mapped and rolls back all side effects."""
+
+    def fail_split(*args: object, **kwargs: object) -> list[object]:
+        del args, kwargs
+        raise TextSplittingError("internal tokenizer failure")
+
+    monkeypatch.setattr(documents_api_module, "split_pages", fail_split)
+    response = document_api.client.post(
+        "/documents/upload",
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "The document could not be stored."}
+    assert list(document_api.settings.upload_dir.glob("*")) == []
+    with document_api.session_factory() as session:
+        assert session.scalar(select(Document)) is None
+        assert session.scalar(select(Chunk)) is None
+
+
 def test_postgres_unavailable_returns_503_and_removes_promoted_file(
     document_api: DocumentApiContext,
     monkeypatch: pytest.MonkeyPatch,
@@ -221,10 +275,48 @@ def test_postgres_unavailable_returns_503_and_removes_promoted_file(
         "/documents/upload",
         files={"file": ("notes.txt", b"hello", "text/plain")},
     )
+    monkeypatch.undo()
 
     assert response.status_code == 503
     assert response.json() == {"detail": "The document database is unavailable."}
     assert list(document_api.settings.upload_dir.glob("*")) == []
+    with document_api.session_factory() as session:
+        assert session.scalar(select(Document)) is None
+        assert session.scalar(select(Chunk)) is None
+
+
+def test_chunk_flush_failure_rolls_back_document_and_cleans_file(
+    document_api: DocumentApiContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second-flush failure cannot leave a document without chunks."""
+    original_flush = Session.flush
+    flush_count = 0
+
+    def fail_second_flush(
+        self: Session,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        nonlocal flush_count
+        flush_count += 1
+        if flush_count == 2:
+            raise OperationalError("INSERT", {}, Exception("offline"))
+        original_flush(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "flush", fail_second_flush)
+    response = document_api.client.post(
+        "/documents/upload",
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+    )
+    monkeypatch.undo()
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "The document database is unavailable."}
+    assert list(document_api.settings.upload_dir.glob("*")) == []
+    with document_api.session_factory() as session:
+        assert session.scalar(select(Document)) is None
+        assert session.scalar(select(Chunk)) is None
 
 
 def test_commit_failure_after_promote_removes_final_file(
@@ -250,6 +342,7 @@ def test_commit_failure_after_promote_removes_final_file(
     assert list(document_api.settings.upload_dir.glob("*")) == []
     with document_api.session_factory() as session:
         assert session.scalar(select(Document)) is None
+        assert session.scalar(select(Chunk)) is None
 
 
 def test_error_after_commit_keeps_file_for_committed_document(
@@ -273,7 +366,10 @@ def test_error_after_commit_keeps_file_for_committed_document(
     assert response.status_code == 503
     with document_api.session_factory() as session:
         document = session.scalar(select(Document))
+        chunk = session.scalar(select(Chunk))
     assert document is not None
+    assert chunk is not None
+    assert chunk.doc_id == document.id
 
     paths = build_upload_paths(
         document_api.settings.upload_dir,

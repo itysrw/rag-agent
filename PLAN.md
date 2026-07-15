@@ -104,11 +104,11 @@ rag-agent/
 
 ### Day 5 — 文本切分
 
-- [ ] 安装 `langchain-text-splitters`（只用这一个模块，不用完整 LangChain）
-- [ ] 实现 `RecursiveCharacterTextSplitter`
-- [ ] Chunk 字段：`doc_id` · `chunk_id` · `content` · `page` · `metadata`
-- [ ] 测试 300 / 500 / 800 token 三种 chunk size，记录差异
-- [ ] 建 `chunks` 表，切分结果存入 PostgreSQL
+- [x] 安装 `langchain-text-splitters`（只用这一个模块，不用完整 LangChain）
+- [x] 实现 `RecursiveCharacterTextSplitter`
+- [x] Chunk 字段：`doc_id` · `chunk_id` · `content` · `page` · `metadata`
+- [x] 测试 300 / 500 / 800 token 三种 chunk size，记录差异
+- [x] 建 `chunks` 表，切分结果存入 PostgreSQL
 
 **产出**：一个文档能被切成多个 chunks，入库
 
@@ -380,7 +380,7 @@ rag-agent/
 | Day 2 | 已完成 | 三个固定路由、应用配置与 Loguru 已实现；真实 HTTP 验收通过，pytest 1 passed |
 | Day 3 | 已完成 | DeepSeek OpenAI-compatible JSON/SSE 链路已实现；错误分层与流关闭测试通过，pytest 12 passed、1 warning，真实 JSON/SSE API 均返回 200 |
 | Day 4 | 已完成 | multipart 分块上传、分页解析、安全文件存储与 PostgreSQL 持久化已实现；真实 PDF/PostgreSQL 验收通过，pytest 44 passed、1 warning |
-| Day 5 | | |
+| Day 5 | 已完成 | 按页 token 切分、500/100 默认配置、Chunk 持久化及 300/500/800 结构实验已完成；标准与真实 PostgreSQL 验收通过 |
 | Day 6 | | |
 | Day 7 | | |
 | Day 8 | | |
