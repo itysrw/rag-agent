@@ -4,62 +4,67 @@
 
 ## 当前检查点
 
-**Day 1 至 Day 4 均已完成并验收，本地提交已准备；推送因规则模式下无法连接 GitHub 而暂未完成。当前暂停开发，Day 5 未开始。**
+**Day 1 至 Day 5 的功能实现、验收和本地提交均已完成。Day 6 尚未开始，当前暂停开发。**
 
-## Git 状态
+Day 5 在不改变 `POST /documents/upload` 成功响应契约的前提下，为每个新上传文档生成
+按页、有序、带 token 元数据的 Chunks，并与 Document 在同一 PostgreSQL 事务中提交。
+
+## Git 精确状态
 
 - 分支：`master`
-- Day 4 实现提交：`623989f2d6934c98500c555bfac0b5ba6f94736d`
-- Day 4 提交摘要：`623989f feat: complete Day 4 document upload`
-- Day 3 交接提交：`a27a3f5 docs: refresh Day 3 handoff`
-- Day 3 实现提交：`177ad2b feat: complete Day 3 DeepSeek chat integration`
-- 远端：`origin https://github.com/itysrw/rag-agent.git`
+- Day 5 实现提交：`a989837bbf8bae1cf866beda034130a514152378`
+- Day 5 提交摘要：`a989837 feat: complete Day 5 text chunking`
+- Day 5 基线提交：`a64a0cc docs: refresh Day 4 handoff`
+- 本交接刷新提交是 `a989837` 的直接后继；完整当前 HEAD 以 `git rev-parse HEAD` 为准
+- 远端名称：`origin`
 - 上游跟踪：未配置
-- 推送状态：两次 push 分别因连接重置和 GitHub 443 不可达而失败，远端尚未发布
-- 首次发布前远端状态：没有已有分支
-- 未纳入本次发布的本地修改：另一个编辑流程正在产生配置、依赖和 Day 5 相关改动，实时清单以 `git status` 为准
-- 无关未跟踪目录：`.agents/`，不得读取或纳入提交
-- 上述本地改动在发布准备期间出现；不得擅自读取敏感值、覆盖、删除或提交
-- `.env`：本地存在、被忽略且未跟踪；不得读取、输出或提交
+- 本地远端跟踪引用：无
+- 远端实时状态：待确认；本轮未 fetch、未 push
+- Day 5 相关文件已提交；交接提交完成后暂存区和项目工作区应为空
+- `PLAN.md`：经用户明确授权，Day 5 五项任务已勾选，开发日志已标记完成；Day 6 未修改
+- `.agents/`：无关目录，未读取、未修改、未提交
+- `.env`：未查看、未输出、未修改、未提交；真实验收通过现有配置由应用读取
 
-## Day 4 已完成
+## Day 5 已完成
 
-- `POST /documents/upload` 使用 multipart 和必填 `UploadFile`；
-- PDF/Markdown/TXT 安全上传、1 MiB 分块读取、实际 20 MiB 上限；
-- 安全文件名、扩展名、MIME、PDF 内容签名与 UTF-8 校验；
-- UUID `.part` 临时文件与原子 `os.replace`；
-- PDF 最多 500 页，逐页解析并保留空白页，以 `\f` 存储边界；
-- PostgreSQL UUID 主键和 `documents` 表；
-- SQLAlchemy 2.x + psycopg 3 同步事务；
-- 显式 `python -m backend.app.models.init_db` 建表，不影响启动或 `/health`；
-- 失败回滚与临时/最终文件补偿清理；
-- 安全的 `201/400/413/415/422/503/500` HTTP 契约；
-- `GET /health`、非流式 `/chat`、SSE `/chat` 行为保持不变。
+- 依赖：`langchain-text-splitters>=1.1,<1.2`、`tiktoken>=0.13,<0.14`
+- 配置：默认 `CHUNK_SIZE=500`、`CHUNK_OVERLAP=100`、`CHUNK_ENCODING_NAME=o200k_base`
+- `split_pages()`：逐页切分，空白页跳过，原页码保留，文档内 `chunk_index` 从 0 连续递增
+- `Chunk`：UUID 主键、Document 外键、级联删除、唯一顺序、JSONB 元数据、`doc_id` 索引
+- 上传事务：Document 第一次 flush → Chunks 第二次 flush → 文件移动 → commit
+- 失败补偿：切分、两次 flush、文件移动或 commit 失败均不留下半完成数据
+- 成功响应仍只有 `id/filename/size/status/created_at`
+- 300/500/800 token 结构实验已记录，不包含检索质量结论
+- 只对新上传文档切分，不回填 Day 4 历史数据
+- 未实现 Embedding、Qdrant、检索或其他 Day 6+ 功能
 
-## 最近验收结果
+## 最终验收
 
 - Python：`3.11.15`
-- PostgreSQL：`postgres:16-alpine`；本次交接查询为 `Up (healthy)`
-- 真实三页 PDF（含空白页）/磁盘/PostgreSQL 往返：通过
-- `extracted_text` 页边界：两个 `\f`，通过
-- 验收后 `documents` 行数：`0`
-- 全量 pytest：`44 passed, 1 warning in 3.22s`
-- 发布前常规 pytest：`43 passed, 1 skipped, 1 warning in 3.29s`
+- 标准测试：`60 passed, 1 skipped, 1 warning in 5.26s`
+- 真实 PostgreSQL：`61 passed, 1 warning in 4.67s`
+- PostgreSQL JSONB、Chunk 页码/顺序、Document 删除级联：通过
+- `python -m backend.app.models.init_db`：既有验收通过，可新建缺失的 `chunks` 表
+- `pip check`：既有验收为 `No broken requirements found.`
+- compileall：既有验收通过
+- `git diff --check`：本轮通过，仅有既存 LF→CRLF 提示
 - 当前失败测试：无
-- `pip check`：`No broken requirements found.`
-- compileall、Compose 配置、`git diff --check`：通过
-- 密钥扫描：0 个匹配
-- `PLAN.md`：Day 4 六项已勾选；Day 5 为空
 
-## 当前错误和风险
+旧交接记录中的 `58 passed` / `59 passed` 是新增两个切分兜底测试前的数字；本轮重新执行
+全部 61 个测试项后，标准环境跳过 PostgreSQL 用例，真实 PostgreSQL 环境全部通过。
 
-- 无阻断错误。
-- pytest 仍有 `.pytest_cache` 的 `[WinError 5] 拒绝访问` 警告；根因待确认，不影响通过。
-- 进程恰好在文件移动后、数据库提交前崩溃，可能留下孤儿文件；清理任务未实现。
-- Docker 和 `rg.exe` 在受限权限下曾出现 `Access is denied`；已用只读替代/授权完成核验，根因待确认。
-- 首次真正修改已有表结构前是否引入 Alembic，待确认。
-- 是否增加 `.gitattributes` 统一行尾，待确认。
+## 当前错误与风险
+
+- pytest 仍有 `.pytest_cache` 的 `[WinError 5] 拒绝访问` 警告；根因待确认，不影响测试通过。
+- `docker compose ps postgres` 普通权限报 Docker config/named pipe `Access is denied`；授权后两次查询超时。
+  但显式建表及真实 PostgreSQL 测试均成功，数据库本身可用。
+- `o200k_base` 第一次使用需要下载词表；本机已完成缓存。新环境的预热/离线缓存策略待确认。
+- 文件移动后进程立即崩溃仍可能留下孤儿文件；启动清理任务未实现。
+- `_cleanup_failed_upload()` 读取 SQLAlchemy 私有事务 `_state`，未来升级需验证兼容性。
+- Git 持续提示部分文件未来可能由 LF 转为 CRLF；是否加入 `.gitattributes` 待确认。
+- 远端实时状态、是否配置上游及是否推送仍待确认。
 
 ## 唯一下一步
 
-保持暂停。新会话只读复核本交接包和 Git 状态，复述后等待用户明确选择：网络恢复后重试推送、授权 Day 5、处理其他待确认项，或继续暂停。不得自行执行任何一项。
+保持暂停。等待用户明确选择是否检查/配置远端并推送，或另行授权开始 Day 6。
+推送和 Day 6 必须分别获得明确授权。

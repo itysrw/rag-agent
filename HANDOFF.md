@@ -3,8 +3,8 @@
 更新时间：2026-07-15（America/New_York）
 仓库：`D:\2019\rag-agent`
 
-当前阶段：Day 1 至 Day 4 已完成并验收，本地提交已准备。推送因规则模式下无法连接
-GitHub 而暂未完成；不得自行开始 Day 5。
+当前阶段：Day 1 至 Day 5 的功能实现、验收和本地提交已完成。Day 5 实现提交为
+`a989837bbf8bae1cf866beda034130a514152378`；当前暂停开发，不得自行推送或开始 Day 6。
 
 ## A. 详细交接文档
 
@@ -13,15 +13,15 @@ GitHub 而暂未完成；不得自行开始 Day 5。
 构建一个可写入简历、可在面试中完整讲解的企业知识库 RAG Agent：
 
 - FastAPI 提供后端 API；
-- 支持 PDF、Markdown、TXT 的上传、解析、切分和元数据存储；
+- 支持 PDF、Markdown、TXT 上传、解析、分页切分和元数据持久化；
 - 使用 Embedding、Qdrant、BM25、RRF、Rerank 实现检索增强；
 - 使用 OpenAI-compatible LLM 生成带来源引用的回答；
 - 使用 LangGraph 实现检索决策、工具调用和多轮记忆；
-- PostgreSQL 保存业务数据，并以评测数据集量化质量和延迟；
+- PostgreSQL 保存业务数据，以评测数据集量化质量和延迟；
 - Streamlit 提供演示界面，最终由 Docker Compose 一键启动；
 - 最终形成 README、架构图、评测报告、简历描述和面试材料。
 
-`PLAN.md` 是 25 天范围与顺序的唯一计划基线。计划中的未来能力不能写成已完成事实。
+`PLAN.md` 是 25 天范围与顺序的唯一计划基线。未来能力不得写成已完成事实。
 
 ### 2. 新会话必须阅读的资料
 
@@ -33,92 +33,122 @@ GitHub 而暂未完成；不得自行开始 Day 5。
 4. `TODO.md`
 5. `AGENTS.md`
 6. `README.md`
-7. `PLAN.md`（只读，除非用户另行授权修改）
+7. `PLAN.md`（只读，除非用户明确授权修改）
 8. `docs/architecture.md`
-9. 与获授权任务直接相关的代码和测试
+9. `docs/day5-chunk-size-comparison.md`
+10. `backend/app/api/documents.py`
+11. `backend/app/core/config.py`
+12. `backend/app/core/database.py`
+13. `backend/app/models/document.py`
+14. `backend/app/models/chunk.py`
+15. `backend/app/models/init_db.py`
+16. `backend/app/services/document_parser.py`
+17. `backend/app/services/document_storage.py`
+18. `backend/app/services/text_splitter.py`
+19. `backend/tests/test_text_splitter.py`
+20. `backend/tests/test_documents.py`
+21. `backend/tests/test_documents_postgres.py`
 
-禁止读取或输出 `.env`，也不要读取无关未跟踪目录 `.agents/` 的内容。
+禁止读取或输出 `.env`，也不得读取无关未跟踪目录 `.agents/` 的内容。
 
 ### 3. Git、环境与工作区精确状态
 
 | 项目 | 当前值 |
 |---|---|
 | 分支 | `master` |
-| Day 4 实现提交 | `623989f2d6934c98500c555bfac0b5ba6f94736d` |
-| Day 4 提交摘要 | `623989f feat: complete Day 4 document upload` |
-| 前一提交 | `a27a3f5 docs: refresh Day 3 handoff` |
-| Day 3 实现提交 | `177ad2b feat: complete Day 3 DeepSeek chat integration` |
-| 远端 | `origin https://github.com/itysrw/rag-agent.git` |
+| Day 5 实现提交 | `a989837bbf8bae1cf866beda034130a514152378` |
+| Day 5 提交摘要 | `a989837 feat: complete Day 5 text chunking` |
+| 当前交接提交 | 本文档刷新提交，是 `a989837` 的直接后继；完整 HEAD 以 `git rev-parse HEAD` 为准 |
+| Day 4 实现 | `623989f feat: complete Day 4 document upload` |
+| Day 4 交接 | `a64a0cc docs: refresh Day 4 handoff` |
+| Day 3 交接 | `a27a3f5 docs: refresh Day 3 handoff` |
+| Day 3 实现 | `177ad2b feat: complete Day 3 DeepSeek chat integration` |
+| 远端名称 | `origin` |
 | 上游跟踪 | 未配置 |
-| 推送状态 | 两次 push 分别因连接重置和 GitHub 443 不可达而失败，远端尚未发布 |
-| 首次发布前远端状态 | `git ls-remote --heads origin` 无输出，远端没有已有分支 |
+| 本地远端跟踪引用 | 无 |
+| 远端实时状态 | 待确认；本轮未 fetch、未 push |
 | Python | `3.11.15` |
 | 虚拟环境 | `D:\2019\rag-agent\.venv` |
-| PostgreSQL | Docker `postgres:16-alpine`；2026-07-15 本次交接核验为 `Up (healthy)` |
-| `.env` | 本地存在且被 Git 忽略；未读取、未输出、未提交 |
-| `PLAN.md` | Day 4 六项已按用户授权勾选完成；Day 5 未开始 |
+| PostgreSQL | 可连接；显式建表和真实集成测试通过 |
+| 暂存区 | 空 |
+| Day 5 | 已提交到本地 `a989837` |
+| `PLAN.md` | 经用户明确授权更新 Day 5 复选框和开发日志；Day 6 未修改 |
 
-发布本交接包时，工作区仍有另一个编辑流程产生的未提交修改，包含配置、依赖和 Day 5
-相关文件，以及无关未跟踪目录 `.agents/`。实时清单以 `git status` 为准；这些内容均未纳入
-本次发布。不得擅自读取可能含密钥的 `.env.example`，也不得擅自提交、覆盖或删除这些改动。
+并发说明：Day 5 开始时 HEAD 为 `623989f`，三份交接文档存在未提交刷新。开发期间，
+本轮之外的流程创建了 `a64a0cc`，提交范围为 `HANDOFF.md`、`STATUS.md`、`TODO.md`，
+并将 HEAD 移到该提交。之后用户明确授权提交 Day 5 和更新 `PLAN.md`，本地创建了
+`a989837`；新会话仍必须以实际 Git 输出为准再次检查。
 
-新会话必须先用以下只读命令复核，实际输出优先于本段文字：
+Day 5 实现提交包含：
 
-```powershell
-git status --short --branch
-git log -3 --oneline
-git branch -vv
-```
+- 修改：`.env.example`、`README.md`、`DECISIONS.md`、`PLAN.md`、`docs/architecture.md`、
+  `backend/requirements.txt`、`backend/app/api/documents.py`、
+  `backend/app/core/config.py`、`backend/app/models/init_db.py`、
+  `backend/tests/test_documents.py`、`backend/tests/test_documents_postgres.py`；
+- 新增：`backend/app/models/chunk.py`、`backend/app/services/text_splitter.py`、
+  `backend/tests/test_text_splitter.py`、`docs/day5-chunk-size-comparison.md`；
+- 后续交接提交：`HANDOFF.md`、`STATUS.md`、`TODO.md`；
+- 排除：`.agents/` 是无关目录；未读取、未修改、未纳入提交；
+- `.env` 未查看、未输出、未修改；真实数据库命令由应用配置层读取现有配置。
 
-### 4. 已完成并提交的阶段
+### 4. 已完成阶段
 
 #### Day 1：项目边界和架构
 
-- 建立项目范围、目录、README、Mermaid 目标架构和 GitHub 远端；
+- 建立范围、目录、README、目标架构和 GitHub 远端；
 - 提交：`751dc40 docs: complete Day 1 project architecture`。
 
 #### Day 2：FastAPI 骨架
 
 - FastAPI 应用、`GET /health`、聊天和上传占位路由；
 - 配置、Loguru、请求日志；
-- `/health` 真实 HTTP 验收通过；
 - 提交：`607645d feat: complete Day 2 FastAPI foundation`。
 
 #### Day 3：DeepSeek 对话
 
 - OpenAI-compatible `LLMClient`；
-- 默认模型 `deepseek-v4-flash`，默认关闭思考模式；
+- 默认 `deepseek-v4-flash`，默认关闭思考模式；
 - `POST /chat` 支持非流式 JSON 和 SSE；
-- 缺少配置返回 `503`，普通上游错误返回 `502`，SSE 流中错误返回通用 error 事件；
-- 真实 DeepSeek 非流式/SSE 验收通过；
-- 当时 pytest：`12 passed, 1 warning`；
-- 实现提交：`177ad2b feat: complete Day 3 DeepSeek chat integration`；
-- 交接提交：`a27a3f5 docs: refresh Day 3 handoff`。
+- 缺少配置返回 `503`，普通上游失败返回 `502`，SSE 流错误返回通用 error 事件；
+- pytest 与真实 DeepSeek JSON/SSE 验收通过；
+- 实现提交：`177ad2b`；交接提交：`a27a3f5`。
 
-#### Day 4：文档上传、解析和 PostgreSQL 持久化
+#### Day 4：文档上传、解析和 PostgreSQL
 
-- `POST /documents/upload` 已从占位接口改为 multipart 文件上传；
-- PDF/Markdown/TXT 安全存储和解析；
-- PDF 页边界保留，空白页不丢失；
-- PostgreSQL `documents` 表和同步事务；
-- 失败回滚及文件补偿清理；
-- 真实 PDF、磁盘和 PostgreSQL 往返验收通过；
-- 全量 pytest：`44 passed, 1 warning`；
-- 提交：`623989f feat: complete Day 4 document upload`。
+- `POST /documents/upload` 支持 multipart PDF/Markdown/TXT；
+- 20 MiB 实际字节上限、500 页 PDF 上限、1 MiB 分块存储；
+- UUID `.part` 临时文件、安全文件名/MIME/PDF 签名验证；
+- PDF 空白页和一基页码保留，以 `\f` 序列化到 `documents.extracted_text`；
+- SQLAlchemy 2.x + psycopg 3，同步事务和失败补偿；
+- 真实 PDF、磁盘与 PostgreSQL 往返通过；
+- 实现提交：`623989f`；Day 4 交接提交：`a64a0cc`。
 
-### 5. 当前实现状态
+#### Day 5：分页 token 切分和 Chunk 持久化
+
+- 安装独立 `langchain-text-splitters 1.1.2` 与 `tiktoken 0.13.0`，未安装完整 LangChain；
+- 新增 `ChunkingSettings`，默认 `500/100/o200k_base`；
+- 新增纯函数 `split_pages()`，逐页切分，禁止跨页；
+- 空白页不生成 Chunk，后续页码不压缩；
+- 新增 `chunks` 表及 UUID/顺序/JSONB/外键/索引/级联约束；
+- 新上传 Document 与全部 Chunk 在同一事务中写入；
+- 上传成功响应未增加 `chunk_count` 或其他字段；
+- 300/500/800 token 结构实验已实际执行并记录；
+- 标准与真实 PostgreSQL 全量测试通过；
+- 本地实现提交：`a989837 feat: complete Day 5 text chunking`。
+
+### 5. 当前接口与实现状态
 
 #### 5.1 已注册接口
 
-`backend/app/main.py:create_app()` 依次注册：
+`backend/app/main.py:create_app()` 注册：
 
-- `health_router`：`GET /health`；
-- `chat_router`：`POST /chat`；
-- `documents_router`：`POST /documents/upload`。
+- `GET /health`
+- `POST /chat`
+- `POST /documents/upload`
 
-Day 4 没有修改 `/health` 或 `/chat` 的契约。
+Day 5 未修改 `/health` 或 `/chat` 契约，也没有新增查询、删除、回填或重切分 API。
 
-#### 5.2 `POST /documents/upload` 精确契约
+#### 5.2 `POST /documents/upload` 契约
 
 请求：
 
@@ -128,7 +158,7 @@ Content-Type: multipart/form-data
 字段：file（UploadFile，必填）
 ```
 
-成功响应 `201`，模型为 `backend/app/api/documents.py:DocumentUploadResponse`：
+成功 `201`，`DocumentUploadResponse` 字段仍严格为：
 
 ```json
 {
@@ -140,160 +170,207 @@ Content-Type: multipart/form-data
 }
 ```
 
-不返回 `extracted_text`。
+不返回 `extracted_text`、`chunk_count` 或 Chunk 正文。
 
 | 场景 | 状态码 |
 |---|---|
-| 保存、解析、移动和数据库提交成功 | `201` |
-| 空文件、损坏/加密/无文本 PDF、PDF 超页数、非 UTF-8 文本、非法文件名 | `400` |
-| 实际上传超过 20 MiB | `413` |
-| 不支持的扩展名、MIME 或 PDF 内容签名 | `415` |
-| 缺少 `file` 字段 | `422` |
-| PostgreSQL 配置缺失、连接失败或超时 | `503` |
-| 未预期存储或数据库错误 | `500` |
+| 文档、Chunks、文件全部成功 | `201` |
+| 空文件、损坏/加密/无文本 PDF、超页数、非 UTF-8、非法文件名 | `400` |
+| 实际上传超过限制 | `413` |
+| 扩展名、MIME 或 PDF 签名不支持 | `415` |
+| 缺少 `file` | `422` |
+| PostgreSQL 连接、flush 或 commit 不可用 | `503` |
+| 切分、存储或其他未预期错误 | `500` |
 
-所有客户端错误都是通用安全描述，不返回数据库密码、解析库原始异常或上传正文。
+所有错误使用通用安全描述，不返回正文、tokenizer 原始错误、数据库密码或原始数据库响应。
 
-#### 5.3 上传和存储
+#### 5.3 Day 5 切分配置
 
-- 允许扩展名：`.pdf`、`.md`、`.txt`；
-- `backend/app/services/document_storage.py:ALLOWED_CONTENT_TYPES` 定义扩展名与 MIME 白名单；
-- 原始文件名最多 255 字符，拒绝控制字符、`.`、`..`、POSIX/Windows 路径；
-- 服务端以 UUID 生成存储名，扩展名统一小写；
-- 临时文件：`data/uploads/{UUID}.part`；
-- 最终文件：`data/uploads/{UUID}.pdf|.md|.txt`；
-- 使用 `UploadFile.file.read(settings.read_chunk_size)` 同步分块读取；
-- 真实字节上限 `20 * 1024 * 1024`，不依赖 `Content-Length`；
-- PDF 前 1024 字节必须包含 `%PDF-`；
-- `data/` 已被 Git 忽略。
+文件：`backend/app/core/config.py`
 
-#### 5.4 文本解析和页边界
-
-- `backend/app/services/document_parser.py:PageText(page: int, text: str)` 使用一基页码；
-- PDF 由 `pypdf.PdfReader(strict=False)` 逐页 `extract_text()`；
-- 空白页保存为对应 `PageText`，只有所有页均为空白才失败；
-- PDF 最大 500 页；加密、损坏、扫描版整体无文本 PDF 返回 `400`；OCR 不在当前范围；
-- Markdown/TXT 使用严格 UTF-8，`utf-8-sig` 支持 BOM，并视为第 1 页；
-- `PAGE_SEPARATOR = "\f"`；页内已有 `\f` 会转换成换行；
-- `serialize_pages()` 以 `\f` 写入 `documents.extracted_text`。
-
-#### 5.5 PostgreSQL 模型
-
-模型：`backend/app/models/document.py:Document`，表名 `documents`。
-
-| 字段 | SQLAlchemy 类型/约束 |
-|---|---|
-| `id` | `Uuid(as_uuid=True)`，主键 |
-| `filename` | `String(255)`，非空 |
-| `size` | `BigInteger`，非空 |
-| `status` | `String(32)`，非空；当前成功值仅 `ready` |
-| `created_at` | `DateTime(timezone=True)`，非空，默认 UTC |
-| `extracted_text` | `Text`，非空，以 `\f` 保留页边界 |
-
-没有 `storage_path`、`content_type`、`error_message` 字段；失败记录不入库。
-
-数据库不会在 FastAPI lifespan 或 `/health` 中初始化。显式建表入口：
-
-```powershell
-.\.venv\Scripts\python.exe -m backend.app.models.init_db
+```text
+ChunkingSettings
+chunk_size = 500
+chunk_overlap = 100
+chunk_encoding_name = "o200k_base"
 ```
 
-#### 5.6 文件和事务顺序
+环境变量：`CHUNK_SIZE`、`CHUNK_OVERLAP`、`CHUNK_ENCODING_NAME`。
+
+验证：`chunk_size > 0`、`chunk_overlap >= 0`、`chunk_overlap < chunk_size`、编码名非空。
+`get_chunking_settings()` 使用 `lru_cache` 返回配置。
+
+#### 5.4 纯切分服务
+
+文件：`backend/app/services/text_splitter.py`
+
+- `JSONScalar = str | int | float | bool | None`
+- `ChunkDraft(chunk_index, content, page, metadata)`
+- `TextSplittingError`
+- `split_pages(pages, *, chunk_size, chunk_overlap, encoding_name)`
+
+行为：
+
+1. 校验配置；
+2. `tiktoken.get_encoding(encoding_name)`；
+3. token 计数使用 `encoding.encode(text, disallowed_special=())`；
+4. 构造 `RecursiveCharacterTextSplitter`；
+5. 每个 `PageText` 独立切分；
+6. 空白页跳过，但 `page` 使用原一基页码；
+7. `chunk_index` 在整个文档内从 0 连续递增；
+8. 每个 Chunk 再次验证 `token_count <= chunk_size`；
+9. 没有非空 Chunk 时抛 `TextSplittingError`。
+
+分隔符顺序：
+
+```text
+\n\n → \n → 。 → ！ → ？ → . → ! → ? → ； → ; → ， → , → 空格 → 单字符
+```
+
+使用 `keep_separator="end"`。
+
+metadata 精确结构：
+
+```json
+{
+  "chunk_size": 500,
+  "chunk_overlap": 100,
+  "length_unit": "token",
+  "encoding_name": "o200k_base",
+  "token_count": 487
+}
+```
+
+#### 5.5 `chunks` 数据模型
+
+文件：`backend/app/models/chunk.py`，表名：`chunks`。
+
+| 字段 | 类型与约束 |
+|---|---|
+| `chunk_id` | UUID，主键，默认 `uuid4()` |
+| `doc_id` | UUID，非空，外键 `documents.id`，`ON DELETE CASCADE` |
+| `chunk_index` | Integer，非空，检查 `>= 0` |
+| `content` | Text，非空，切分服务保证非空白 |
+| `page` | Integer，非空，检查 `>= 1` |
+| `metadata` | PostgreSQL JSONB；SQLite 使用 JSON 变体；非空 |
+
+额外约束：
+
+- `(doc_id, chunk_index)` 唯一：`uq_chunks_doc_id_index`
+- `doc_id` 索引：`ix_chunks_doc_id`
+- ORM 属性名 `chunk_metadata` 映射到数据库列 `metadata`
+
+不依赖 UUID 排序。Day 5 不更新、不重切分、不回填历史数据。
+
+#### 5.6 上传和事务顺序
 
 ```text
 uuid4()
 → validate_upload_metadata()
 → build_upload_paths()
 → save_upload_to_part()
-→ parse_document()
-→ serialize_pages()
-→ session.begin() / add() / flush()
+→ parse_document() -> list[PageText]
+→ split_pages() -> list[ChunkDraft]
+→ 构造 Document 与 Chunk ORM 对象
+→ session.begin()
+→ add(Document) / flush()
+→ add_all(Chunks) / flush()
 → promote_upload()（os.replace）
 → commit
+→ 原 DocumentUploadResponse
 ```
 
-异常时 `backend/app/api/documents.py:_cleanup_failed_upload()` 回滚数据库并调用
-`cleanup_upload_files()` 删除 `.part` 和最终文件。若事务已经实际提交但提交后的钩子抛错，
-清理逻辑保留已提交文档的最终文件。进程恰好在文件移动后崩溃仍可能留下孤儿文件，
-这是已确认残余风险。
+必须保留两次 flush。真实 PostgreSQL 已证明单次 flush 在没有 ORM relationship 时可能先插入
+Chunk，触发 `chunks_doc_id_fkey`。两次 flush 仍属于同一事务；第二次 flush 失败会回滚第一
+次 flush 的 Document。
 
-### 6. Day 4 关键代码位置、类和函数
+`_cleanup_failed_upload(session, paths, document_id)` 继续负责数据库回滚和 `.part`/最终文件清理。
+提交已实际成功但提交后钩子抛错时保留已提交 Document、Chunks 和最终文件。
 
-| 文件 | 关键符号 | 作用 |
+#### 5.7 显式数据库初始化
+
+文件：`backend/app/models/init_db.py`
+
+`main()` 导入 `Document` 和 `Chunk` 注册模型，再执行：
+
+```python
+Base.metadata.create_all(bind=get_engine())
+```
+
+命令：
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.app.models.init_db
+```
+
+该命令只创建缺失表，不迁移既有表。应用启动和 `/health` 仍不依赖 PostgreSQL。
+
+### 6. Day 5 关键代码和测试位置
+
+| 文件 | 符号 | 作用 |
 |---|---|---|
-| `backend/app/api/documents.py` | `DocumentUploadResponse` | `201` 响应模型 |
-| 同上 | `require_database_session()` | 延迟取得同步 Session；配置错误映射 `503` |
-| 同上 | `upload_document(file, session, settings)` | 上传、解析、事务和 HTTP 错误总编排 |
-| 同上 | `_cleanup_failed_upload(session, paths, document_id)` | 回滚与文件补偿清理 |
-| `backend/app/core/config.py` | `MAX_UPLOAD_SIZE` | `20 * 1024 * 1024` |
-| 同上 | `MAX_PDF_PAGES` | `500` |
-| 同上 | `READ_CHUNK_SIZE` | `1024 * 1024` |
-| 同上 | `DatabaseSettings` / `get_database_settings()` | `POSTGRES_` 配置 |
-| 同上 | `DocumentSettings` / `get_document_settings()` | 上传目录与限制配置 |
-| `backend/app/core/database.py` | `build_database_url()` | 构造 `postgresql+psycopg` URL，拒绝占位密码 |
-| 同上 | `get_engine()` | 延迟缓存 Engine，`pool_pre_ping=True` |
-| 同上 | `get_session_factory()` | 同步 Session，`expire_on_commit=False` |
-| `backend/app/models/document.py` | `Document` / `utc_now()` | `documents` ORM 模型和 UTC 时间 |
-| `backend/app/models/init_db.py` | `main()` | 显式 `Base.metadata.create_all()` |
-| `backend/app/services/document_storage.py` | `validate_upload_metadata()` | 文件名、扩展名、MIME 检查 |
-| 同上 | `build_upload_paths()` | UUID 路径唯一推导点 |
-| 同上 | `save_upload_to_part()` | `xb` 分块保存、实际大小和内容检查 |
-| 同上 | `promote_upload()` / `cleanup_upload_files()` | 原子移动和补偿清理 |
-| `backend/app/services/document_parser.py` | `PageText` / `parse_document()` | PDF/UTF-8 分页解析 |
-| 同上 | `serialize_pages()` | 用 `\f` 序列化页面 |
-
-测试位置：
-
-- `backend/tests/test_documents.py`：接口、HTTP 契约、事务失败和提交后异常；
-- `backend/tests/test_document_parser.py`：PDF 页边界、加密/损坏/无文本和 UTF-8；
-- `backend/tests/test_document_storage.py`：路径穿越、类型、分块、大小和清理；
-- `backend/tests/test_documents_postgres.py:test_upload_round_trip_with_local_postgres()`：真实 PostgreSQL/PDF 往返；
-- `backend/tests/pdf_fixtures.py`：测试 PDF 生成辅助函数。
+| `backend/app/core/config.py` | `ChunkingSettings` | 默认参数及边界验证 |
+| 同上 | `get_chunking_settings()` | 缓存切分配置 |
+| `backend/app/services/text_splitter.py` | `ChunkDraft` | 纯切分输出 |
+| 同上 | `TextSplittingError` | 安全切分异常 |
+| 同上 | `split_pages()` | 按页 token 切分 |
+| `backend/app/models/chunk.py` | `Chunk` | `chunks` ORM 模型 |
+| `backend/app/models/init_db.py` | `main()` | 显式注册并创建新表 |
+| `backend/app/api/documents.py` | `upload_document()` | 上传、切分、两表事务和响应编排 |
+| 同上 | `_cleanup_failed_upload()` | 回滚与文件补偿 |
+| `backend/tests/test_text_splitter.py` | `representative_text()` | 可复现实验语料 |
+| 同上 | 13 个测试 | 配置、页码、token 上限、确定性、特殊文本、模型约束 |
+| `backend/tests/test_documents.py` | 17 个测试 | API 成功、响应不变、切分/flush/commit 补偿 |
+| `backend/tests/test_documents_postgres.py` | `test_upload_round_trip_with_local_postgres()` | 真实 JSONB、页码、顺序和级联 |
+| `docs/day5-chunk-size-comparison.md` | 实验报告 | 300/500/800 结构数据 |
 
 ### 7. 已确认技术决策及原因
 
-完整记录以 `DECISIONS.md` 为准，尤其是 D-015 至 D-018：
+完整记录以 `DECISIONS.md` 为准。关键决策：
 
-1. **使用 `pypdf` 而非旧 `PyPDF2` 名称或 `pdfminer.six`**：`pypdf` 是合并后的维护项目；当前只需文本层提取。
-2. **保留每一页并用 `\f` 序列化**：Day 5 的 chunk `page` 和 Day 8 的引用需要可靠页码。
-3. **同步 SQLAlchemy 2.x + psycopg 3，同步上传路由**：FastAPI 会在线程池运行普通 `def`，适合同步文件、pypdf 和数据库 I/O。
-4. **数据库显式初始化**：PostgreSQL 暂时不可用时 FastAPI 和 `/health` 仍应启动并保持原语义。
-5. **UUID 主键、`ready` 状态、`extracted_text TEXT`**：满足 Day 4 最小持久化并为分页切分保留文本。
-6. **不保存路径和失败记录**：路径集中推导，失败通过事务回滚和文件清理解决，避免擅自扩表。
-7. **20 MiB、500 页、1 MiB 块**：同时限制上传字节、PDF 页数和单次内存读取。
-8. **`.part → flush → os.replace → commit`**：文件系统与 PostgreSQL不能形成真正原子事务，此顺序配合补偿清理缩小半完成窗口。
+1. `PLAN.md` 控制范围；避免提前引入未来组件。
+2. FastAPI 使用模块化结构；路由只编排 HTTP，服务封装业务能力。
+3. Day 3 只接 DeepSeek，客户端保持 OpenAI-compatible，默认关闭思考模式。
+4. 上游与配置错误不泄露供应商或凭据细节。
+5. Day 4 使用 `pypdf` 并以 `\f` 保留每个 PDF 页面边界。
+6. 同步 SQLAlchemy 2.x + psycopg 3；数据库显式初始化，不耦合启动和 `/health`。
+7. 文件和数据库采用补偿式一致性，不声称真正跨系统原子事务。
+8. Day 5 使用 `o200k_base`，因为默认 `len` 是字符计数而不是 token。
+9. 按页独立切分，默认 `500/100`；保证 Day 8 引用页码可靠。
+10. Chunk 使用 UUID 身份和独立 `chunk_index` 顺序；UUID 不可用于恢复原文顺序。
+11. `chunk_metadata` 映射数据库列 `metadata`，避免 SQLAlchemy 保留属性冲突。
+12. 同一事务分两次 flush，显式保证外键父行先存在。
+13. Day 5 只创建全新 `chunks` 表，继续 `create_all()`；不回填、不引入 Alembic。
+14. 结构实验不等于检索质量实验；检索结论留到 Day 9。
 
-### 8. 已否决或未采用的方案
+### 8. 已否决或未采用方案
 
-- Day 3 同时接入 DeepSeek、OpenAI 和千问：否决，范围和计费复杂度过大；
-- 继续默认使用 `deepseek-chat`：否决，改为 `deepseek-v4-flash`；
-- 在 `LLMClient` 中按供应商写分支：否决，保持 OpenAI-compatible；
-- Day 4 一次性将整个上传读入内存：否决，大文件会放大内存风险；
-- 只检查 `Content-Length`：否决，必须统计实际读取字节；
-- 直接用客户端文件名落盘：否决，存在路径穿越和重名覆盖；
-- 只信任扩展名或 MIME：否决，PDF 还校验内容签名并实际解析；
-- 只保存拼接文本、不保留页边界：否决，会破坏 Day 5 页码和 Day 8 引用；
-- 将数据库建表放到应用启动或 `/health`：否决，会改变已验收健康检查语义；
-- 在 Day 4 立即引入 Alembic：未采用；首次真正修改已有表结构前再引入；
-- 保存 `storage_path`、`content_type`、`error_message` 或失败行：未采用，超出 Day 4 最小范围；
-- 在 Day 4 加 OCR、切分、Embedding、Qdrant：禁止，均超出 Day 4。
+- 安装完整 LangChain：否决；只安装 `langchain-text-splitters`。
+- 使用默认 `len` 并称为 token 切分：否决；字符数与 token 数不是同一指标。
+- 先拼接整篇 `extracted_text` 再切分：否决；会造成 Chunk 跨页和错误引用。
+- 让 Chunk UUID 同时表示顺序：否决；UUID 排序不稳定。
+- ORM 属性直接命名 `metadata`：否决；与 SQLAlchemy Declarative 保留属性冲突。
+- Document 与 Chunks 一次 flush 并假设自动外键排序：已尝试且否决；真实 PostgreSQL 外键失败。
+- 给上传响应增加 `chunk_count`：否决；会改变已验收契约。
+- 回填 Day 4 历史文档：未采用；超出 Day 5。
+- Day 5 引入 Alembic：未采用；只新增表，没有修改既有表。
+- 根据结构实验声称 500 token 检索最好：禁止；没有检索评测证据。
+- Embedding、Qdrant、BM25、RRF、Rerank、RAG、LangGraph：禁止，均属于未来 Day。
 
 ### 9. 不可违反的约束
 
-- 使用 Python 3.11；
-- 后端代码位于 `backend/`；
-- 公共函数使用类型标注；
-- 使用 pytest，完成开发任务前运行全量测试；
-- 不读取、输出或提交 `.env`、API Key、数据库真实密码；
-- 不在日志中记录上传正文、数据库密码或原始数据库错误响应；
-- 未经用户明确授权不得修改 `PLAN.md`；
-- 不得重写或删除已验收的 Day 1 至 Day 4 实现；
-- 不得将计划中的 Day 5+ 能力描述为已完成；
-- 不得自行推送；`master` 当前无上游跟踪；
-- 不得读取、修改或提交无关 `.agents/`；
-- 新会话初次只读复核后必须等待用户指定唯一下一动作。
+- 使用 Python 3.11；后端代码位于 `backend/`；公共函数使用类型标注。
+- 使用 pytest；完成开发任务前运行全量测试。
+- 不读取、输出或提交 `.env`、API Key、数据库真实密码。
+- 不在日志中记录上传正文、tokenizer 原始错误、数据库密码或原始数据库响应。
+- 未经用户明确授权不得修改 `PLAN.md`。
+- 不得重写或删除已验收的 Day 1 至 Day 5 实现。
+- 不得将 Day 6+ 能力描述为已完成。
+- 不得读取、修改或提交无关 `.agents/`。
+- commit 与 push 必须分别获得明确授权。
+- 新会话先只读恢复并等待用户指定唯一动作。
 
-### 10. 当前错误、日志和已尝试但失败的操作
+### 10. 已尝试但失败的操作、当前错误和日志
 
 #### 当前阻断错误
 
@@ -301,104 +378,154 @@ uuid4()
 
 #### 当前失败测试
 
-无。最近一次全量 PostgreSQL 集成测试结果：
+无。
+
+#### 持续警告
 
 ```text
-44 passed, 1 warning in 3.22s
-```
-
-本次发布前常规测试未启用 PostgreSQL 集成开关，结果为 `43 passed, 1 skipped, 1 warning in 3.29s`；
-被跳过的是本地 PostgreSQL 往返测试，已由上述完整验收覆盖。
-
-唯一持续警告：pytest 无法写入 `.pytest_cache`，日志包含：
-
-```text
-PytestCacheWarning: cache could not write path ...
+PytestCacheWarning: could not create cache path ...
 [WinError 5] 拒绝访问
 ```
 
-根因：待确认。该警告不影响测试结果。
+根因待确认；不影响测试通过。
 
-#### 已发生且已解决/规避的问题
+#### Day 5 已发生并解决/规避的问题
 
-1. 受限网络首次安装新依赖失败；获准联网后安装成功，`pip check` 通过。
-2. 首轮新增测试使用当前 Starlette 不存在的 413 常量名；已改用兼容常量，测试通过。
-3. PostgreSQL 镜像首次拉取两次超时；后台下载最终完成，`postgres:16-alpine` 已启动。
-4. Docker 在受限权限下读取 `C:\Users\袁伟鑫\.docker\config.json` 和 named pipe 时出现 `Access is denied`；只读提升权限后 `docker compose ps postgres` 成功，容器为 `healthy`。
-5. 本次生成交接包时 `rg.exe` 被系统拒绝执行；改用 PowerShell `Select-String` 完成只读核对。根因待确认，不影响项目。
-6. LF/CRLF 提示仍可能出现；`git diff --check` 已通过。是否添加 `.gitattributes`：待确认。
+1. 首次安装新依赖时受限网络返回 `[WinError 10013]`；授权联网后安装成功。
+2. `tiktoken` 首次加载 `o200k_base` 时需要下载词表，受限网络导致 5 个切分测试失败；
+   授权下载并缓存后正常离线运行。
+3. 授权环境运行 tokenizer 测试时，pytest 临时目录出现 `[WinError 5]`，结果为
+   `10 passed, 1 error`；移除测试中未使用的 `tmp_path` 后普通权限通过。
+4. 首次标准全量测试有 1 个测试失败，因为测试 monkeypatch 的 `Session.flush` 在断言查询时仍生效；
+   在查询前 `monkeypatch.undo()` 后通过。这是测试隔离问题，不是生产逻辑问题。
+5. 首次真实 PostgreSQL 上传返回 `500`，日志只记录 `IntegrityError`。安全诊断得到：
+
+   ```text
+   sqlstate=23503
+   constraint=chunks_doc_id_fkey
+   table=chunks
+   ```
+
+   原因是单次 flush 先插入 Chunk。改为同一事务内先 flush Document、再 flush Chunks 后通过。
+6. `docker compose ps postgres` 普通权限读取 Docker config/named pipe 时 `Access is denied`；
+   授权后 30 秒和 60 秒查询均超时。直接显式建表和真实 PostgreSQL 测试成功，因此不阻断 Day 5。
+7. Git 持续提示 LF 未来可能转换为 CRLF；`git diff --check` 退出码为 0。
+8. Day 5 开发期间外部并发流程创建 `a64a0cc` 并移动 HEAD；本交接已按实际状态重写。
+
+#### 已知残余风险
+
+- 新环境首次使用 `o200k_base` 可能需要网络下载；预热/离线缓存策略待确认。
+- 文件移动后进程立即崩溃仍可能留下孤儿文件。
+- `_cleanup_failed_upload()` 读取 SQLAlchemy 私有事务 `_state`；未来升级需验证兼容性。
+- `.pytest_cache`、Docker 查询权限和行尾规范仍待确认。
 
 ### 11. 已完成验收
 
-- 依赖版本：`pypdf 6.14.2`、`python-multipart 0.0.32`、`SQLAlchemy 2.0.51`、`psycopg 3.3.4`；
-- `pip check`：`No broken requirements found.`；
-- compileall：通过；
-- Docker Compose 配置：通过；
-- `git diff --check`：通过；
-- 密钥扫描：0 个匹配；
-- PostgreSQL：`postgres:16-alpine`，本次复核 `healthy`；
-- 显式 `python -m backend.app.models.init_db`：通过；
-- 真实三页 PDF（中间空白页）上传返回 `201`；
-- 磁盘文件和数据库记录一致；`extracted_text` 含两个 `\f`；
-- 测试文件和记录清理成功，验收后 `documents` 行数为 `0`；
-- Day 2 `/health` 和 Day 3 `/chat` 回归通过；
-- 全量 pytest：`44 passed, 1 warning`。
+最终实际命令：
 
-### 12. 待完成任务
+```powershell
+# 显式创建缺失表
+.\.venv\Scripts\python.exe -m backend.app.models.init_db
 
-当前没有获授权的开发任务。用户选择之前保持暂停。
+# 标准全量测试；PostgreSQL 测试跳过
+.\.venv\Scripts\python.exe -m pytest backend/tests -v
 
-`PLAN.md` 的下一个计划阶段是 Day 5“文本切分”，但尚未开始：
+# 真实 PostgreSQL 全量测试
+$env:RUN_POSTGRES_INTEGRATION='1'
+.\.venv\Scripts\python.exe -m pytest backend/tests -v
 
-- 安装 `langchain-text-splitters`，不安装完整 LangChain；
-- 实现 `RecursiveCharacterTextSplitter`；
-- Chunk 字段：`doc_id`、`chunk_id`、`content`、`page`、`metadata`；
-- 测试 300 / 500 / 800 token 三种 chunk size并记录差异；
-- 建立 `chunks` 表并把切分结果写入 PostgreSQL；
-- 产出：一个文档能被切成多个 chunks 并入库。
+# 依赖检查
+.\.venv\Scripts\python.exe -m pip check
 
-Day 5 开工前仍需确认，禁止自行补全：
+# 编译检查
+.\.venv\Scripts\python.exe -m compileall -q backend
 
-- “token”使用哪种 tokenizer/`length_function`；
-- `chunk_overlap` 数值；
-- `chunk_id` 类型、主键和排序语义；
-- `metadata` 的 JSON 结构及数据库类型；
-- `chunks.doc_id` 外键、删除策略和索引；
-- 新表继续由 `create_all()` 创建，还是在 Day 5 引入迁移工具；
-- 300/500/800 的对比语料、指标和记录位置。
+# 差异格式检查
+git diff --check
+```
 
-其他延后事项：孤儿文件清理任务、Alembic 时机、`.pytest_cache` 权限、`.gitattributes`、
-Day 6 Embedding 供应商和 Day 18 千问对比，均为待确认。
+最新结果（2026-07-15 提交前复跑）：
 
-### 13. 下一步具体操作（最多 5 步）
+- 标准：`60 passed, 1 skipped, 1 warning in 5.26s`
+- 真实 PostgreSQL：`61 passed, 1 warning in 4.67s`
+- `pip check`：`No broken requirements found.`
+- compileall：通过
+- `git diff --check`：通过；只有 LF→CRLF 提示
+- 新表注册和创建：通过
+- 上传响应字段不变：通过
+- PDF 空白第 2 页、Chunk 页码 `[1, 3]`：通过
+- Chunk 顺序 `[0, 1]`：通过
+- JSONB metadata：通过
+- Document 删除级联删除 Chunks：通过
+- 切分、第二次 flush、commit 失败补偿：通过
 
-1. 新会话完整阅读第 2 节列出的资料以及 Day 4 关键代码和测试。
-2. 只读运行 `git status --short --branch`、`git log -3 --oneline`、`git branch -vv`；不读取 `.env` 或 `.agents/`。
-3. 向用户复述项目目标、Day 1-4 完成状态、待推送状态、当前 HEAD、工作区差异及所有“待确认”项。
-4. 如果实际状态与本交接包不符，先报告差异，不改代码、不提交、不推送。
-5. 等用户明确选择：网络恢复后重试推送、授权 Day 5、处理其他待确认项，或继续暂停；只能执行被选中的一项。
+旧交接中的 `58 passed` / `59 passed` 是新增两个切分兜底测试前的数字；本轮收集到 61 个测试项，
+标准环境跳过 PostgreSQL 用例，真实 PostgreSQL 环境全部通过。
 
-### 14. 下一阶段验收标准
+### 12. 300/500/800 结构实验
+
+报告：`docs/day5-chunk-size-comparison.md`。
+
+语料：`backend/tests/test_text_splitter.py:representative_text()`，30 个确定性中英文/Markdown 小节，
+原文 `1,980` token。
+
+| chunk/overlap | Chunk 数 | 平均 token | 最大 token | token 总和 | 冗余率估算 | 空块 | 超限 |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 300/60 | 8 | 247.50 | 264 | 1,980 | 0.00% | 0 | 0 |
+| 500/100 | 5 | 448.80 | 462 | 2,244 | 13.33% | 0 | 0 |
+| 800/160 | 3 | 748.00 | 792 | 2,244 | 13.33% | 0 | 0 |
+
+只能得出结构差异；哪一种检索质量最好仍为待确认。
+
+### 13. 待完成任务
+
+当前没有获授权的开发任务。
+
+最近的项目操作候选：
+
+1. 只读复核本交接和最新 Git 状态；
+2. 用户另行决定是否检查远端、配置上游和推送；
+3. 用户另行授权后才可开始 Day 6。
+
+Day 6 Embedding 仍待确认：
+
+- 供应商/模型：OpenAI、阿里云百炼/通义千问、或本地 `BAAI/bge-small-zh-v1.5`；
+- Embedding 维度；
+- 批量大小和重试细节是否沿用计划默认；
+- API 成本、网络和本地资源；
+- tokenizer 与 Day 5 `o200k_base` 的关系。
+
+其他待确认：远端实时状态、上游/推送、tokenizer 词表预热、孤儿文件清理、Alembic 时机、
+pytest/Docker 权限、`.gitattributes`、Day 18 千问对比。
+
+### 14. 下一步具体操作（最多 5 步）
+
+1. 新会话完整阅读第 2 节资料。
+2. 只读运行 `git status --short --branch`、`git log -3 --oneline`、`git branch -vv`；
+   不读取 `.env` 或 `.agents/`。
+3. 确认历史包含 `a989837 feat: complete Day 5 text chunking`，并核对工作区是否为空。
+4. 若状态不符，先报告差异并暂停，不改代码、不提交、不推送。
+5. 等用户指定唯一动作：处理远端、授权 Day 6、执行其他操作或继续暂停。
+
+### 15. 下一阶段验收标准
 
 #### 当前交接恢复验收
 
-- 精确识别 `master`、当前 HEAD 和 Day 4 实现提交 `623989f2d6934c98500c555bfac0b5ba6f94736d`；
-- 确认 Day 1-4 已提交但推送受网络阻断，并区分项目提交和无关 `.agents/`；
-- 明确当前尚未发布、未开始 Day 5；
-- 不读取 `.env`，不改代码、不提交、不推送；
-- 列出矛盾、缺失和待确认项后等待用户指令。
+- 识别 Day 1 至 Day 5 已完成；Day 5 本地实现提交为 `a989837`。
+- 识别 `a64a0cc` 是并发流程创建的 Day 4 交接提交，也是 Day 5 实现提交的基线。
+- 明确 `.agents/` 未读取、未修改、未提交。
+- 明确 `PLAN.md` 的 Day 5 状态已更新、Day 6 未开始。
+- 准确复述标准/真实 PostgreSQL 测试结果和唯一持续警告。
+- 不读取 `.env`，不改代码、不提交、不推送，除非用户另行授权。
 
-#### 若未来获授权执行 Day 5
+#### 若未来授权 Day 6
 
-- 严格完成 `PLAN.md` Day 5 的五项任务，不进入 Day 6；
-- 保留 Day 4 的 PDF `\f` 页边界并为每个 chunk 写入正确 `page`；
-- 300 / 500 / 800 的比较可复现并有记录；
-- chunks 成功写入 PostgreSQL；
-- `/health`、`/chat`、`/documents/upload` 契约不回归；
-- 单元测试和真实 PostgreSQL 集成测试通过；
-- 更新交接文档；修改 `PLAN.md`、提交和推送仍分别需要用户授权。
+- 先确认 Embedding 供应商、模型和维度；
+- 严格只完成 `PLAN.md` Day 6，不进入 Day 7；
+- 不破坏 Day 5 页码、顺序、metadata 和上传事务契约；
+- `PLAN.md`、提交、推送仍分别需要授权。
 
-### 15. 常用命令
+### 16. 常用命令
 
 所有命令从 `D:\2019\rag-agent` 执行：
 
@@ -406,22 +533,16 @@ Day 6 Embedding 供应商和 Day 18 千问对比，均为待确认。
 # 安装依赖
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 
-# 启动 PostgreSQL
-docker compose up -d postgres
-
-# 查看 PostgreSQL 状态
-docker compose ps postgres
-
 # 显式建表
 .\.venv\Scripts\python.exe -m backend.app.models.init_db
 
 # 启动后端
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
 
-# 普通测试；PostgreSQL 集成测试默认跳过
+# 标准测试
 .\.venv\Scripts\python.exe -m pytest backend/tests -v
 
-# 启用本地 PostgreSQL 集成测试
+# 真实 PostgreSQL 测试
 $env:RUN_POSTGRES_INTEGRATION='1'
 .\.venv\Scripts\python.exe -m pytest backend/tests -v
 
@@ -431,7 +552,7 @@ $env:RUN_POSTGRES_INTEGRATION='1'
 
 ## B. 300 字以内快速恢复摘要
 
-仓库 `D:\2019\rag-agent`，分支 `master`，尚未配置上游。Day 1-4 已完成并提交；Day 4 已实现 multipart PDF/MD/TXT 上传、20 MiB/500 页限制、UUID 分块存储、PDF `\f` 分页和 PostgreSQL 持久化。真实 PDF/PostgreSQL 验收为 `44 passed, 1 warning`；本次常规测试为 `43 passed, 1 skipped, 1 warning`。推送因规则模式下 GitHub 443 不可达而失败。工作区另有其他编辑流程产生且未纳入提交的本地修改，实时清单以 `git status` 为准，不得擅自覆盖。Day 5 未授权，先只读复核并等待指令。
+仓库 `D:\2019\rag-agent`，`master`；Day 5 本地实现提交 `a989837`。Day 1-5 已完成，支持按页 `o200k_base` token 切分、默认 500/100、有序 UUID Chunks、JSONB、级联删除及 Document/Chunks 同事务持久化，上传响应不变。标准测试 60 passed/1 skipped，真实 PostgreSQL 61 passed，均有 1 个既存缓存权限警告。`PLAN.md` 已更新 Day 5，Day 6 未开始，尚未推送。先只读复核并等待指令。
 
 ## C. 新对话的第一条启动提示词
 
@@ -447,46 +568,41 @@ $env:RUN_POSTGRES_INTEGRATION='1'
 6. README.md
 7. PLAN.md
 8. docs/architecture.md
-9. backend/app/api/documents.py
-10. backend/app/core/config.py
-11. backend/app/core/database.py
-12. backend/app/models/document.py
+9. docs/day5-chunk-size-comparison.md
+10. backend/app/api/documents.py
+11. backend/app/core/config.py
+12. backend/app/models/chunk.py
 13. backend/app/models/init_db.py
-14. backend/app/services/document_parser.py
-15. backend/app/services/document_storage.py
+14. backend/app/services/text_splitter.py
+15. backend/tests/test_text_splitter.py
 16. backend/tests/test_documents.py
-17. backend/tests/test_document_parser.py
-18. backend/tests/test_document_storage.py
-19. backend/tests/test_documents_postgres.py
+17. backend/tests/test_documents_postgres.py
 
 执行规则：
 - 先只读检查，不要立即改代码。
-- 不要重新完成已经完成的 Day 1-4。
+- 不要重新完成已完成的 Day 1-5。
 - 不要擅自推翻 DECISIONS.md 中的技术决策。
-- 不要假设未提供的信息；不确定内容标记为“待确认”。
+- 不确定内容标记为“待确认”，禁止自行补全。
 - 不要读取、输出或提交 .env/API Key/数据库真实密码。
-- 不要读取或提交无关的 .agents/。
+- 不要读取或提交无关 .agents/。
 - 不要修改 PLAN.md，除非我明确授权。
 - 不要提交或推送，除非我分别明确授权。
-- 不要开始 Day 5 或更晚任务。
+- 不要开始 Day 6 或更晚任务。
 
 请先回复：
-1. 你理解的项目最终目标和当前实现状态；
-2. 已提交、待推送内容，以及当前工作区差异；
-3. 已确认技术决策及其原因；
-4. 发现的缺失、矛盾、当前错误或风险；
+1. 项目最终目标和当前实现状态；
+2. 已提交、未提交和远端待确认内容；
+3. Day 5 已确认技术决策及原因；
+4. 缺失、矛盾、当前错误或风险；
 5. 接下来最多 5 个步骤。
 
-预期基线：分支 master 尚未配置上游；Day 4 实现提交为
-623989f2d6934c98500c555bfac0b5ba6f94736d；Day 1-4 和交接刷新均已本地提交但尚未发布。
-Day 4 真实 PDF/PostgreSQL 验收已通过；pytest 44 passed、1 warning；发布前常规测试为
-43 passed、1 skipped、1 warning。工作区另有其他编辑流程产生且未纳入本次发布的本地修改，
-实时清单以 git status 为准；不得擅自读取敏感值、覆盖或纳入项目提交。
+预期基线：master；历史包含 Day 5 实现提交
+a989837bbf8bae1cf866beda034130a514152378，当前 HEAD 是其交接刷新后继。
+Day 1-5 已完成并本地提交。标准测试 60 passed、1 skipped、1 warning；
+真实 PostgreSQL 61 passed、1 warning。PLAN.md 已更新 Day 5，Day 6 未开始，尚未推送。
 
-当前唯一目标：只读确认交接包和 Git 状态，准确复述后等待我指定下一动作。
+当前唯一目标：只读确认交接包、最新 HEAD、干净工作区和远端待确认状态，准确复述后等待我指定下一动作。
 
-本轮验收标准：准确识别 Day 1-4 已完成但推送受网络阻断、Day 5 未开始；列出所有待确认项；
-不改代码、不读取 .env、不提交、不推送。
-
-复述完成后等待我确认，再从 HANDOFF.md 的“下一步具体操作”开始。
+本轮验收标准：不改代码、不读取 .env/.agents、不提交、不推送；准确识别 Day 5 提交、
+PLAN.md 状态、测试证据、远端待确认项和所有残余风险。
 ```
