@@ -128,11 +128,11 @@ rag-agent/
 
 ### Day 7 — 接入 Qdrant
 
-- [ ] 用 Docker 启动 Qdrant（`docker run -p 6333:6333 qdrant/qdrant`）
-- [ ] 创建 collection（指定 embedding 维度和距离函数）
-- [ ] 把 chunk + embedding 写入 Qdrant，payload 带 metadata
-- [ ] 实现 `POST /retrieval/search`：输入 query，返回 top-k chunks
-- [ ] 测试几个问题，看返回结果是否相关
+- [x] 用 Docker 启动 Qdrant（`docker run -p 6333:6333 qdrant/qdrant`）
+- [x] 创建 collection（指定 embedding 维度和距离函数）
+- [x] 把 chunk + embedding 写入 Qdrant，payload 带 metadata
+- [x] 实现 `POST /retrieval/search`：输入 query，返回 top-k chunks
+- [x] 测试几个问题，看返回结果是否相关
 
 **产出**：输入 query 能返回相关 chunks，结果肉眼合理
 
@@ -382,7 +382,7 @@ rag-agent/
 | Day 4 | 已完成 | multipart 分块上传、分页解析、安全文件存储与 PostgreSQL 持久化已实现；真实 PDF/PostgreSQL 验收通过，pytest 44 passed、1 warning |
 | Day 5 | 已完成 | 按页 token 切分、500/100 默认配置、Chunk 持久化及 300/500/800 结构实验已完成；标准与真实 PostgreSQL 验收通过 |
 | Day 6 | 已完成 | 固定 revision 的本地 BGE、CPU 512 维归一化向量、每批 32 条、tokenizer 截断预检和瞬时下载重试已实现；完整测试与 PostgreSQL 验收通过 |
-| Day 7 | | |
+| Day 7 | 已完成 | 固定 Qdrant v1.18.1、512/Cosine collection、显式幂等索引与固定 Top 5 检索 API 已实现；标准测试 153 passed，真实 BGE/Qdrant 3 passed，三个受控问题均为 Top 1 |
 | Day 8 | | |
 | Day 9 | | |
 | Day 10 | | |

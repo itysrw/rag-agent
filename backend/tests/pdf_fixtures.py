@@ -25,12 +25,7 @@ def build_text_pdf(page_texts: list[str]) -> bytes:
             f"/Resources << /Font << /F1 {font_id} 0 R >> >> "
             f"/Contents {content_id} 0 R >>"
         ).encode("ascii")
-        escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        stream = (
-            f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET".encode("latin-1")
-            if text
-            else b""
-        )
+        stream = _build_text_stream(text)
         objects[content_id] = (
             f"<< /Length {len(stream)} >>\nstream\n".encode("ascii")
             + stream
@@ -57,3 +52,21 @@ def build_text_pdf(page_texts: list[str]) -> bytes:
         ).encode("ascii")
     )
     return bytes(output)
+
+
+def _build_text_stream(text: str) -> bytes:
+    """Encode Latin-1 literals or BOM-marked UTF-16BE PDF strings."""
+    if not text:
+        return b""
+    try:
+        encoded = text.encode("latin-1")
+    except UnicodeEncodeError:
+        encoded_hex = (b"\xfe\xff" + text.encode("utf-16-be")).hex().upper()
+        return f"BT /F1 12 Tf 72 720 Td <{encoded_hex}> Tj ET".encode("ascii")
+
+    escaped = (
+        encoded.replace(b"\\", b"\\\\")
+        .replace(b"(", b"\\(")
+        .replace(b")", b"\\)")
+    )
+    return b"BT /F1 12 Tf 72 720 Td (" + escaped + b") Tj ET"

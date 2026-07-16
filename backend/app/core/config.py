@@ -15,6 +15,7 @@ EMBEDDING_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
 EMBEDDING_MODEL_REVISION = "4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4"
 EMBEDDING_DIMENSION = 512
 EMBEDDING_MAX_BATCH_SIZE = 32
+QDRANT_MAX_BATCH_SIZE = 32
 
 
 class Settings(BaseSettings):
@@ -167,6 +168,40 @@ class EmbeddingSettings(BaseSettings):
         return value
 
 
+class QdrantSettings(BaseSettings):
+    """Local Qdrant connection and write limits for Day 7."""
+
+    host: str = "localhost"
+    port: int = Field(default=6333, ge=1, le=65535)
+    collection: str = "documents"
+    timeout_seconds: float = Field(default=10.0, gt=0)
+    upsert_batch_size: int = Field(
+        default=QDRANT_MAX_BATCH_SIZE,
+        gt=0,
+        le=QDRANT_MAX_BATCH_SIZE,
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="QDRANT_",
+        extra="ignore",
+    )
+
+    @field_validator("host", "collection")
+    @classmethod
+    def strip_nonempty_value(cls, value: str) -> str:
+        """Normalize required Qdrant text settings."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Qdrant text settings must not be empty")
+        return normalized
+
+    def build_url(self) -> str:
+        """Build the local REST endpoint without credentials."""
+        return f"http://{self.host}:{self.port}"
+
+
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings."""
@@ -201,3 +236,9 @@ def get_chunking_settings() -> ChunkingSettings:
 def get_embedding_settings() -> EmbeddingSettings:
     """Return cached local BGE document-embedding settings."""
     return EmbeddingSettings()
+
+
+@lru_cache
+def get_qdrant_settings() -> QdrantSettings:
+    """Return cached local Qdrant settings."""
+    return QdrantSettings()

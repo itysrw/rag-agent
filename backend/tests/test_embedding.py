@@ -32,6 +32,7 @@ from backend.app.core.database import Base
 from backend.app.models.chunk import Chunk
 from backend.app.models.document import Document
 from backend.app.services.embedding import (
+    BGE_QUERY_INSTRUCTION,
     ChunkEmbeddingInput,
     ChunkEmbeddingInputTooLongError,
     EmbeddingClient,
@@ -249,6 +250,50 @@ def test_client_reuses_one_loaded_model(tmp_path: Path) -> None:
     client.embed_documents(["second"])
 
     assert len(model_loads) == 1
+
+
+def test_embed_query_applies_instruction_once_and_keeps_documents_plain(
+    tmp_path: Path,
+) -> None:
+    """Only query vectors receive the fixed BGE retrieval instruction."""
+    model = FakeModel()
+    client, _ = build_client(tmp_path, model)
+
+    query_vector = client.embed_query("  报销时间  ")
+    document_vectors = client.embed_documents(["报销时间"])
+
+    assert len(query_vector) == 512
+    assert len(document_vectors[0]) == 512
+    assert model.batches == [
+        [f"{BGE_QUERY_INSTRUCTION}报销时间"],
+        ["报销时间"],
+    ]
+    assert model.batches[0][0].count(BGE_QUERY_INSTRUCTION) == 1
+
+
+def test_blank_query_fails_before_model_loading(tmp_path: Path) -> None:
+    """Whitespace-only search input cannot trigger model work."""
+    client, model_loads = build_client(tmp_path, FakeModel())
+
+    with pytest.raises(EmbeddingInputError):
+        client.embed_query("  \n  ")
+
+    assert model_loads == []
+
+
+def test_query_token_limit_includes_instruction_before_inference(
+    tmp_path: Path,
+) -> None:
+    """The BGE query prefix participates in the no-truncation check."""
+    model = FakeModel(max_seq_length=len(BGE_QUERY_INSTRUCTION) + 2)
+    client, _ = build_client(tmp_path, model)
+
+    with pytest.raises(EmbeddingInputTooLongError) as error:
+        client.embed_query("问题")
+
+    assert error.value.input_index == 0
+    assert error.value.token_count == len(BGE_QUERY_INSTRUCTION) + 4
+    assert model.batches == []
 
 
 @pytest.mark.parametrize("invalid", ["", " \n "])

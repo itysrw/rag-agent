@@ -1,12 +1,12 @@
 # 架构说明
 
-更新时间：2026-07-15（America/New_York）
+更新时间：2026-07-16（America/New_York）
 
 本文严格区分：
 
-- 已提交并推送的 Day 1 至 Day 5；
-- 当前工作区已实现但未提交的 Day 6；
-- 尚未实现的 Day 7 及以后目标。
+- 已提交的 Day 1 至 Day 6；Day 7 提交前基线为 `eefd397`；
+- 已实现、验收并进入授权检查点的 Day 7；最终 SHA 应通过 Git 实时读取；
+- 尚未实现的 Day 8 及以后目标。
 
 ## 当前实现架构
 
@@ -17,6 +17,7 @@ flowchart LR
     api --> health["GET /health"]
     api --> chat["POST /chat"]
     api --> upload["POST /documents/upload"]
+    api --> retrieval_api["POST /retrieval/search<br/>固定 Top 5"]
 
     chat --> llm["LLMClient<br/>OpenAI-compatible"]
     llm --> deepseek["DeepSeek V4 Flash<br/>仅 LLM"]
@@ -28,14 +29,19 @@ flowchart LR
     splitter --> chunks["PostgreSQL chunks<br/>有序 · JSONB"]
     pages --> documents["PostgreSQL documents<br/>extracted_text"]
 
-    operator["本地操作者"] --> command["python -m backend.app.commands.embed_document<br/>--document-id UUID"]
-    command --> ordered["SELECT Chunk<br/>ORDER BY chunk_index"]
+    operator["本地操作者"] --> command["index_document --document-id UUID"]
+    operator --> init_qdrant["init_qdrant"]
+    command --> ordered["SELECT Document + Chunk<br/>ORDER BY chunk_index"]
     ordered --> embedding["EmbeddingClient"]
     embedding --> snapshot["固定 BGE snapshot<br/>本地缓存优先"]
     snapshot --> tokenizer["BGE tokenizer 预检<br/>包含特殊 token · 禁止截断"]
     tokenizer --> inference["SentenceTransformers CPU<br/>批量 ≤ 32"]
-    inference --> vectors["512 维归一化向量<br/>仅内存"]
-    vectors --> summary["安全摘要<br/>不含正文和向量值"]
+    inference --> vectors["512 维归一化向量"]
+    vectors --> qdrant["Qdrant<br/>unnamed 512 / Cosine"]
+    init_qdrant --> qdrant
+    retrieval_api --> query_embedding["embed_query()<br/>固定 BGE query instruction"]
+    query_embedding --> qdrant
+    qdrant --> results["payload + score<br/>不返回向量"]
 
     chunks --> ordered
 ~~~
@@ -43,10 +49,11 @@ flowchart LR
 关键隔离边界：
 
 - 上传 API 不调用 EmbeddingClient，Day 6 不扩大上传事务。
-- Embedding 命令只读 documents/chunks，不写 PostgreSQL。
-- 向量只存在于当前进程内存，不写 Chunk.metadata、pgvector 或 Qdrant。
+- Day 6 Embedding 命令仍只读且只产生内存向量；Day 7 另由显式索引命令写 Qdrant。
+- 索引命令先关闭 PostgreSQL Session，再执行模型推理和 Qdrant upsert。
+- PostgreSQL 与 Qdrant 不伪装成跨存储事务；稳定 Chunk UUID 支持幂等重跑。
 - DeepSeek Key 只属于已有 LLM 链路，不参与 Embedding。
-- FastAPI 当前没有新增 Embedding 或检索 HTTP 接口。
+- FastAPI 只新增独立检索接口；上传接口和 `/chat` 均未接入 Qdrant。
 
 ## 当前 HTTP 接口
 
@@ -56,8 +63,9 @@ flowchart LR
 | POST /chat，stream=false | 已实现，返回完整 JSON |
 | POST /chat，stream=true | 已实现，返回 SSE delta 与 DONE |
 | POST /documents/upload | 已实现，支持 PDF/MD/TXT |
+| POST /retrieval/search | 已实现，只接收 query，固定 Top 5，不返回向量 |
 
-Day 6 只有本地命令入口，没有新增 HTTP 路由。
+应用启动和 GET /health 均不连接 Qdrant。
 
 ## 文档上传流程
 
@@ -110,6 +118,34 @@ Day 5 已证明不能把 Document 和无 ORM relationship 的 Chunk 只做一次
 Day 5 的 o200k_base 与 BGE tokenizer 不可互换。500 个 Day 5 token 不保证少于
 BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
 
+## Day 7 Qdrant 索引与检索流程
+
+初始化入口：
+
+    .\.venv\Scripts\python.exe -m backend.app.commands.init_qdrant
+
+索引入口：
+
+    .\.venv\Scripts\python.exe -m backend.app.commands.index_document --document-id <UUID>
+
+索引顺序：
+
+1. 从 PostgreSQL 读取 Document 和按 chunk_index 排序的 Chunks。
+2. 关闭数据库 Session。
+3. 创建或验证 unnamed 512/Cosine collection；配置不匹配时失败，不重建。
+4. 使用 Day 6 `embed_documents()` 生成文档向量。
+5. Point ID 直接使用 chunk_id，payload 携带正文、页码、文件名和 metadata。
+6. 每批最多 32 条执行 `upsert(wait=True)`；部分成功后依靠相同 UUID 幂等重跑。
+
+在线检索顺序：
+
+1. `POST /retrieval/search` 校验请求体只包含非空 query。
+2. `embed_query()` 添加一次固定 BGE 查询 instruction，并包含 instruction 做长度预检。
+3. `query_points()` 固定 `limit=5`、`with_payload=True`、`with_vectors=False`。
+4. 校验 Point UUID、payload 必需字段和有限 score，再返回来源信息和正文。
+
+Day 7 不实现可调 top_k、doc_id filter、score threshold、BM25、Hybrid、Rerank 或 RAG。
+
 ## 异常与安全边界
 
 backend/app/services/embedding.py 定义的安全异常：
@@ -142,7 +178,9 @@ backend/app/commands/embed_document.py 额外定义：
 - DocumentSettings：上传资源限制。
 - ChunkingSettings：CHUNK_SIZE、CHUNK_OVERLAP、CHUNK_ENCODING_NAME。
 - EmbeddingSettings：EMBEDDING_ 前缀；模型名、revision、维度和设备使用 Literal 固定。
+- QdrantSettings：QDRANT_ 前缀；本地 REST URL、collection、timeout 和最大 32 条 upsert batch。
 - sentence-transformers==5.3.0 为 Day 6 新依赖。
+- qdrant-client==1.18.0 为 Day 7 固定依赖。
 - 当前环境已解析到 torch 2.13.0、transformers 5.14.0、huggingface-hub 1.23.0。
 
 所有相对上传和模型缓存路径均从仓库根目录解析，不依赖当前工作目录。
@@ -151,10 +189,9 @@ backend/app/commands/embed_document.py 额外定义：
 
 ## 尚未实现
 
-- Qdrant 容器、collection 和向量持久化；
 - pgvector 或 PostgreSQL 向量字段；
-- POST /retrieval/search；
-- query embedding 和 BGE query instruction；
+- 自动索引、删除同步、后台队列或 outbox；
+- 可调 top_k、doc_id filter 和 score threshold；
 - BM25、RRF、Rerank；
 - RAG prompt 与来源引用；
 - LangGraph、Agent 工具和记忆；

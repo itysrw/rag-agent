@@ -1,6 +1,6 @@
 # 技术决策记录
 
-更新时间：2026-07-15（America/New_York）
+更新时间：2026-07-16（America/New_York）
 
 ## D-001：以 25 天计划控制范围
 
@@ -209,3 +209,40 @@
   错误不重试。
 - 加载：下载完成后只从本地 snapshot 加载，`local_files_only=True`、
   `trust_remote_code=False`、匿名访问，并在进程内复用模型。
+
+## D-028：Day 7 使用显式命令完成 Qdrant 索引
+
+- 状态：已确认
+- 决策：`index_document --document-id` 先从 PostgreSQL 读取 Document 和有序 Chunk，
+  关闭 Session 后再执行本地 Embedding 与 Qdrant upsert；上传接口不自动索引。
+- 原因：PostgreSQL 与 Qdrant 不能组成一个真实事务。显式命令可以隔离上传失败面，并允许
+  通过稳定 Point ID 幂等重跑。
+- 限制：不实现后台队列、outbox、删除同步或上传事务内 Embedding。
+
+## D-029：Qdrant 使用固定的 unnamed 512/Cosine collection
+
+- 状态：已确认
+- 决策：Day 7 使用单一 unnamed dense vector，维度固定 512、距离为 Cosine；Point ID
+  直接复用 `Chunk.chunk_id`，payload 保存 doc_id、chunk_index、content、page、filename
+  和 metadata。
+- 原因：该配置与 Day 6 的归一化 BGE 向量一致；复用 UUID 保持跨存储身份一致，并使重复
+  upsert 覆盖同一点而不是生成重复数据。
+- 安全：已有 collection 必须校验维度和距离；不使用 `recreate_collection()` 自动删除数据。
+
+## D-030：查询向量使用独立 BGE instruction
+
+- 状态：已确认
+- 决策：`EmbeddingClient.embed_query()` 仅为查询添加一次
+  `为这个句子生成表示以用于检索相关文章：`，并让 instruction 一起参与 BGE tokenizer
+  长度预检；`embed_documents()` 继续直接编码 Chunk 正文。
+- 原因：BGE 的查询与 passage 编码语义不同，但仍必须保持 512 维、归一化和禁止静默截断。
+
+## D-031：Day 7 检索 API 固定 Top 5 且不返回向量
+
+- 状态：已确认
+- 决策：`POST /retrieval/search` 请求体只允许 `query`，内部使用 `query_points()`、
+  `limit=5`、`with_payload=True`、`with_vectors=False`。
+- 原因：可调 top_k、doc_id filter 和 score threshold 属于 Day 9；当前接口只验证基础向量
+  检索链路，并避免泄露或传输完整向量。
+- 错误：Query 过长为 422；Embedding/Qdrant 不可用或 collection 不匹配为 503；无效
+  Qdrant Point/Payload 为安全 502。

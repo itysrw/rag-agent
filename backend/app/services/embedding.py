@@ -20,6 +20,8 @@ from loguru import logger
 
 from backend.app.core.config import EmbeddingSettings, get_embedding_settings
 
+BGE_QUERY_INSTRUCTION = "为这个句子生成表示以用于检索相关文章："
+
 
 class EmbeddingError(RuntimeError):
     """Base class for safe local embedding failures."""
@@ -333,6 +335,14 @@ class EmbeddingClient:
                 "Embedding result count does not match the input count."
             )
         return vectors
+
+    def embed_query(self, query: str) -> tuple[float, ...]:
+        """Generate one normalized BGE retrieval-query vector."""
+        if not isinstance(query, str) or not query.strip():
+            raise EmbeddingInputError("Embedding query must not be blank.")
+
+        query_text = f"{BGE_QUERY_INSTRUCTION}{query.strip()}"
+        return self.embed_documents([query_text])[0]
 
     def _get_model(self) -> SentenceEmbeddingModel:
         if self._model is not None:
