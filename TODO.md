@@ -2,31 +2,43 @@
 
 更新时间：2026-07-16（America/New_York）
 
-## P0：Day 7 检查点恢复
+## P0：Day 8 工作区核验
 
-新会话第一轮只读：
+1. 核对 `master`、基线 HEAD `683f516777345a1a000c6f94ade5fb4232a3a58e`、暂存区和
+   Day 8 工作区差异。
+2. 阅读 `docs/day8-rag-smoke.md`、RAG/Chat/LLM 实现与新增测试。
+3. 确认当前标准测试 `181 passed/5 skipped/1 warning`、真实 Qdrant+BGE `2 passed`、
+   真实上传→索引→RAG `1 passed`。
+4. 确认 `PLAN.md`、`docker-compose.yml` 无差异，并排除 `.env`、`.agents/`、
+   `.pytest-tmp/`、`data/models/`。
 
-1. 完整阅读 `HANDOFF.md`、`STATUS.md`、`DECISIONS.md`、`TODO.md`、`AGENTS.md`、
-   `README.md`、`PLAN.md`、`docs/architecture.md` 和 `docs/day7-retrieval-smoke.md`。
-2. 用 `git rev-parse HEAD`、`git status` 和远端实时查询核对 Day 7 最终提交及本地/远端一致性。
-3. 确认 `PLAN.md` Day 7 五项和开发日志已更新，Day 8 及以后未修改。
-4. 确认标准测试 `153 passed/4 skipped/1 warning`、真实 BGE/Qdrant `3 passed`。
-5. 明确排除 `.env`、无关 `.agents/` 和 `data/models/`。
+## P1：可选真实 DeepSeek 验收
 
-完成后先复述状态，等待用户指定下一动作。
+已在一次明确授权下完成付费冒烟：报销 JSON、VPN SSE、Python 门控拒答通过。一次性脚本未提交，
+当前没有 `RUN_DEEPSEEK_RAG_INTEGRATION` 开关或对应 pytest。年假真实生成和月球真实拒答未单独
+执行；是否补充四题全覆盖待确认。任何补充调用都需要新的明确授权，不得打印 API Key、完整
+Prompt 或知识库全文，不得把真实调用加入标准 pytest。
 
-## P1：Day 8
+## P2：计划状态更新
 
-Day 8 尚未授权。只有用户明确授权后，才可按当时的 `PLAN.md` 实现基础 RAG；
-不得从 Day 7 交接包自行扩大范围。
+`PLAN.md` Day 8 尚未更新。只有用户明确授权后才能勾选并写入真实完成事实，不得修改 Day 9。
+
+## P3：Day 8 检查点 Git 操作
+
+暂存、commit、实时远端核验和 push 是独立动作，必须分别获得明确授权。暂存时必须排除
+`.env`、`.agents/`、`.pytest-tmp/`、`data/models/`，并在提交前重新运行 pytest、pip check、compileall 和
+`git diff --check`。
+
+## P4：Day 9 及以后
+
+尚未授权。不得提前开放 top_k、doc_id filter、score threshold，不得开始 BM25、Hybrid、
+Rerank、LangGraph、多轮记忆或 trace。
 
 ## 延后且待确认
 
+- 用更大正负样本集重新校准 `RAG_MIN_RELEVANCE_SCORE`；
 - `.pytest_cache` WinError 5 权限警告根因；
-- 新环境的 Qdrant 和 BGE 离线复现；
-- PostgreSQL/Qdrant 的 outbox、自动重试、删除同步和一致性修复；
-- 孤儿上传文件启动清理；
-- SQLAlchemy 私有事务 `_state` 的升级兼容性；
-- `.gitattributes` 行尾规范；
-- 首次修改既有表结构时是否引入 Alembic；
-- 后续 BM25、Hybrid/RRF、Rerank、RAG、LangGraph、评测和 Streamlit。
+- 新环境 Qdrant/BGE 与完全离线复现；
+- PostgreSQL/Qdrant outbox、删除同步和一致性修复；
+- 孤儿上传文件启动清理与 SQLAlchemy 私有 `_state` 兼容性；
+- `.gitattributes` 行尾规范和首次表结构迁移时是否引入 Alembic。

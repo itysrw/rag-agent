@@ -8,7 +8,7 @@ from openai import OpenAIError
 from pydantic import SecretStr
 
 from backend.app.core.config import LLMSettings
-from backend.app.services.llm import LLMClient, LLMServiceError
+from backend.app.services.llm import LLMClient, LLMMessage, LLMServiceError
 
 
 class FakeStream:
@@ -107,6 +107,67 @@ def test_complete_uses_compatible_request_shape() -> None:
             "extra_body": {"vendor_option": True},
         }
     ]
+
+
+def test_complete_messages_preserves_system_and_user_roles() -> None:
+    """RAG callers can send structured messages without flattening roles."""
+    client, sdk = make_client()
+    messages: list[LLMMessage] = [
+        {"role": "system", "content": "use only context"},
+        {"role": "user", "content": "context and question"},
+    ]
+
+    assert client.complete_messages(messages) == "complete"
+    assert sdk.completions.calls[0]["messages"] == messages
+    assert sdk.completions.calls[0]["stream"] is False
+
+
+def test_stream_messages_preserves_roles_and_closes() -> None:
+    """Structured streaming shares the request contract and cleanup path."""
+    client, sdk = make_client()
+    messages: list[LLMMessage] = [
+        {"role": "system", "content": "rules"},
+        {"role": "user", "content": "question"},
+    ]
+
+    assert list(client.stream_messages(messages)) == ["A", "B"]
+    assert sdk.completions.calls[0]["messages"] == messages
+    assert sdk.completions.calls[0]["stream"] is True
+    assert sdk.completions.stream_response.closed is True
+
+
+@pytest.mark.parametrize(
+    "messages",
+    [
+        [],
+        [{"role": "tool", "content": "invalid"}],
+        [{"role": "user", "content": "   "}],
+    ],
+)
+def test_messages_reject_empty_or_invalid_values(messages: list[Any]) -> None:
+    """Invalid structured input fails before the compatible SDK is called."""
+    client, sdk = make_client()
+
+    with pytest.raises(ValueError):
+        client.complete_messages(messages)  # type: ignore[arg-type]
+
+    assert sdk.completions.calls == []
+
+
+def test_complete_rejects_empty_upstream_content() -> None:
+    """An empty complete response cannot become a successful RAG answer."""
+    client, sdk = make_client()
+
+    def empty_response(**kwargs: Any) -> Any:
+        sdk.completions.calls.append(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=None))]
+        )
+
+    sdk.completions.create = empty_response  # type: ignore[method-assign]
+
+    with pytest.raises(LLMServiceError, match="empty response"):
+        client.complete_messages([{"role": "user", "content": "question"}])
 
 
 def test_stream_yields_only_text_deltas() -> None:

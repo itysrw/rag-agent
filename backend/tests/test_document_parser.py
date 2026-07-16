@@ -42,6 +42,18 @@ def test_pdf_preserves_blank_page_boundaries(tmp_path: Path) -> None:
     assert serialize_pages(pages).count("\f") == 2
 
 
+def test_pdf_fixture_extracts_chinese_without_null_characters(tmp_path: Path) -> None:
+    """Controlled Chinese PDFs remain valid PostgreSQL text input."""
+    expected = "报销票据必须在每月二十五日前提交给财务组。"
+    path = tmp_path / "chinese.pdf"
+    path.write_bytes(build_text_pdf([expected]))
+
+    pages = parse(path, ".pdf")
+
+    assert pages == [PageText(page=1, text=expected)]
+    assert "\x00" not in serialize_pages(pages)
+
+
 def test_pdf_rejects_when_every_page_is_blank(tmp_path: Path) -> None:
     """A PDF with no text layer is not accepted as ready."""
     path = tmp_path / "blank.pdf"

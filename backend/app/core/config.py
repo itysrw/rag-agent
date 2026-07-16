@@ -16,6 +16,7 @@ EMBEDDING_MODEL_REVISION = "4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4"
 EMBEDDING_DIMENSION = 512
 EMBEDDING_MAX_BATCH_SIZE = 32
 QDRANT_MAX_BATCH_SIZE = 32
+RAG_MIN_RELEVANCE_SCORE = 0.46
 
 
 class Settings(BaseSettings):
@@ -202,6 +203,23 @@ class QdrantSettings(BaseSettings):
         return f"http://{self.host}:{self.port}"
 
 
+class RAGSettings(BaseSettings):
+    """Generation-layer relevance gate for the Day 8 RAG flow."""
+
+    min_relevance_score: float = Field(
+        default=RAG_MIN_RELEVANCE_SCORE,
+        ge=0.0,
+        le=1.0,
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="RAG_",
+        extra="ignore",
+    )
+
+
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings."""
@@ -242,3 +260,9 @@ def get_embedding_settings() -> EmbeddingSettings:
 def get_qdrant_settings() -> QdrantSettings:
     """Return cached local Qdrant settings."""
     return QdrantSettings()
+
+
+@lru_cache
+def get_rag_settings() -> RAGSettings:
+    """Return cached Day 8 RAG relevance settings."""
+    return RAGSettings()

@@ -140,11 +140,11 @@ rag-agent/
 
 ### Day 8 — 实现基础 RAG
 
-- [ ] `/chat` 接入检索流程：query → 检索 → 构建 prompt → 生成
-- [ ] Prompt 模板：system 指令 + context + user question
-- [ ] 回答里带引用来源（文档名 + 页码）
-- [ ] 无相关文档时回答"知识库中没有相关信息"，不乱答
-- [ ] 端到端测试：上传文档 → 问问题 → 看答案
+- [x] `/chat` 接入检索流程：query → 检索 → 构建 prompt → 生成
+- [x] Prompt 模板：system 指令 + context + user question
+- [x] 回答里带引用来源（文档名 + 页码）
+- [x] 无相关文档时回答"知识库中没有相关信息"，不乱答
+- [x] 端到端测试：上传文档 → 问问题 → 看答案
 
 **产出**：能基于上传文档回答问题，带来源引用
 
@@ -383,7 +383,7 @@ rag-agent/
 | Day 5 | 已完成 | 按页 token 切分、500/100 默认配置、Chunk 持久化及 300/500/800 结构实验已完成；标准与真实 PostgreSQL 验收通过 |
 | Day 6 | 已完成 | 固定 revision 的本地 BGE、CPU 512 维归一化向量、每批 32 条、tokenizer 截断预检和瞬时下载重试已实现；完整测试与 PostgreSQL 验收通过 |
 | Day 7 | 已完成 | 固定 Qdrant v1.18.1、512/Cosine collection、显式幂等索引与固定 Top 5 检索 API 已实现；标准测试 153 passed，真实 BGE/Qdrant 3 passed，三个受控问题均为 Top 1 |
-| Day 8 | | |
+| Day 8 | 已完成 | `/chat` 接入 Day 7 固定 Top 5 检索，生成层按 `0.46` 门槛过滤 Context；结构化 system/user Prompt、JSON/SSE 均返回后端去重来源；无相关内容精确拒答且不调用 LLM；模型自由文本中的来源标记由 sanitizer 清理。标准套件 181 passed、5 skipped；真实 PostgreSQL/BGE/Qdrant 端到端与真实 DeepSeek JSON/SSE/拒答三路径均验收通过 |
 | Day 9 | | |
 | Day 10 | | |
 | Day 11 | | |

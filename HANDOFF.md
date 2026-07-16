@@ -3,8 +3,8 @@
 更新时间：2026-07-16（America/New_York）
 仓库：`D:\2019\rag-agent`
 
-> 本文件是独立交接入口，不依赖历史聊天。当前已暂停功能开发；接手者第一轮只读核验，
-> 不得立即修改代码。
+> 本文件是独立交接入口。Day 8 基础 RAG 已在本地工作区实现并验收；当前暂停开发。
+> 真实 DeepSeek 已在用户授权下完成一次付费冒烟验收；不要再次调用，除非获得新的明确授权。
 
 ## A. 详细交接文档
 
@@ -12,19 +12,18 @@
 
 构建一个可写入简历、可在面试中完整讲解的企业知识库 RAG Agent：
 
-- FastAPI 提供后端 API；
-- 支持 PDF、Markdown、TXT 上传、解析、按页切分和元数据持久化；
-- 使用本地 BGE、Qdrant、BM25、RRF、Rerank 实现检索增强；
-- 使用 OpenAI-compatible LLM 生成带来源引用的答案；
-- 使用 LangGraph 实现检索决策、工具调用和多轮记忆；
-- PostgreSQL 保存业务数据，Qdrant 保存向量；
-- 用评测数据集量化检索质量、答案质量和延迟；
-- Streamlit 提供演示界面，最终由 Docker Compose 一键启动；
-- 最终形成 README、架构图、评测报告、简历描述和面试材料。
+- FastAPI 提供文档上传、检索和问答 API；
+- PostgreSQL 保存 Document/Chunk 业务数据，Qdrant 保存本地 BGE 向量；
+- 后续使用 BM25、RRF、Rerank 优化检索；
+- OpenAI-compatible LLM 生成带来源引用的答案；
+- LangGraph 实现工具选择和多轮记忆；
+- 通过评测集量化检索、答案和延迟；
+- Streamlit 与 Docker Compose 提供最终演示和部署；
+- 形成 README、架构图、评测报告、简历描述和面试材料。
 
-`PLAN.md` 是 25 天范围和顺序的基线。未来目标不得写成已经完成。
+`PLAN.md` 是 25 天范围基线。未来功能不得写成已完成；未经明确授权不得修改该文件。
 
-### 2. 新会话必须按顺序完整阅读
+### 2. 新会话阅读顺序
 
 1. `HANDOFF.md`
 2. `STATUS.md`
@@ -32,97 +31,100 @@
 4. `TODO.md`
 5. `AGENTS.md`
 6. `README.md`
-7. `PLAN.md`，只读，除非用户明确授权修改
+7. `PLAN.md`（只读）
 8. `docs/architecture.md`
-9. `docs/day5-chunk-size-comparison.md`
-10. `docs/day7-retrieval-smoke.md`
-11. `.env.example`；禁止读取 `.env`
+9. `docs/day7-retrieval-smoke.md`
+10. `docs/day8-rag-smoke.md`
+11. `.env.example`（禁止读取 `.env`）
 12. `backend/requirements.txt`
 13. `backend/app/core/config.py`
-14. `backend/app/core/database.py`
-15. `backend/app/models/document.py`
-16. `backend/app/models/chunk.py`
-17. `backend/app/api/documents.py`
-18. `backend/app/api/retrieval.py`
-19. `backend/app/services/text_splitter.py`
-20. `backend/app/services/embedding.py`
-21. `backend/app/services/qdrant_store.py`
-22. `backend/app/services/retrieval.py`
-23. `backend/app/commands/embed_document.py`
-24. `backend/app/commands/init_qdrant.py`
-25. `backend/app/commands/index_document.py`
-26. `backend/tests/test_embedding.py`
-27. `backend/tests/test_embedding_integration.py`
-28. `backend/tests/test_documents_postgres.py`
-29. `backend/tests/test_index_document.py`
-30. `backend/tests/test_qdrant_store.py`
-31. `backend/tests/test_qdrant_integration.py`
-32. `backend/tests/test_retrieval.py`
+14. `backend/app/api/chat.py`
+15. `backend/app/api/retrieval.py`
+16. `backend/app/services/llm.py`
+17. `backend/app/services/embedding.py`
+18. `backend/app/services/qdrant_store.py`
+19. `backend/app/services/retrieval.py`
+20. `backend/app/services/rag.py`
+21. `backend/app/commands/index_document.py`
+22. `backend/tests/test_chat.py`
+23. `backend/tests/test_llm.py`
+24. `backend/tests/test_rag.py`
+25. `backend/tests/test_rag_integration.py`
+26. `backend/tests/test_qdrant_integration.py`
+27. `backend/tests/pdf_fixtures.py`
+28. `backend/tests/test_document_parser.py`
 
-禁止读取或输出 `.env`、API Key、数据库真实密码。不要读取无关 `.agents/` 内容，
-不要把 `.agents/` 或 `data/models/` 纳入项目提交。
+禁止读取、输出或提交 `.env`、API Key、数据库真实密码；不得读取或提交无关 `.agents/`，
+不得提交 `data/models/`。
 
-### 3. 项目阶段与已完成内容
+### 3. 阶段状态
 
-#### Day 1 至 Day 6：已提交
+#### Day 1-7：已提交
 
-- Day 1：项目边界、目录、README、目标架构和 Git 远端。
-- Day 2：FastAPI 骨架、`GET /health`、路由、配置和请求日志。
-- Day 3：OpenAI-compatible `LLMClient`、DeepSeek 普通 JSON 与 SSE 对话。
-- Day 4：PDF/Markdown/TXT 上传、解析、文件补偿与 PostgreSQL 文档持久化。
-- Day 5：按页 `o200k_base` token 切分，默认 `500/100`；有序 Chunk、JSONB、
-  级联删除和同事务持久化。
-- Day 6：固定本地 `BAAI/bge-small-zh-v1.5` Embedding，CPU、512 维、归一化、
-  批量不超过 32、BGE tokenizer 预检、固定 snapshot、本地缓存优先、瞬时下载重试、
-  只读 `embed_document` 命令和两个 P2 修复。
+- Day 1-3：项目边界、FastAPI、日志、OpenAI-compatible DeepSeek JSON/SSE。
+- Day 4-5：PDF/Markdown/TXT 上传解析、PostgreSQL、按页 `o200k_base` 500/100 切分、
+  有序 Chunk 和同事务两次 flush。
+- Day 6：固定 revision 的本地 BGE，CPU、512 维、归一化、批量最多 32、tokenizer 预检、
+  固定 snapshot 和安全重试。
+- Day 7：显式 `index_document` 将 PostgreSQL Chunk 写入 unnamed 512/Cosine Qdrant，
+  稳定 Chunk UUID 幂等 upsert；`POST /retrieval/search` 固定 Top 5、不返回向量。
 
-Day 6 最近一次有效提交为：
+当前已提交基线：
 
 ```text
-eefd397db1e20947016c22ffa26d1fefc894949d feat: complete Day 6 local BGE embeddings
+683f516777345a1a000c6f94ade5fb4232a3a58e feat: complete Day 7 Qdrant retrieval
 ```
 
-`PLAN.md` 的 Day 6 五项已在该提交中勾选。用户随后明确授权更新 Day 7；Day 7
-五项现已勾选，开发日志已记录实际实现和验收结果，Day 8 及以后未修改。
+Day 6 两个已提交 P2：
 
-#### Day 7：已实现、验收并进入授权提交/推送检查点
+1. Embedding `ValidationError` 在客户端创建边界转为 `EmbeddingConfigurationError`，不再误报数据库不可用。
+2. 模型缓存目录创建 `OSError` 安全包装为 `ModelDownloadError`，不泄露路径且不调用 downloader。
 
-Day 7 的边界是：通过显式命令把 PostgreSQL Chunk 向量化并写入 Qdrant，
-再由独立检索 API 查询。当前完成：
+#### Day 8：本地已实现并验收，未提交
 
-- 固定 `qdrant-client==1.18.0` 与 `qdrant/qdrant:v1.18.1`；
-- Qdrant 容器 `rag-agent-qdrant` 仅绑定 `127.0.0.1:6333`；
-- 命名卷 `rag-agent-qdrant-data:/qdrant/storage`；
-- `documents` collection 为 unnamed dense vector、512 维、Cosine；
-- 显式 `init_qdrant` 初始化/校验命令；
-- 显式 `index_document --document-id <UUID>` 索引命令；
-- 稳定 Point ID 等于 `Chunk.chunk_id`，重复 upsert 幂等覆盖；
-- 查询侧增加固定 BGE instruction，文档 Chunk 仍直接编码；
-- 独立 `POST /retrieval/search`，请求只接受 `query`，固定 Top 5，不返回向量；
-- 单元、契约、真实 Qdrant、真实 BGE、受控三页中文 PDF 相关性测试均已通过；
-- Qdrant 容器重启后 `documents` collection 持久化校验通过。
+链路：
 
-Day 8 及以后尚未授权，不得开始。
+```text
+POST /chat
+  → Day 7 固定 Top 5
+  → RAG 层 score >= 0.46 门控
+  → system 规则 + user JSON Context
+  → DeepSeek/OpenAI-compatible LLM
+  → answer + 后端 sources
+```
 
-### 4. Day 7 最终提交前 Git 快照
+已完成：
 
-下表记录本次授权提交前的精确基线；Day 7 最终提交是包含本文件的下一条提交，
-其 SHA 必须在新会话中用 `git rev-parse HEAD` 实时读取，不得自行补全。
+- `RAGSettings(min_relevance_score=0.46)`，范围 `0..1`；只在生成层使用。
+- `LLMMessage`、`complete_messages()`、`stream_messages()`；旧单消息接口保持兼容。
+- `RAGSource`、`PreparedRAG`、`RAGAnswer`、`RAGService`。
+- Prompt 中 system 保存规则，Context 作为不可信 JSON user 数据，仅含 filename/page/content。
+- 无相关 Context 精确返回 `知识库中没有相关信息`，不调用 LLM 方法。
+- sources 从实际 Context 按 filename/page 去重，不解析模型文本。
+- 模型正文中的文件名、页码和 `SNN` 类来源标记会被清理；可信引用只通过后端
+  结构化 `sources` 返回。
+- 普通 `/chat` 返回 answer/model/sources。
+- SSE 成功返回 delta → sources event → DONE；流失败不发送 sources 或 DONE。
+- `prepare()` 在 `StreamingResponse` 前完成，检索错误保持 HTTP 422/502/503。
+- 上传接口仍不自动索引；完整链路保持 upload → `index_document` → `/chat`。
+
+未实现 Day 9：没有可调 top_k、doc filter、请求 threshold、BM25、Hybrid、Rerank 或 trace。
+
+### 4. Git 与工作区精确状态
+
+最后只读核对：
 
 | 项目 | 当前值 |
 |---|---|
 | 分支 | `master` |
-| HEAD | `eefd397db1e20947016c22ffa26d1fefc894949d` |
-| HEAD 摘要 | `eefd397 feat: complete Day 6 local BGE embeddings` |
-| 上游 | `origin/master` |
-| 本地跟踪引用 `origin/master` | `eefd397db1e20947016c22ffa26d1fefc894949d` |
-| 基于本地跟踪引用的 ahead/behind | `0/0` |
+| HEAD | `683f516777345a1a000c6f94ade5fb4232a3a58e` |
+| 本地 `origin/master` | `683f516777345a1a000c6f94ade5fb4232a3a58e` |
+| 基于本地跟踪引用 ahead/behind | `0/0` |
 | 暂存区 | 空 |
-| Day 7 提交 | 无 |
-| Day 7 推送 | 无 |
-| GitHub 远端实时 HEAD | 提交前已确认是 `eefd397db1e20947016c22ffa26d1fefc894949d` |
+| Day 8 commit/push | 无 / 无 |
+| GitHub 实时 HEAD | 本轮未重新查询；不得用本地跟踪引用替代实时结论 |
 
-提交前已修改的跟踪文件：
+Day 8 已修改跟踪文件：
 
 - `.env.example`
 - `DECISIONS.md`
@@ -130,399 +132,268 @@ Day 8 及以后尚未授权，不得开始。
 - `README.md`
 - `STATUS.md`
 - `TODO.md`
+- `backend/app/api/chat.py`
 - `backend/app/core/config.py`
-- `backend/app/main.py`
-- `backend/app/services/embedding.py`
-- `backend/requirements.txt`
+- `backend/app/services/llm.py`
 - `backend/tests/pdf_fixtures.py`
-- `backend/tests/test_embedding.py`
+- `backend/tests/test_chat.py`
+- `backend/tests/test_document_parser.py`
+- `backend/tests/test_llm.py`
 - `docs/architecture.md`
-- `pytest.ini`
 
-提交前 Day 7 新增且未跟踪的文件：
+Day 8 新增未跟踪文件：
 
-- `backend/app/api/retrieval.py`
-- `backend/app/commands/index_document.py`
-- `backend/app/commands/init_qdrant.py`
-- `backend/app/services/qdrant_store.py`
-- `backend/app/services/retrieval.py`
-- `backend/tests/test_index_document.py`
-- `backend/tests/test_qdrant_integration.py`
-- `backend/tests/test_qdrant_store.py`
-- `backend/tests/test_retrieval.py`
-- `docs/day7-retrieval-smoke.md`
+- `backend/app/services/rag.py`
+- `backend/tests/test_rag.py`
+- `backend/tests/test_rag_integration.py`
+- `docs/day8-rag-smoke.md`
 
-另有一个无关的未跟踪 `.agents/` 文件。它没有被读取、修改或暂存，未来提交必须排除。
-`.env` 没有被读取、输出、修改或暂存。`data/models/` 是 Git 忽略的本地模型缓存，
-未来提交必须排除。`docker-compose.yml` 没有 Day 7 差异。
+合计为 14 个已修改跟踪文件、4 个 Day 8 新增未跟踪文件。另有无关未跟踪 `.agents/` 和
+测试产物 `.pytest-tmp/`；两者均未读取、修改或删除，必须排除。`PLAN.md`、
+`docker-compose.yml`、`backend/requirements.txt` 无差异；未读取 `.env`，未新增生产依赖。
 
-### 5. Day 6 精确实现、两个 P2 修复及原因
+### 5. Day 8 技术决策
 
-#### 5.1 固定配置
+#### 5.1 真实相关性校准
 
-文件：`backend/app/core/config.py`
+修复中文 PDF fixture 后，受控三页 PDF 的 Top-1：
 
-- `EMBEDDING_MODEL_NAME = "BAAI/bge-small-zh-v1.5"`
-- `EMBEDDING_MODEL_REVISION = "4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4"`
-- `EMBEDDING_DIMENSION = 512`
-- `EMBEDDING_MAX_BATCH_SIZE = 32`
-- `EmbeddingSettings`：只允许 CPU，`normalize_embeddings=True`，批量 `1..32`，
-  下载重试 `0..3`，默认退避基数 1 秒。
+| 类型 | 问题 | 页 | score |
+|---|---|---:|---:|
+| 正 | 报销票据最晚什么时候交？ | 1 | 0.688781 |
+| 正 | VPN 连不上应该联系谁，分机是多少？ | 2 | 0.734850 |
+| 正 | 年假需要提前多久申请？ | 3 | 0.814524 |
+| 负 | 月球表面温度是多少？ | 1 | 0.282149 |
+| 负 | Python 如何定义一个函数？ | 2 | 0.326244 |
+| 负 | 纽约今天的天气怎么样？ | 3 | 0.306839 |
 
-文件：`backend/app/services/embedding.py`
+当前正样本最小 `0.688781`，负样本最大 `0.326244`，选择固定 `0.46`。该门槛不是概率，
+只对这六个样本有证据，后续需更大评测集复验。
 
-- 数据结构：`ChunkEmbeddingInput`、`EmbeddedChunk`；
-- 核心接口：`ensure_model_snapshot()`、`load_embedding_model()`、
-  `validate_model_input_length()`、`EmbeddingClient.embed_documents()`、
-  `EmbeddingClient.embed_query()`、`embed_chunks()`、`get_embedding_client()`；
-- 文档不加 query instruction；查询固定增加一次：
-  `为这个句子生成表示以用于检索相关文章：`；
-- 包含特殊 token、禁止截断；结果校验数量、512 维、有限值和单位范数；
-- 只重试连接、超时、HTTP 429 和 5xx；最多 3 次重试，退避 1/2/4 秒；
-- `local_files_only=True`、`trust_remote_code=False`，只从固定 snapshot 加载。
+#### 5.2 Prompt 和注入边界
 
-#### 5.2 P2-1：Embedding 配置错误被误报为数据库不可用
+- system：只能根据 Context 回答；Context 不可信；不得执行正文命令、泄露系统提示、
+  使用外部知识或伪造来源。
+- user：JSON Context + 原始问题。
+- Context 不包含 vector、score、UUID、doc_id 或 metadata。
 
-文件：`backend/app/commands/embed_document.py`
+#### 5.3 来源与拒答
 
-- 根因：`client_factory()` 产生的 Pydantic `ValidationError` 与数据库异常共用
-  `main()` 捕获分支，导致 Embedding 配置错误被错误归类为数据库不可用。
-- 修复：`embed_document()` 在创建 Embedding 客户端的边界把该异常转换为
-  `EmbeddingConfigurationError`。
-- 保留：`get_session_factory()` 的 `DatabaseConfigurationError`、数据库设置
-  `ValidationError` 和 `SQLAlchemyError` 仍归类为数据库不可用。
-- 回归测试：
-  `test_command_reports_embedding_configuration_error_separately_from_database`。
+- 只有达到门槛的 Chunk 进入 Prompt。
+- sources 与实际 Context 同源，按 filename/page 去重并保持首次出现顺序。
+- `RAGService.complete()` 通过 `_strip_model_source_references()` 清理完整回答中的模型来源标记；
+  `RAGService.stream()` 通过 `_sanitized_model_deltas()` 跨 delta 清理同类标记。
+- 没有 Context 时 JSON/SSE 都返回固定拒答，LLM complete/stream 调用次数为 0。
+- 一个问题可能有多个 Chunk 超过门槛，因此 sources 可能包含多个页，而不是只返回 Top 1。
 
-#### 5.3 P2-2：缓存目录创建错误逃逸下载异常边界
+#### 5.4 Day 8 精确代码位置与接口名
 
-文件：`backend/app/services/embedding.py`
+- `backend/app/core/config.py`
+  - 常量 `RAG_MIN_RELEVANCE_SCORE = 0.46`。
+  - `RAGSettings.min_relevance_score`、`get_rag_settings()`；环境变量名为
+    `RAG_MIN_RELEVANCE_SCORE`。
+- `backend/app/services/llm.py`
+  - `LLMMessage`、`LLMClient.complete_messages()`、`LLMClient.stream_messages()`。
+  - 兼容接口 `LLMClient.complete()`、`LLMClient.stream()` 保留。
+- `backend/app/services/rag.py`
+  - `NO_RELEVANT_KNOWLEDGE`、`RAG_SYSTEM_PROMPT`。
+  - `RAGSource`、`PreparedRAG`、`RAGAnswer`。
+  - `select_relevant_chunks()`、`build_sources()`、`build_rag_messages()`。
+  - `RAGService.prepare()`、`RAGService.complete()`、`RAGService.stream()`、`get_rag_service()`。
+  - `_strip_model_source_references()`、`_sanitized_model_deltas()` 清理模型自由文本来源标记。
+- `backend/app/api/chat.py`
+  - `ChatRequest`、`ChatSourceResponse`、`ChatResponse`；message 最大 4096 字符。
+  - `require_rag_service()`、`chat()`、`stream_sse()`。
+- `backend/tests/test_rag.py`：门控、Prompt、来源、拒答、结构化 LLM 调用与空流单测。
+- `backend/tests/test_chat.py`：JSON/SSE、错误映射、来源清理、lazy dependency 单测。
+- `backend/tests/test_rag_integration.py`：
+  `test_upload_index_and_chat_returns_answer_source_and_safe_refusal()`，使用真实
+  PostgreSQL/BGE/Qdrant 与 Stub LLM。
+- `backend/tests/pdf_fixtures.py`：`build_text_pdf()`、`_build_text_stream()`。
 
-- 根因：`settings.cache_dir.mkdir()` 位于下载异常边界之外；例如缓存路径实际是文件时，
-  `FileExistsError` 会未经安全包装直接逃逸。
-- 修复：捕获目录创建的 `OSError` 并转换为 `ModelDownloadError`。
-- 安全性：用户消息不包含本机缓存路径，原始异常链保留，且失败发生在 downloader 调用前。
-- 回归测试：`test_cache_path_file_is_wrapped_before_download`。
+### 6. HTTP 与错误契约
 
-两个 P2 已随 `eefd397` 提交。修复后真实 BGE CPU 测试已重新执行并通过，
-不再是“待确认”。
+普通响应：
 
-### 6. Day 7 精确代码位置、接口和参数
-
-#### 6.1 配置与依赖
-
-文件：`backend/app/core/config.py`
-
-- `QDRANT_MAX_BATCH_SIZE = 32`
-- `QdrantSettings`
-- `get_qdrant_settings()`
-- 默认：`host="localhost"`、`port=6333`、`collection="documents"`、
-  `timeout_seconds=10.0`、`upsert_batch_size=32`
-- 校验：端口 `1..65535`，host/collection 非空，timeout `>0`，batch `1..32`
-- `QdrantSettings.build_url()` 返回无凭据的本地 REST URL。
-
-文件：`backend/requirements.txt`
-
-- `sentence-transformers==5.3.0`
-- `qdrant-client==1.18.0`
-
-#### 6.2 Qdrant 适配层
-
-文件：`backend/app/services/qdrant_store.py`
-
-- 常量：`QDRANT_SCHEMA_VERSION = 1`
-- 数据结构：`VectorizedChunk`、`RetrievedChunk`
-- 异常：`QdrantStoreError`、`QdrantUnavailableError`、
-  `QdrantCollectionMismatchError`、`QdrantResultError`
-- 服务：`QdrantVectorStore`
-- 方法：`initialize_collection()`、`validate_collection()`、`upsert_chunks()`、`search()`
-- 工厂：`get_qdrant_vector_store()`
-- collection metadata 固定保存 schema version、模型名和 revision；不匹配即失败；
-- 禁止用 `recreate_collection()` 隐式删除已有数据；
-- payload 精确字段：`chunk_id`、`doc_id`、`chunk_index`、`content`、`page`、
-  `filename`、`metadata`；
-- `upsert(wait=True)`，每批不超过 32；
-- `query_points(..., with_payload=True, with_vectors=False)`；
-- 严格校验 vector、UUID、payload 和有限 score。
-
-#### 6.3 显式命令
-
-文件：`backend/app/commands/init_qdrant.py`
-
-- `QdrantInitializationSummary`
-- `initialize_qdrant()`
-- `print_summary()`
-- `main()`
-
-命令：
-
-```powershell
-.\.venv\Scripts\python.exe -m backend.app.commands.init_qdrant
+```json
+{
+  "answer": "……",
+  "model": "deepseek-v4-flash",
+  "sources": [{"filename": "policy.pdf", "page": 1}]
+}
 ```
 
-文件：`backend/app/commands/index_document.py`
-
-- 异常：`DocumentIndexingError`、`DocumentNotFoundError`、
-  `DocumentChunksNotFoundError`、`QdrantConfigurationError`
-- 数据结构：`IndexSummary`
-- 接口：`index_document()`、`print_summary()`、`build_parser()`、`main()`
-- 查询按 `Chunk.chunk_index` 升序；PostgreSQL Session 在 BGE 和 Qdrant 工作前关闭；
-- 输出只包含安全标识、collection、数量、维度和状态，不输出正文或向量。
-
-命令：
-
-```powershell
-.\.venv\Scripts\python.exe -m backend.app.commands.index_document --document-id <UUID>
-```
-
-#### 6.4 检索服务与 HTTP API
-
-文件：`backend/app/services/retrieval.py`
-
-- `RETRIEVAL_TOP_K = 5`
-- `RetrievalService.search(query)`
-- `get_retrieval_service()`
-
-文件：`backend/app/api/retrieval.py`
-
-- `RetrievalSearchRequest`：只允许 `query`，`extra="forbid"`，去除首尾空白，
-  长度 `1..4096`；
-- `RetrievedChunkResponse`
-- `RetrievalSearchResponse`
-- `require_retrieval_service()`
-- `search_retrieval()`
-- 路由：`POST /retrieval/search`
-
-响应：`{"results": [...]}`；每项包含 `chunk_id`、`doc_id`、`chunk_index`、
-`content`、`page`、`filename`、`metadata`、`score`，不包含 vector。
+SSE 成功：delta events → sources event → `[DONE]`。无 Context 时发送一条固定拒答 delta、
+空 sources event、`[DONE]`。
 
 错误映射：
 
-- 空白、额外字段或请求过长：Pydantic `422`；
-- BGE token 超限：`422`；
-- Embedding 不可用、Qdrant 不可用、collection 缺失或不匹配：`503`；
+- 空白 message：Pydantic `422`。
+- BGE Query 超限：`422`。
+- Embedding/Qdrant 不可用或 collection 不匹配：`503`。
 - Qdrant Point/Payload 无效：安全 `502`。
+- LLM 未配置：`503`。
+- 普通 LLM 失败：`502`。
+- LLM 流开始后失败：SSE error event，不发送 sources 或 DONE。
 
-文件：`backend/app/main.py`
+应用启动和 `GET /health` 不连接 PostgreSQL、BGE、Qdrant 或 LLM。
 
-- `create_app()` 注册 `retrieval_router`；
-- 应用启动和 `GET /health` 仍不连接 PostgreSQL 或 Qdrant；
-- Qdrant、BGE 配置和客户端仅在相关命令或检索路由调用时解析。
+### 7. 中文 PDF fixture 修复
 
-### 7. 不可违反的约束与禁止修改的契约
+真实端到端首次上传返回 PostgreSQL `DataError`。根因是旧 Type1+BOM UTF-16BE fixture
+被 pypdf 提取为带 NUL 的字节映射；第一次分数测量也因此无效。
 
-- 使用 Python 3.11；后端代码位于 `backend/`；公共函数使用类型注解；测试用 pytest。
-- 不得提前实现 `PLAN.md` 后续 Day；Day 8 及以后未授权。
-- 不得修改 `PLAN.md`，除非用户再次明确授权。
-- 不得读取、输出、修改或提交 `.env`、API Key、数据库真实密码。
-- 不得读取或提交无关 `.agents/`；不得提交 `data/models/`。
-- 暂存、commit、push 是三个独立动作；commit 和 push 必须分别获得明确授权。
-- 不得自动把上传接入 Embedding/Qdrant；不得把 Qdrant 加入上传事务。
-- 不得把 `/chat` 接入检索；不得新增可调 `top_k`、doc filter、score threshold。
-- 不得提前实现 BM25、Hybrid/RRF、Rerank、RAG、后台队列、outbox、删除同步。
-- 不得用 `recreate_collection()` 自动重建不匹配的 collection。
-- `POST /documents/upload` 成功 `201` 响应字段保持：
-  `id`、`filename`、`size`、`status`、`created_at`；不得增加正文或向量。
-- PDF 页边界和一基页码、`split_pages()` 按页切分、Document 第一次 flush、
-  Chunks 第二次 flush、上传失败文件补偿必须保留。
-- 文档 Chunk 不加 BGE query instruction；只有 `embed_query()` 添加一次固定 instruction。
+修复：测试 PDF 改为 Type0 `/STSong-Light`、`/UniGB-UCS2-H`、CIDFont 与无 BOM
+UTF-16BE hex text。回归测试验证中文精确提取且无 NUL。随后真实 PostgreSQL 上传、
+Day 7 Qdrant 相关性和 Day 8 端到端均通过。
 
-### 8. 已确认技术决策及原因
+### 8. 验证证据
 
-完整决策编号见 `DECISIONS.md`。当前阶段最关键的是：
+开发前标准基线：
 
-1. `PLAN.md` 控制范围：避免提前实现未来 Day，确保验收边界可复现。
-2. Day 5 按页使用 `o200k_base`、默认 `500/100`：避免跨页并保留引用页码；
-   `o200k_base` 与 BGE tokenizer 不可互换。
-3. Document 与 Chunk 同事务分两次 flush：真实 PostgreSQL 已证明一次 flush 会先插入
-   Chunk 并触发 `chunks_doc_id_fkey`。
-4. Day 6 使用固定 revision 的本地 BGE：正文不外发，不需要 Embedding API Key，
-   结果稳定可复现。
-5. BGE tokenizer 独立预检：防止 SentenceTransformers 静默截断。
-6. Day 6 向量仅在内存：不扩大上传事务失败面，持久化留给 Day 7。
-7. Day 7 使用显式索引命令：PostgreSQL 与 Qdrant 无法组成真实事务；稳定 UUID 支持幂等重跑。
-8. Qdrant 固定 unnamed 512/Cosine：与归一化 BGE 输出一致，避免动态 schema 漂移。
-9. 查询使用固定 BGE instruction：符合 query/passage 编码语义，文档侧保持原契约。
-10. 检索 API 固定 Top 5 且不返回向量：只验证 Day 7 基础链路，Day 9 参数不得提前进入。
+```text
+153 passed, 4 skipped, 1 warning in 30.41s
+```
 
-### 9. 已尝试但失败、已修复或明确否决的方案
+Day 8 初验标准套件：
 
-#### 实际失败后已修复
+```text
+183 collected
+178 passed, 5 skipped, 1 warning in 16.43s
+```
 
-- Document 与无 ORM relationship 的 Chunk 只做一次 flush：真实 PostgreSQL 触发
-  `chunks_doc_id_fkey`；已改为两次 flush。
-- Day 6 Embedding 配置 `ValidationError` 与数据库异常共用分支：会误报数据库不可用；
-  已以 `EmbeddingConfigurationError` 分离。
-- `cache_dir.mkdir()` 位于下载异常边界外：`FileExistsError` 可逃逸；已包装为安全
-  `ModelDownloadError`。
-- Day 7 首次真实中文 PDF 测试复用了只支持 Latin-1 的最小 PDF fixture，触发
-  `UnicodeEncodeError`；已修改 `backend/tests/pdf_fixtures.py`，`_build_text_stream()`
-  对 Latin-1 使用 literal string，对中文使用 BOM UTF-16BE hex string，随后真实测试通过。
-- 首次拉取 `qdrant/qdrant:v1.18.1` 时 Docker CLI 挂起且 daemon 暂时无响应；
-  `Start-Service com.docker.service` 因无法打开服务失败。经明确授权重启 Docker Desktop 后
-  daemon 恢复、镜像拉取成功，最终镜像 digest 为
-  `sha256:45f8e3ddc2570a4d029877e1b5ec1045c19b3852b4e22a55c7f43b05aea0ca89`。
-- GitHub 实时 HEAD 查询曾网络超时；最终提交前已恢复并确认远端 `master` 为 `eefd397`。
+加入模型来源标记清理回归后，本轮重新运行的当前标准套件：
 
-#### 明确否决或不在当前范围
+```text
+186 collected
+181 passed, 5 skipped, 1 warning in 13.91s
+```
 
-- OpenAI Embedding、用 DeepSeek Key 做 Embedding、Day 6 千问 Embedding：否决。
-- SentenceTransformers 静默截断：禁止，必须先做 BGE tokenizer 预检。
-- 对所有下载/加载/推理错误统一重试：否决，只重试瞬时网络错误。
-- 上传事务内 Embedding、自动 Qdrant 索引：否决。
-- pgvector、Qdrant 自动重建、可调 Top K、filter、threshold、BM25、Hybrid、Rerank、RAG：
-  均不属于 Day 7。
-- 修改 `docker-compose.yml` 加入 Qdrant：本轮未采用；Day 7 使用固定本地容器命令。
+五个跳过项：真实 PostgreSQL、真实 BGE、两个真实 Qdrant、一个真实 RAG 端到端。
 
-### 10. 当前验证证据、错误、警告和日志
+其他已执行：
 
-#### 标准测试
+- 定向 LLM/RAG/Chat：`35 passed, 1 warning in 13.06s`。
+- 修复后真实 Qdrant+BGE：`2 passed, 1 warning in 14.41s`。
+- 真实 PostgreSQL+BGE+Qdrant、Stub LLM 端到端：`1 passed, 1 warning in 15.81s`。
+- 中文解析与上传单测：`25 passed, 1 warning in 14.98s`。
+- `pip check`、`compileall -q backend`、`git diff --check`：通过；Day 8 文件常见密钥模式匹配 0。
+- 当前失败测试：无。
+
+持续 warning：`.pytest_cache` 写入 `PytestCacheWarning: [WinError 5] Access is denied`；
+不影响通过，根因待确认。
+
+精确命令：
 
 ```powershell
+# 标准套件（真实外部集成默认跳过）
 .\.venv\Scripts\python.exe -m pytest backend/tests -v
-```
 
-最近一次结果：
+# 静态/依赖检查
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m compileall -q backend
+git diff --check
 
-- Python `3.11.15`
-- pytest `9.1.1`
-- collected `157`
-- `153 passed`
-- `4 skipped`
-- `1 warning`
-- 用时 `16.42s`
-
-四个跳过项：真实 PostgreSQL、真实 BGE、两个显式开关控制的真实 Qdrant 测试。
-当前失败测试：无。
-
-持续 warning：`.pytest_cache` 写入出现 `PytestCacheWarning: [WinError 5] Access is denied`。
-不影响测试结果，根因待确认。
-
-#### 修复后真实 BGE CPU 测试
-
-```powershell
-$env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_embedding_integration.py -v
-```
-
-结果：`1 passed, 1 warning in 16.37s`。使用固定 revision、CPU、512 维归一化向量。
-
-#### 真实 Qdrant + BGE 测试
-
-```powershell
+# 真实 Qdrant + BGE
 $env:RUN_QDRANT_INTEGRATION='1'
 $env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_qdrant_integration.py -v
+
+# 真实 PostgreSQL + BGE + Qdrant，Stub LLM
+$env:RUN_RAG_INTEGRATION='1'
+$env:RUN_POSTGRES_INTEGRATION='1'
+$env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
+$env:RUN_QDRANT_INTEGRATION='1'
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_rag_integration.py -v
 ```
 
-结果：`2 passed, 1 warning in 19.59s`。验证：
+#### 8.1 真实 DeepSeek 付费冒烟验收
 
-- collection 创建和严格校验；
-- 相同 Chunk UUID 重复 upsert 后无重复 Point；
-- payload 返回且 vector 不返回；
-- `query_points()` 路径；
-- 受控三页中文 PDF 的三个问题分别命中预期页 1、2、3，均为 Top 1；
-- 临时 collection 在 `finally` 中清理。
+`docs/day8-rag-smoke.md` 记录 2026-07-16 在用户明确授权下执行一次真实调用，使用
+`get_llm_client()` 和 `deepseek-v4-flash`，走真实
+upload → `index_document` → `/chat`，并在结束后清理临时 Qdrant collection、PostgreSQL
+文档行和上传文件。实际覆盖：
 
-2026-07-16 推送前将真实 BGE 与两个真实 Qdrant 用例合并复验，结果为
-`3 passed, 1 warning in 13.55s`。
+- JSON：“报销票据最晚什么时候交？”回答“每月二十五日前提交给财务组”；sources 为第 1、3 页。
+  第 1 页是正确主来源，第 3 页因也超过 `0.46` 被纳入，符合既有契约。
+- SSE：“VPN 连不上应该联系谁，分机是多少？”拼接为“联系网络组，分机是 6203”；
+  sources 仅第 2 页，以 `[DONE]` 结束，正文无引用标记泄漏。
+- 知识库外：“Python 如何定义一个函数？”固定拒答，sources 为空，LLM 调用数未增加。
 
-#### 其他检查
+真实验收没有加入 pytest；一次性脚本未保留。当前仓库没有
+`RUN_DEEPSEEK_RAG_INTEGRATION` 开关或对应测试，当前任务也没有可读取的原始终端会话。
+因此可确认的是上述验收记录；精确一次性脚本和原始终端日志为“待确认”。未单独真实调用
+“年假需要提前多久申请？”或“月球表面温度是多少？”，不得写成四题真实调用全覆盖。
 
-- `pip check`：通过，`No broken requirements found.`
-- `compileall -q backend`：通过。
-- `git diff --check`：通过；仅出现 LF 将转换为 CRLF 的提示，不是失败。
-- Qdrant `/healthz`：通过。
-- `documents` collection：容器重启后仍存在且 512/Cosine 校验通过。
+### 9. 已尝试但失败或被否决的方案
 
-### 11. 当前未验证项、文档矛盾和残余风险
+- 已失败并修复：Type1 字体 + BOM UTF-16BE 中文 PDF fixture。pypdf 产生带 NUL 文本，
+  真实上传触发 PostgreSQL `DataError`；基于该 fixture 的首次相关性分数无效，不得引用。
+- 已否决：把模型答案中的文件名/页码当作可信引用。当前实现只信任后端 `sources`，并清理
+  模型正文中的来源标记。
+- 已否决：在 Day 8 修改 `/retrieval/search` 或开放 top_k/filter/threshold；这些属于 Day 9。
+- 已否决：将真实 DeepSeek 调用加入标准 pytest；原因是网络、余额、费用和结果非确定性。
 
-- GitHub 提交前实时 `refs/heads/master` 已确认等于 `eefd397`；最终推送后的 SHA 以 Git 实时查询为准。
-- `.pytest_cache` 的 WinError 5 权限根因：待确认。
-- 本节 Git 表是 Day 7 最终提交前快照；最终提交和推送结果以 Git 实时状态为准。
-- `PLAN.md` 已按用户明确授权更新 Day 7 五项和开发日志，Day 8 及以后保持不变。
-- Qdrant 当前容器是本机运行状态，不代表新机器已完成部署；新环境复现待确认。
-- 本地模型首次下载仍依赖 Hugging Face 网络；代理、磁盘空间、缓存损坏与完全离线部署策略待确认。
-- PostgreSQL 与 Qdrant 不具备跨存储事务；索引命令依赖稳定 UUID 幂等重跑，但没有 outbox、
-  自动重试、删除同步或一致性修复任务。
-- `POST /retrieval/search` 是同步、固定 Top 5 的基础接口，尚无鉴权、限流、filter、threshold、
-  BM25、Hybrid、Rerank 或质量评测集。
-- 上传文件移动后进程立即崩溃仍可能留下孤儿文件；启动清理任务未实现。
-- `_cleanup_failed_upload()` 读取 SQLAlchemy 私有事务 `_state`，升级兼容性待确认。
-- Git 持续提示 LF→CRLF；是否增加 `.gitattributes` 待确认。
-- 首次修改已有表结构时是否引入 Alembic：待确认。
+### 10. 当前错误、未验证项与残余风险
 
-已清除的旧矛盾：`ecadc329`、Day 6 未提交、`110 passed / 2 skipped / 1 warning`、
-“修复后真实 BGE 待确认”都只是 Day 6 交接历史，不再代表当前状态。
+- 当前失败测试：无。
+- 当前持续 warning：`.pytest_cache` 的 `PytestCacheWarning: [WinError 5] Access is denied`；
+  不影响通过，根因待确认。
+- 未跟踪 `.pytest-tmp/` 为测试产物；内容未检查，是否清理待确认，不得提交。
+- `git diff --check` 通过，但 Git 提示工作区 LF 将来可能转为 CRLF；是否增加
+  `.gitattributes` 待确认。
+- 真实 DeepSeek 已覆盖 JSON、SSE 和一种门控拒答，但年假真实生成、月球真实拒答未单独执行；
+  是否需要补充为完整四题验收待确认，当前暂停且不得自动重跑。
+- `0.46` 校准集仅六题，领域和文档分布变化后可能误拒绝或误接受。
+- PostgreSQL/Qdrant 无跨存储事务，仍无 outbox、删除同步和一致性修复。
+- 模型首次下载、完全离线部署、新机器 Qdrant 复现待确认。
+- 上传崩溃孤儿文件、SQLAlchemy 私有 `_state` 和 Alembic 引入时机仍待确认。
 
-### 12. 待完成任务与下一步具体操作（最多 5 步）
+### 11. 下一步（最多 5 步）
 
-1. 新会话第一轮只读核对本文件、`STATUS.md`、`DECISIONS.md`、`TODO.md`、
-   `README.md`、`PLAN.md` 和 Git 实时状态；先复述状态，不改代码。
-2. 确认 Day 7 检查点提交包含代码、测试、文档和 `PLAN.md` 状态，且远端与本地一致。
-3. 明确排除 `.env`、`.agents/` 和 `data/models/`。
-4. 等用户指定唯一下一动作。
-5. 未经用户明确授权不得开始 Day 8。
+1. 新会话先只读核验本交接包、Git 状态、14 个已修改文件、4 个 Day 8 新文件，以及需排除的
+   `.agents/` 和 `.pytest-tmp/`。
+2. 等待用户选择是否需要补充真实 DeepSeek 四题全覆盖；未经新授权不得再次产生费用。
+3. 只有明确授权后才修改 `PLAN.md` Day 8 状态。
+4. 暂存、commit、实时远端核验、push 分别等待明确授权；暂存时排除 `.env`、`.agents/`、
+   `data/models/`。
+5. Day 8 检查点完成且用户明确授权后，才可开始 Day 9。
 
-当前唯一下一步：Day 7 检查点完成后等待用户授权 Day 8；下一步最小改动为“无”。
+### 12. 验收标准
 
-### 13. 当前交接验收标准
+当前交接检查点：
 
-- 用 Git 实时识别包含本文件的 Day 7 检查点 SHA，不把提交前基线 `eefd397` 当作最终 HEAD；
-- 正确识别 Day 1-7 已完成，`PLAN.md` Day 7 五项和日志已更新；
-- 确认暂存区为空、本地与远端一致，且只剩被排除的无关 `.agents/` 未跟踪文件；
-- 正确复述标准测试 `153 passed / 4 skipped / 1 warning`；
-- 正确复述修复后真实 BGE `1 passed`、真实 Qdrant+BGE `2 passed`；
-- 正确识别两个已修复 P2 及原因；
-- 明确 Day 8 及以后未经授权不得开始；
-- 不读取或纳入 `.env`、无关 `.agents/`、`data/models/`。
+- 新对话不依赖聊天即可定位目标、状态、决策、失败方案、代码、命令、日志、风险和下一步。
+- Git 基线为 `683f516777345a1a000c6f94ade5fb4232a3a58e`；暂存区为空；Day 8 未提交、未推送。
+- 当前标准测试 `181 passed, 5 skipped, 1 warning`；真实 Qdrant+BGE `2 passed`；真实
+  PostgreSQL+BGE+Qdrant、Stub LLM RAG `1 passed`。
+- 真实 DeepSeek 冒烟的实际覆盖范围按 8.1 记录，不扩大成未执行问题。
+- `PLAN.md`、`docker-compose.yml`、`backend/requirements.txt` 无差异；没有读取 `.env`，
+  没有读取/修改无关 `.agents/` 或 `.pytest-tmp/`，没有暂存、commit 或 push。
+
+若未来补充完整四题付费验收，完成条件为：三个知识库内问题事实正确、首要 sources 页分别
+命中 1/2/3；至少覆盖一次 JSON 与一次 SSE；“月球表面温度是多少？”固定拒答、sources 为空且
+不调用 DeepSeek；不得记录凭据、完整 Prompt 或知识库全文；模型自然语言不得用脆弱全文匹配。
 
 ## B. 300 字以内快速恢复摘要
 
-仓库 `D:\2019\rag-agent`，`master`；`eefd397` 是 Day 7 提交前基线，最终 HEAD 必须用 Git 实时读取。Day 1-7 已完成，Day 7 实现显式 Chunk→BGE→Qdrant 索引和固定 Top 5 API，`PLAN.md` 五项及日志已更新。标准测试 `153 passed/4 skipped/1 warning`，真实 BGE/Qdrant `3 passed`。排除 `.env`、`.agents/`、`data/models/`；新会话先只读核验本地/远端一致后等待 Day 8 授权。
+`D:\2019\rag-agent`，`master`，HEAD `683f516`。Day 1-7 已提交；Day 8 RAG 已验收，
+14 改、4 新均未暂存/提交/推送，`PLAN.md` 无差异。固定 Top 5、门槛 `0.46`；
+测试 `181 passed/5 skipped/1 warning`，真实检索+Stub LLM RAG `1 passed`。DeepSeek 已通过
+报销 JSON、VPN SSE、Python 拒答；年假/月球未单独调用。排除 `.env`、`.agents/`、
+`.pytest-tmp/`、`data/models/`，当前暂停。
 
-## C. 新对话的第一条启动提示词
+## C. 新会话启动提示词
 
 ```text
-这是一个已有项目的新工作会话，仓库位于 D:\2019\rag-agent。
-
-请先完整阅读：
-1. HANDOFF.md
-2. STATUS.md
-3. DECISIONS.md
-4. TODO.md
-5. AGENTS.md
-6. README.md
-7. PLAN.md
-8. docs/architecture.md
-9. docs/day5-chunk-size-comparison.md
-10. docs/day7-retrieval-smoke.md
-11. .env.example
-12. backend/requirements.txt
-13. HANDOFF.md 列出的 Day 6/7 直接相关代码和测试
-
-执行规则：
-- 第一轮只读检查，不要立即改代码。
-- 不要重新完成 Day 1-7，不要开始 Day 8。
-- 不要擅自推翻 DECISIONS.md。
-- 不确定内容标记为“待确认”，禁止自行补全。
-- 不要读取、输出或提交 .env、API Key、数据库真实密码。
-- 不要读取或提交无关 .agents/，不要提交 data/models/。
-- 不要修改 PLAN.md，除非我明确授权。
-- 暂存、commit、push 分别需要明确授权。
-
-请先回复：
-1. 项目最终目标和 Day 1-7 当前状态；
-2. 精确 Git、暂存、未提交和远端核验状态；
-3. Day 6 两个 P2 修复，以及 Day 7 技术决策和接口；
-4. 当前失败、警告、未验证项、文档矛盾和残余风险；
-5. 接下来最多 5 个步骤。
-
-当前唯一目标：
-只读确认 Day 7 检查点、交接包、PLAN.md 和本地/远端 Git 状态，准确复述后等待我指定下一动作。
-
-本轮验收标准：
-不改代码，不读取 .env 或无关 .agents/，不修改 PLAN.md，不提交、不推送；
-通过 Git 实时识别 Day 7 最终 HEAD，确认本地与远端一致、PLAN.md Day 7 已更新、
-153 passed/4 skipped/1 warning、真实 BGE/Qdrant 3 passed，并等待 Day 8 授权。
+这是已有项目的新会话，仓库 D:\2019\rag-agent。先完整阅读 HANDOFF.md、STATUS.md、
+DECISIONS.md、TODO.md、AGENTS.md、README.md、PLAN.md、docs/architecture.md、
+docs/day7-retrieval-smoke.md、docs/day8-rag-smoke.md 及 HANDOFF 列出的 Day 8 代码/测试。
+第一轮只读核验并复述：master/HEAD 683f516；Day 1-7 已提交；Day 8 有 14 个修改文件和
+4 个新文件，另有须排除的 .agents/ 和 .pytest-tmp/；已验收但未暂存/提交/推送；标准测试
+181 passed/5 skipped/1 warning；真实
+Qdrant+BGE 2 passed；真实 PostgreSQL+BGE+Qdrant、Stub LLM RAG 1 passed；真实 DeepSeek
+已覆盖报销 JSON、VPN SSE、Python 门控拒答，年假/月球未单独真实调用；PLAN.md 无差异。
+禁止读取 .env 或无关 .agents/，排除 data/models/。列出矛盾/待确认项和最多 5 个下一步，
+然后等待我指定唯一动作，不要直接改代码或再次调用付费 API。
 ```

@@ -246,3 +246,63 @@
   检索链路，并避免泄露或传输完整向量。
 - 错误：Query 过长为 422；Embedding/Qdrant 不可用或 collection 不匹配为 503；无效
   Qdrant Point/Payload 为安全 502。
+
+## D-032：Day 8 在生成层使用固定相关性门控
+
+- 状态：已确认
+- 决策：`RAGSettings.min_relevance_score` 默认固定为 `0.46`，只过滤送入 Prompt 的
+  Day 7 Top 5 结果；不修改 `/retrieval/search`，也不向请求方开放门槛。
+- 证据：修复中文 PDF fixture 后，三个正样本 Top-1 为 `0.688781`、`0.734850`、
+  `0.814524`；三个负样本 Top-1 为 `0.282149`、`0.326244`、`0.306839`。
+- 限制：该值只对当前受控样本有证据，不是概率，也不是后续评测集的最终阈值。
+
+## D-033：RAG 使用结构化 messages，Context 作为不可信 user 数据
+
+- 状态：已确认
+- 决策：LLM 请求使用 system + user messages；system 保存 RAG 规则，检索 Context 以 JSON
+  放入 user message，仅包含 filename、page、content。
+- 原因：知识库正文可能包含 Prompt Injection，不能获得 system 指令优先级；JSON 渲染可稳定
+  处理引号、换行和分隔符。
+- 兼容：`LLMClient.complete()` 和 `stream()` 继续包装单一 user message。
+
+## D-034：拒答与结构化 sources 由后端控制
+
+- 状态：已确认
+- 决策：无通过门槛的 Chunk 时后端精确返回 `知识库中没有相关信息`，不调用 LLM；
+  sources 从实际 Context 按 filename/page 去重生成，不从模型答案解析。
+- SSE：成功为 delta → sources → DONE；流失败发送 error 后停止，不发送 sources 或 DONE。
+- 原因：降低幻觉、费用和延迟，并防止模型伪造来源或页码。
+
+## D-035：检索必须在建立 SSE 响应前完成
+
+- 状态：已确认
+- 决策：`RAGService.prepare()` 在构造 `StreamingResponse` 前完成 BGE、Qdrant、门控、
+  Prompt 和 sources 准备。
+- 原因：Query 超限和检索服务故障应返回真实 HTTP 422/502/503；只有 LLM 已开始流式输出后
+  的错误才使用 SSE error event。
+
+## D-036：受控中文 PDF fixture 使用 Type0/CID 字体
+
+- 状态：已确认
+- 决策：测试 PDF 使用 Type0 `/STSong-Light`、`/UniGB-UCS2-H` 和无 BOM UTF-16BE hex text。
+- 原因：旧 Type1+BOM 方案被 pypdf 提取为带 NUL 的字节映射，无法写入 PostgreSQL，且会
+  污染中文检索校准；新方案可精确提取中文并通过真实上传链路。
+
+## D-037：模型正文来源标记不可信并由 RAG 层清理
+
+- 状态：已确认
+- 决策：结构化 `sources` 是唯一可信引用。`RAGService.complete()` 使用
+  `_strip_model_source_references()` 清理完整答案，`RAGService.stream()` 使用
+  `_sanitized_model_deltas()` 跨流式分片清理 `.pdf/.md/.txt`、`page N`、`第 N 页`、
+  `SNN` 及包含这些标记的括号引用。
+- 原因：模型可能复述 Context 文件名、重复后端来源或伪造页码；引用必须从实际通过门控的
+  Context 生成，不能从模型自由文本解析。
+- 影响：答案正文与来源展示分离；JSON/SSE 客户端只应读取后端 `sources` 字段/event。
+
+## D-038：真实 DeepSeek 只做显式授权的一次性冒烟
+
+- 状态：已确认
+- 决策：真实 DeepSeek 不进入标准 pytest；每次产生费用的调用都需要显式授权，并在完成后停止。
+- 原因：网络、账户余额、费用和模型自然语言均不稳定，不能破坏离线测试的可重复性。
+- 当前证据：2026-07-16 已覆盖报销 JSON、VPN SSE、Python 门控拒答；一次性脚本未提交。
+- 限制：不得把上述三条路径写成“年假”和“月球”也已真实调用；补充调用需新授权。

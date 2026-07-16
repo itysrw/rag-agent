@@ -4,9 +4,9 @@
 
 本文严格区分：
 
-- 已提交的 Day 1 至 Day 6；Day 7 提交前基线为 `eefd397`；
-- 已实现、验收并进入授权检查点的 Day 7；最终 SHA 应通过 Git 实时读取；
-- 尚未实现的 Day 8 及以后目标。
+- 已提交的 Day 1 至 Day 7；当前基线 HEAD 为 `683f516`；
+- 当前工作区已实现并验收、尚未提交的 Day 8；
+- 尚未实现的 Day 9 及以后目标。
 
 ## 当前实现架构
 
@@ -19,8 +19,14 @@ flowchart LR
     api --> upload["POST /documents/upload"]
     api --> retrieval_api["POST /retrieval/search<br/>固定 Top 5"]
 
-    chat --> llm["LLMClient<br/>OpenAI-compatible"]
+    chat --> rag["RAGService.prepare()<br/>检索在 SSE 建立前完成"]
+    rag --> query_embedding["embed_query()<br/>固定 BGE instruction"]
+    gate["生成层相关性门控<br/>固定 0.46"]
+    gate -->|"无 Context"| refusal["固定拒答<br/>不调用 LLM"]
+    gate -->|"有 Context"| prompt["system 规则 + user JSON Context"]
+    prompt --> llm["LLMClient messages<br/>OpenAI-compatible"]
     llm --> deepseek["DeepSeek V4 Flash<br/>仅 LLM"]
+    gate --> sources["后端 sources<br/>filename + page"]
 
     upload --> storage["UUID.part 分块存储"]
     storage --> parser["PDF / Markdown / TXT 解析"]
@@ -39,9 +45,10 @@ flowchart LR
     inference --> vectors["512 维归一化向量"]
     vectors --> qdrant["Qdrant<br/>unnamed 512 / Cosine"]
     init_qdrant --> qdrant
-    retrieval_api --> query_embedding["embed_query()<br/>固定 BGE query instruction"]
+    retrieval_api --> query_embedding
     query_embedding --> qdrant
-    qdrant --> results["payload + score<br/>不返回向量"]
+    qdrant --> results["固定 Top 5<br/>payload + score · 无向量"]
+    results --> gate
 
     chunks --> ordered
 ~~~
@@ -52,20 +59,24 @@ flowchart LR
 - Day 6 Embedding 命令仍只读且只产生内存向量；Day 7 另由显式索引命令写 Qdrant。
 - 索引命令先关闭 PostgreSQL Session，再执行模型推理和 Qdrant upsert。
 - PostgreSQL 与 Qdrant 不伪装成跨存储事务；稳定 Chunk UUID 支持幂等重跑。
-- DeepSeek Key 只属于已有 LLM 链路，不参与 Embedding。
-- FastAPI 只新增独立检索接口；上传接口和 `/chat` 均未接入 Qdrant。
+- DeepSeek Key 只属于生成链路，不参与 Embedding。
+- `/chat` 只复用独立检索服务；上传接口仍不接入 BGE/Qdrant。
+- Context 正文只进入 user message，sources 从实际 Context 生成，不依赖模型输出。
+- 模型正文中的文件名、页码和 `SNN` 类来源标记在完整/流式输出中清理；客户端只信任
+  后端结构化 sources。
+- RAG 门槛不进入 `/retrieval/search`，不提前开放 Day 9 参数。
 
 ## 当前 HTTP 接口
 
 | 方法与路径 | 状态 |
 |---|---|
 | GET /health | 已实现 |
-| POST /chat，stream=false | 已实现，返回完整 JSON |
-| POST /chat，stream=true | 已实现，返回 SSE delta 与 DONE |
+| POST /chat，stream=false | 已实现，返回 answer/model/sources |
+| POST /chat，stream=true | 已实现，返回 delta、sources event 与 DONE |
 | POST /documents/upload | 已实现，支持 PDF/MD/TXT |
 | POST /retrieval/search | 已实现，只接收 query，固定 Top 5，不返回向量 |
 
-应用启动和 GET /health 均不连接 Qdrant。
+应用启动和 GET /health 均不连接 PostgreSQL、Qdrant、BGE 或 LLM。
 
 ## 文档上传流程
 
@@ -146,6 +157,22 @@ BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
 
 Day 7 不实现可调 top_k、doc_id filter、score threshold、BM25、Hybrid、Rerank 或 RAG。
 
+## Day 8 基础 RAG 流程
+
+1. `/chat` 校验并规范化 message。
+2. `RAGService.prepare()` 调用 Day 7 `RetrievalService.search()`，固定取得最多 5 个结果。
+3. 只保留 score `>= 0.46` 的 Chunk；门槛只存在于 RAG 生成层。
+4. 无结果时构造固定拒答状态，complete/stream 均不调用 LLM。
+5. 有结果时按 filename/page 去重生成 sources，并把 filename/page/content JSON 放入 user message。
+6. system message 规定 Context 不可信、禁止执行正文指令、禁止使用外部知识和伪造来源。
+7. 普通模式调用 `complete_messages()`，返回 answer/model/sources。
+8. 流式模式调用 `stream_messages()`，成功发送 delta → sources → DONE；LLM 失败发送 error 后停止。
+9. `_strip_model_source_references()` 与 `_sanitized_model_deltas()` 清理模型自由文本中的来源标记，
+   不改变后端从实际 Context 构造的 sources。
+
+`0.46` 来自三条正样本和三条负样本的真实校准：正样本 Top-1 最小 `0.688781`，
+负样本 Top-1 最大 `0.326244`。它只对当前受控样本有证据，后续仍需更大评测集复验。
+
 ## 异常与安全边界
 
 backend/app/services/embedding.py 定义的安全异常：
@@ -179,6 +206,7 @@ backend/app/commands/embed_document.py 额外定义：
 - ChunkingSettings：CHUNK_SIZE、CHUNK_OVERLAP、CHUNK_ENCODING_NAME。
 - EmbeddingSettings：EMBEDDING_ 前缀；模型名、revision、维度和设备使用 Literal 固定。
 - QdrantSettings：QDRANT_ 前缀；本地 REST URL、collection、timeout 和最大 32 条 upsert batch。
+- RAGSettings：RAG_ 前缀；生成层固定相关性门槛，范围 `0..1`。
 - sentence-transformers==5.3.0 为 Day 6 新依赖。
 - qdrant-client==1.18.0 为 Day 7 固定依赖。
 - 当前环境已解析到 torch 2.13.0、transformers 5.14.0、huggingface-hub 1.23.0。
@@ -193,7 +221,6 @@ backend/app/commands/embed_document.py 额外定义：
 - 自动索引、删除同步、后台队列或 outbox；
 - 可调 top_k、doc_id filter 和 score threshold；
 - BM25、RRF、Rerank；
-- RAG prompt 与来源引用；
 - LangGraph、Agent 工具和记忆；
 - 评测、trace、Streamlit 和完整 Docker Compose。
 
