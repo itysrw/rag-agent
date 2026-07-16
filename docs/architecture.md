@@ -2,109 +2,173 @@
 
 更新时间：2026-07-15（America/New_York）
 
-本文区分“当前已实现架构”和“最终目标架构”。目标组件不代表已经完成。
+本文严格区分：
 
-## 当前已实现架构（Day 5 已验收，尚未提交）
+- 已提交并推送的 Day 1 至 Day 5；
+- 当前工作区已实现但未提交的 Day 6；
+- 尚未实现的 Day 7 及以后目标。
 
-```mermaid
+## 当前实现架构
+
+~~~mermaid
 flowchart LR
-    client["调用方 / Swagger UI"] --> api["FastAPI app\nbackend/app/main.py"]
+    client["调用方 / Swagger UI"] --> api["FastAPI app<br/>backend/app/main.py"]
 
-    api --> health["GET /health\napi/health.py"]
-    api --> chat["POST /chat\napi/chat.py"]
-    api --> upload["POST /documents/upload\nmultipart · PDF/MD/TXT"]
+    api --> health["GET /health"]
+    api --> chat["POST /chat"]
+    api --> upload["POST /documents/upload"]
 
-    chat --> dependency["require_llm_client()"]
-    dependency --> cache["get_llm_client()\nlru_cache"]
-    cache --> settings["LLMSettings\ncore/config.py"]
-    cache --> llm["LLMClient\nservices/llm.py"]
-    llm --> sdk["OpenAI Python SDK 2.45.0"]
-    sdk --> provider["OpenAI-compatible endpoint\n默认 DeepSeek V4 Flash"]
+    chat --> llm["LLMClient<br/>OpenAI-compatible"]
+    llm --> deepseek["DeepSeek V4 Flash<br/>仅 LLM"]
 
-    chat -->|"stream=false"| json["ChatResponse JSON"]
-    chat -->|"stream=true"| sse["StreamingResponse SSE\ndelta + DONE"]
+    upload --> storage["UUID.part 分块存储"]
+    storage --> parser["PDF / Markdown / TXT 解析"]
+    parser --> pages["PageText<br/>一基页码"]
+    pages --> splitter["split_pages()<br/>o200k_base · 500/100 · 按页"]
+    splitter --> chunks["PostgreSQL chunks<br/>有序 · JSONB"]
+    pages --> documents["PostgreSQL documents<br/>extracted_text"]
 
-    settings --> env[".env\n本地且不提交"]
-    middleware["请求日志中间件\nmethod/path/status/latency"] --> api
+    operator["本地操作者"] --> command["python -m backend.app.commands.embed_document<br/>--document-id UUID"]
+    command --> ordered["SELECT Chunk<br/>ORDER BY chunk_index"]
+    ordered --> embedding["EmbeddingClient"]
+    embedding --> snapshot["固定 BGE snapshot<br/>本地缓存优先"]
+    snapshot --> tokenizer["BGE tokenizer 预检<br/>包含特殊 token · 禁止截断"]
+    tokenizer --> inference["SentenceTransformers CPU<br/>批量 ≤ 32"]
+    inference --> vectors["512 维归一化向量<br/>仅内存"]
+    vectors --> summary["安全摘要<br/>不含正文和向量值"]
 
-    upload --> storage["分块存储\nUUID.part → UUID.ext"]
-    storage --> parser["PDF 分页 / UTF-8 文本解析"]
-    parser --> pages["PageText\n一基页码与空白页"]
-    pages --> splitter["RecursiveCharacterTextSplitter\no200k_base · 500/100 · 按页"]
-    pages --> document_text["documents.extracted_text\n以 form-feed 保留页边界"]
-    splitter --> chunks["有序 Chunk\ncontent · page · metadata"]
-    document_text --> session["SQLAlchemy 同步事务"]
-    chunks --> session
-    session --> postgres["PostgreSQL\ndocuments + chunks"]
-```
+    chunks --> ordered
+~~~
 
-上图中的上传接口已替换 Day 2 占位实现。Day 5 在不改变 `201` 响应字段的前提下，
-为新上传文档生成按页 Chunk。真实分页 PDF、磁盘、PostgreSQL JSONB、顺序和级联删除
-验收已经通过；Day 5 当前尚未提交，`PLAN.md` 未修改。
+关键隔离边界：
 
-## 当前请求流程
+- 上传 API 不调用 EmbeddingClient，Day 6 不扩大上传事务。
+- Embedding 命令只读 documents/chunks，不写 PostgreSQL。
+- 向量只存在于当前进程内存，不写 Chunk.metadata、pgvector 或 Qdrant。
+- DeepSeek Key 只属于已有 LLM 链路，不参与 Embedding。
+- FastAPI 当前没有新增 Embedding 或检索 HTTP 接口。
 
-### 非流式 `/chat`
+## 当前 HTTP 接口
 
-1. `ChatRequest` 验证 `message` 和 `stream=false`；
-2. `require_llm_client()` 获取缓存的 `LLMClient`；
-3. `LLMClient.complete()` 调用 `chat.completions.create(..., stream=False)`；
-4. 返回 `ChatResponse(answer, model)`；
-5. 配置缺失返回 `503`，上游 `OpenAIError` 映射为 `502`。
+| 方法与路径 | 状态 |
+|---|---|
+| GET /health | 已实现 |
+| POST /chat，stream=false | 已实现，返回完整 JSON |
+| POST /chat，stream=true | 已实现，返回 SSE delta 与 DONE |
+| POST /documents/upload | 已实现，支持 PDF/MD/TXT |
 
-### 流式 `/chat`
+Day 6 只有本地命令入口，没有新增 HTTP 路由。
 
-1. `ChatRequest` 验证 `stream=true`；
-2. `LLMClient.stream()` 调用兼容接口并逐个产生 `delta.content`；
-3. `stream_sse()` 编码为 `data: {"delta":"..."}\n\n`；
-4. 正常完成输出 `data: [DONE]\n\n`；
-5. 流对象在完成、中断或异常时尝试 `close()`；
-6. 流中上游错误输出通用 `event: error`，此时 HTTP headers 可能已经是 `200`，这是 SSE 的正常限制。
+## 文档上传流程
 
-### 文档上传 `/documents/upload`
+1. upload_document() 读取 UploadFile.file，每块最多 1 MiB。
+2. 验证安全文件名、扩展名、MIME、PDF 签名和实际 20 MiB 上限。
+3. 文件先写 UUID.part，PDF 最多 500 页。
+4. parse_document() 生成 list[PageText]；PDF 空白页保留原页码。
+5. split_pages() 按页使用 o200k_base 和 RecursiveCharacterTextSplitter 切分。
+6. Document 第一次 flush，Chunks 第二次 flush。
+7. os.replace 提升文件，随后 commit。
+8. 失败时回滚数据库并清理临时或已移动文件。
 
-1. 同步路由在线程池中读取 `UploadFile.file`，每次最多 1 MiB；
-2. 同时验证安全文件名、扩展名、MIME 与可解析内容，实际大小不得超过 20 MiB；
-3. 文件先写为服务端 UUID 对应的 `.part`，PDF 最多 500 页；
-4. PDF 每页形成一个 `PageText`，空白页保留；所有页均无文本时返回 `400`；
-5. `split_pages()` 逐页使用 `o200k_base` 和 `RecursiveCharacterTextSplitter` 切分；
-   空白页不生成 Chunk，`chunk_index` 在文档内从 0 连续递增；
-6. 页文本以 `\f` 拼接后写入 `documents.extracted_text`，Chunk 写入 `chunks`；
-7. 同一事务先 flush Document，再 flush Chunks，随后 `os.replace`，最后提交；
-8. 任一异常都会回滚两张表并清理临时文件和已移动文件。移动后进程立即崩溃仍可能留下孤儿文件，属于已知残余风险。
+Day 5 已证明不能把 Document 和无 ORM relationship 的 Chunk 只做一次 flush：
+真实 PostgreSQL 曾先插入 Chunk 并触发 chunks_doc_id_fkey。当前两次 flush 必须保留。
 
-## 配置边界
+## Day 6 Embedding 流程
 
-应用配置：`Settings`，环境变量前缀 `APP_`。
-LLM 配置：`LLMSettings`，环境变量前缀 `LLM_`。
-PostgreSQL 配置：`DatabaseSettings`，环境变量前缀 `POSTGRES_`。
-上传配置：`DocumentSettings`，相对目录从仓库根目录解析，不依赖当前工作目录。
-切分配置：`ChunkingSettings`，环境变量为 `CHUNK_SIZE`、`CHUNK_OVERLAP`、
-`CHUNK_ENCODING_NAME`，默认 `500`、`100`、`o200k_base`。
+入口：
 
-`LLMClient` 不知道供应商名称。DeepSeek 的思考开关通过
-`LLM_EXTRA_BODY={"thinking":{"type":"disabled"}}` 作为不透明扩展透传。
+    .\.venv\Scripts\python.exe -m backend.app.commands.embed_document --document-id <UUID>
 
-## 当前没有实现的组件
+执行顺序：
 
-以下均属于未来计划，当前不得视为已完成：
+1. build_parser() 解析 document_id。
+2. embed_document() 获取 Session，按 Chunk.chunk_index 升序读取。
+3. 没有 Chunk 时抛出 DocumentChunksNotFoundError，且不创建 Embedding 客户端。
+4. get_embedding_client() 读取并缓存 EmbeddingSettings。
+5. ensure_model_snapshot() 先检查固定 revision 的本地缓存。
+6. 缓存缺失时匿名下载；只重试连接、超时、HTTP 429 和 5xx。
+7. load_embedding_model() 使用 local_files_only=True 和 trust_remote_code=False 从 snapshot 加载。
+8. validate_model_input_length() 使用 BGE tokenizer，add_special_tokens=True、truncation=False。
+9. EmbeddingClient.embed_documents() 以最多 32 条为一批调用模型。
+10. embed_chunks() 校验并按输入位置绑定 Chunk UUID。
+11. print_summary() 只输出安全元数据；向量随进程结束丢弃。
 
-- Embedding；
-- Qdrant；
+### 模型与配置固定值
+
+| 项目 | 值 |
+|---|---|
+| model_name | BAAI/bge-small-zh-v1.5 |
+| model_revision | 4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4 |
+| device | cpu |
+| dimension | 512 |
+| batch_size | 32，允许配置 1 至 32 |
+| normalize_embeddings | 必须为 true |
+| cache_dir | data/models，相对仓库根目录 |
+| download_max_retries | 最多 3 次重试，即首次尝试加 3 次重试 |
+| retry backoff | 1、2、4 秒 |
+
+Day 5 的 o200k_base 与 BGE tokenizer 不可互换。500 个 Day 5 token 不保证少于
+BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
+
+## 异常与安全边界
+
+backend/app/services/embedding.py 定义的安全异常：
+
+- EmbeddingError
+- ModelDownloadError
+- ModelLoadError
+- EmbeddingInputError
+- EmbeddingInputTooLongError
+- ChunkEmbeddingInputTooLongError
+- EmbeddingResultError
+
+backend/app/commands/embed_document.py 额外定义：
+
+- DocumentChunksNotFoundError
+- EmbeddingConfigurationError
+
+错误分类规则：
+
+- Embedding 配置 ValidationError 转为 EmbeddingConfigurationError，不能误报数据库不可用。
+- DatabaseConfigurationError、数据库设置 ValidationError 和 SQLAlchemyError 仍归类为数据库不可用。
+- cache_dir.mkdir() 的 OSError 转为不含本机路径的 ModelDownloadError，且不调用 downloader。
+- 原始异常用异常链保留；用户输出不包含 Chunk 正文、向量、本机缓存路径、API Key 或数据库密码。
+
+## 配置与依赖边界
+
+- Settings：APP_ 前缀。
+- LLMSettings：LLM_ 前缀。
+- DatabaseSettings：POSTGRES_ 前缀。
+- DocumentSettings：上传资源限制。
+- ChunkingSettings：CHUNK_SIZE、CHUNK_OVERLAP、CHUNK_ENCODING_NAME。
+- EmbeddingSettings：EMBEDDING_ 前缀；模型名、revision、维度和设备使用 Literal 固定。
+- sentence-transformers==5.3.0 为 Day 6 新依赖。
+- 当前环境已解析到 torch 2.13.0、transformers 5.14.0、huggingface-hub 1.23.0。
+
+所有相对上传和模型缓存路径均从仓库根目录解析，不依赖当前工作目录。
+数据库仍通过 python -m backend.app.models.init_db 显式建表，应用启动和 GET /health
+不初始化或探测 PostgreSQL。
+
+## 尚未实现
+
+- Qdrant 容器、collection 和向量持久化；
+- pgvector 或 PostgreSQL 向量字段；
+- POST /retrieval/search；
+- query embedding 和 BGE query instruction；
 - BM25、RRF、Rerank；
-- RAG prompt 与引用；
+- RAG prompt 与来源引用；
 - LangGraph、Agent 工具和记忆；
-- 评测、trace、Streamlit、Docker Compose。
+- 评测、trace、Streamlit 和完整 Docker Compose。
 
 ## 最终目标架构
 
-```mermaid
+~~~mermaid
 flowchart TB
     user["用户"] --> ui["Streamlit"]
     ui --> api["FastAPI"]
 
     api --> ingest["文档解析与切分"]
-    ingest --> postgres["PostgreSQL\n文档与 Chunk 元数据"]
+    ingest --> postgres["PostgreSQL<br/>文档与 Chunk 元数据"]
     ingest --> embedding["Embedding"]
     embedding --> qdrant["Qdrant"]
 
@@ -116,17 +180,15 @@ flowchart TB
     rrf --> rerank["Rerank"]
     rerank --> llm["OpenAI-compatible LLM"]
     llm --> api
-```
+~~~
 
 ## 模块演进规则
 
-- `api/` 只处理 HTTP 输入输出和错误映射；
-- `services/` 封装外部服务与业务能力；
-- `core/` 负责配置、日志和横切能力；
-- `models/` 留给数据库模型；
-- `agent/` 留给 Day 13-16 LangGraph；
-- 不得为未来组件提前加入未经计划验证的抽象。
-
-数据库不会在 FastAPI lifespan 或 `/health` 中初始化。Day 5 继续使用
-`python -m backend.app.models.init_db` 显式执行 `Base.metadata.create_all()` 创建缺失的新表；首次需要修改
-既有表结构前再引入迁移工具。
+- api/ 只处理 HTTP 输入输出和错误映射。
+- commands/ 放置显式本地操作入口，不得隐式接入上传链路。
+- services/ 封装外部服务与业务能力。
+- core/ 负责配置、日志和横切能力。
+- models/ 放置数据库模型。
+- agent/ 留给 Day 13 至 Day 16。
+- 不得为未来 Day 提前引入未验证抽象。
+- PLAN.md 未经用户明确授权不得修改。

@@ -77,12 +77,13 @@
 - 决策：当前 ChatGPT Plus 仅作为开发辅助，不作为项目后端 API 来源。
 - 原因：ChatGPT 与 OpenAI API 分开管理和计费；用户尚未确认 OpenAI API 余额。
 
-## D-012：Day 6 Embedding 供应商延后决定
+## D-012：Day 6 Embedding 供应商曾延后决定
 
-- 状态：待确认
-- 候选：OpenAI、阿里云百炼/通义千问、本地 `BAAI/bge-small-zh-v1.5`。
-- 原因：当前没有文档语料、运行环境和质量/成本测试，不能提前做可靠选择。
-- 禁止：在 Day 3 提前实现 Embedding。
+- 状态：已被 D-024 取代
+- 原候选：OpenAI、阿里云百炼/通义千问、本地 `BAAI/bge-small-zh-v1.5`。
+- 当时原因：Day 3 尚无文档语料、运行环境和质量/成本测试，不能提前做可靠选择。
+- 当前结论：Day 6 已按 D-024 确认使用固定 revision 的本地 BGE；OpenAI 和千问不进入 Day 6。
+- 仍然有效：不得在早于计划的阶段提前实现 Embedding。
 
 ## D-013：Day 18 千问对比是可选评测亮点
 
@@ -173,3 +174,38 @@
 - 原因：Day 5 没有修改既有 `documents` 表；此阶段引入 Alembic 超出范围。
 - 限制：`create_all()` 不是迁移工具；首次修改已有表结构前仍需重新确认 Alembic。
 - 历史数据：只为新上传文档生成 chunks，不回填 Day 4 已有记录。
+
+## D-024：Day 6 只使用固定版本的本地 BGE 模型
+
+- 状态：已确认
+- 决策：文档 Embedding 使用 `BAAI/bge-small-zh-v1.5`，revision 固定为
+  `4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4`，默认且仅支持 CPU，输出维度固定为 512。
+- 原因：该模型适合中文检索、规模较小、可完全本地运行，并能避免知识库正文发送到外部 API。
+- 凭据边界：Embedding 不要求 OpenAI API Key，也不得复用 DeepSeek Key；DeepSeek 仅用于
+  已有 LLM 对话链路。千问不进入 Day 6。
+
+## D-025：BGE tokenizer 在推理前独立执行长度检查
+
+- 状态：已确认
+- 决策：每个 Chunk 使用 BGE 自己的 tokenizer 计数，包含特殊 token；超过模型
+  `max_seq_length` 时在推理前失败，禁止依赖 SentenceTransformers 静默截断。
+- 原因：Day 5 的 `o200k_base` 与 BGE 的 BERT tokenizer 不可互换，500 个 Day 5 token
+  不能证明一定小于 BGE 的 512 token 上限。
+- 安全错误：只包含 Chunk UUID、实际 BGE token 数和上限，不包含 Chunk 正文。
+
+## D-026：Day 6 向量只存在于内存，不进入上传事务
+
+- 状态：已确认
+- 决策：按输入顺序每批最多 32 条生成归一化向量，并绑定原 Chunk UUID；不新增数据库
+  表或字段，不写 `Chunk.metadata`、PostgreSQL、pgvector 或 Qdrant，也不修改上传接口。
+- 原因：向量持久化属于 Day 7；将本地模型推理放入上传事务会扩大失败面并显著延长事务。
+- 文本语义：文档 Chunk 直接编码，不添加只属于查询侧的 BGE query instruction。
+
+## D-027：模型下载和加载采用严格失败边界
+
+- 状态：已确认
+- 决策：先按固定 revision 查找本地缓存；缺失时下载。只对连接错误、超时、429 和 5xx
+  最多重试 3 次，退避为 1、2、4 秒；404、权限、缓存损坏、OOM、设备、维度或本地推理
+  错误不重试。
+- 加载：下载完成后只从本地 snapshot 加载，`local_files_only=True`、
+  `trust_remote_code=False`、匿名访问，并在进程内复用模型。

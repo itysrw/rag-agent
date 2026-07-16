@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,6 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024
 MAX_PDF_PAGES = 500
 READ_CHUNK_SIZE = 1024 * 1024
+EMBEDDING_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
+EMBEDDING_MODEL_REVISION = "4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4"
+EMBEDDING_DIMENSION = 512
+EMBEDDING_MAX_BATCH_SIZE = 32
 
 
 class Settings(BaseSettings):
@@ -120,6 +124,49 @@ class ChunkingSettings(BaseSettings):
         return self
 
 
+class EmbeddingSettings(BaseSettings):
+    """Pinned local BGE document-embedding settings for Day 6."""
+
+    model_name: Literal["BAAI/bge-small-zh-v1.5"] = EMBEDDING_MODEL_NAME
+    model_revision: Literal[
+        "4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4"
+    ] = EMBEDDING_MODEL_REVISION
+    dimension: Literal[512] = EMBEDDING_DIMENSION
+    batch_size: int = Field(default=EMBEDDING_MAX_BATCH_SIZE, gt=0, le=32)
+    device: Literal["cpu"] = "cpu"
+    normalize_embeddings: bool = Field(
+        default=True,
+        validation_alias="EMBEDDING_NORMALIZE",
+    )
+    cache_dir: Path = PROJECT_ROOT / "data" / "models"
+    download_max_retries: int = Field(default=3, ge=0, le=3)
+    retry_base_delay_seconds: float = Field(default=1.0, gt=0)
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="EMBEDDING_",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    @field_validator("cache_dir", mode="after")
+    @classmethod
+    def resolve_cache_dir(cls, value: Path) -> Path:
+        """Resolve relative model cache paths from the repository root."""
+        if value.is_absolute():
+            return value.resolve()
+        return (PROJECT_ROOT / value).resolve()
+
+    @field_validator("normalize_embeddings")
+    @classmethod
+    def require_normalized_vectors(cls, value: bool) -> bool:
+        """Keep vector normalization mandatory for the Day 6 contract."""
+        if not value:
+            raise ValueError("normalize_embeddings must remain enabled")
+        return value
+
+
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings."""
@@ -148,3 +195,9 @@ def get_document_settings() -> DocumentSettings:
 def get_chunking_settings() -> ChunkingSettings:
     """Return cached token-based text chunking settings."""
     return ChunkingSettings()
+
+
+@lru_cache
+def get_embedding_settings() -> EmbeddingSettings:
+    """Return cached local BGE document-embedding settings."""
+    return EmbeddingSettings()

@@ -2,41 +2,89 @@
 
 更新时间：2026-07-15（America/New_York）
 
-## P0：Day 5 检查点已完成
+## P0：只读恢复与范围确认
 
-Day 5 功能、验收、`PLAN.md` 状态更新和本地实现提交均已完成：
+新会话必须先完成以下检查，不得立即改代码：
 
-- 实现提交：`a989837bbf8bae1cf866beda034130a514152378`
-- 提交摘要：`a989837 feat: complete Day 5 text chunking`
-- 标准测试：`60 passed, 1 skipped, 1 warning`
-- 真实 PostgreSQL：`61 passed, 1 warning`
-- `PLAN.md`：Day 5 五项任务和开发日志已更新；Day 6 未修改
-- `.env`、`.agents/`：未读取、未修改、未提交
-- 推送：未执行
+1. 完整阅读 HANDOFF.md、STATUS.md、DECISIONS.md、README.md、PLAN.md 和 docs/architecture.md。
+2. 阅读 Day 6 直接相关的配置、Embedding 服务、命令和测试文件。
+3. 核对 master、HEAD ecadc3296b038bad169b2bb78238f8ffd77e43d8、暂存区和全部工作区差异。
+4. 确认 PLAN.md 的 Day 6 五项和开发日志已更新，但 Day 6 代码仍未提交或推送。
+5. 明确排除 .env、无关 .agents/ 和 data/models/。
 
-本交接刷新提交是 Day 5 实现提交的直接后继。新会话先只读核对最新 HEAD、工作区和远端状态，
-不得重新实现 Day 1-5。
+完成后先复述状态并等待用户指定唯一下一动作。
 
-## P1：仅在用户明确授权后处理远端
+## P1：可选的修复后真实 BGE 验收
 
-- 当前远端名称为 `origin`，但 `master` 没有上游跟踪分支；
-- 本地没有远端跟踪引用，远端实时状态待确认；
-- fetch、上游配置和 push 的具体动作必须按用户授权执行；
-- 不得将 `.env` 或 `.agents/` 纳入任何提交或推送。
+仅在用户要求继续验证，并允许必要的本地模型读取或网络下载后执行：
 
-## P2：仅在用户明确授权后开始 Day 6
+    $env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
+    .\.venv\Scripts\python.exe -m pytest backend/tests/test_embedding_integration.py -v
 
-`PLAN.md` 下一阶段是 Embedding，但供应商仍为待确认：OpenAI、阿里云百炼/通义千问，
-或本地 `BAAI/bge-small-zh-v1.5`。在供应商、模型、维度、费用和运行环境确认前禁止实现。
+验收点：
+
+- 使用固定 revision；
+- device=cpu；
+- 两条中文文本各返回一个 512 维向量；
+- 向量有限且单位范数；
+- 不需要 OpenAI 或 DeepSeek Key；
+- 不打印正文或完整向量。
+
+P2 修复前该测试及 HF_HUB_OFFLINE=1 缓存重跑曾通过；P2 修复后尚未重跑，当前状态为待确认。
+
+## P2：可选的真实文档命令验收
+
+命令：
+
+    .\.venv\Scripts\python.exe -m backend.app.commands.embed_document --document-id <UUID>
+
+当前真实数据库曾扫描到 chunk_count=0，因此缺少可直接复用的 Document UUID。
+是否上传或创建验收文档会修改真实文件和数据库，必须先获得明确授权；不得自行补造数据。
+
+验收点：
+
+- 按 chunk_index 读取；
+- 无 Chunk 时在模型加载前失败；
+- 输出仅包含 document_id、model、revision、device、chunk_count、
+  embedding_dimension、normalized 和 status；
+- 不写 PostgreSQL、Qdrant 或文件；
+- 配置错误不得误报为数据库不可用。
+
+## P3：完成 Day 6 项目检查点
+
+PLAN.md 的 Day 6 五项复选框和开发日志已经按用户授权更新。以下剩余操作互相独立，
+必须分别获得明确授权：
+
+1. 暂存明确的 Day 6、PLAN.md 与交接文件，排除 .env、.agents/ 和 data/models/；
+2. 创建本地提交；
+3. 实时核对远端状态；
+4. 推送 master。
+
+在授权提交前，建议重新执行：
+
+    .\.venv\Scripts\python.exe -m pytest backend/tests -v
+    .\.venv\Scripts\python.exe -m pip check
+    .\.venv\Scripts\python.exe -m compileall backend
+    git diff --check
+
+## P4：Day 7，仅在 Day 6 检查点完成且用户明确授权后
+
+PLAN.md 的下一阶段是 Qdrant。当前禁止提前实现：
+
+- Qdrant 容器或 collection；
+- Chunk 与 Embedding 持久化；
+- POST /retrieval/search；
+- 查询向量、top-k 或检索质量验证。
+
+Day 7 的精确范围必须以当时的 PLAN.md 和用户指令为准。
 
 ## 延后且待确认
 
-- 远端实时状态、是否配置 `master` 上游及推送；
-- 新环境的 `o200k_base` 词表预热/离线缓存策略；
+- pytest .pytest_cache 的 WinError 5 权限警告；
+- GitHub 远端实时查询超时；
+- 新环境的模型与 o200k_base 离线缓存策略；
 - 孤儿上传文件启动清理；
-- 首次修改既有表结构时引入 Alembic；
-- pytest `.pytest_cache` 权限警告；
-- Docker 状态查询权限/超时；
-- `.gitattributes` 行尾规范；
-- Day 6 Embedding 供应商、模型和维度；
-- Day 18 千问质量/成本对比。
+- SQLAlchemy 私有事务 _state 的升级兼容性；
+- .gitattributes 行尾规范；
+- 首次修改既有表结构时是否引入 Alembic；
+- Day 18 千问质量与成本对比。
