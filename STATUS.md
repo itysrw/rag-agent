@@ -9,9 +9,15 @@
   `master` 已实时核对为同一提交，无 PR。
 - Day 9 实现提交共 16 个文件：13 个既有跟踪文件修改、3 个新增文件；审查修复使
   `backend/app/core/logging.py` 成为第 13 个既有跟踪差异。相关状态文档随本次状态提交
-  刷新；状态提交哈希不预写。状态提交推送后，除明确排除的 `.agents/` 外工作区应干净。
-- `PLAN.md`：本轮未修改 Day 9 复选框或日志，等待授权。
-- Day 10 及以后：尚未开始，未经用户明确授权不得开始。
+  刷新；提交 `f3ca9ec1541d5e774f1eae92217d32160f15153f` 已推送。
+- `PLAN.md`：用户于 2026-07-19 明确授权，Day 9 五项复选框和开发日志已标记完成；
+  Day 10 及以后复选框未修改。
+- 当前工作区另有 9 个未提交的 Day 10 BM25 候选文件：已跟踪修改为
+  `backend/app/main.py`、`backend/requirements.txt`；新增文件为 `backend/app/api/bm25.py`、
+  `backend/app/services/bm25.py`、`backend/tests/day10_bm25_cases.py`、
+  `backend/tests/test_bm25.py`、`backend/tests/test_bm25_api.py`、
+  `backend/tests/test_bm25_comparison_integration.py`、`backend/tests/test_bm25_postgres.py`。
+  本轮未读取、未验收、未暂存，来源和完成度待确认。
 
 ## Day 9 已完成内容
 
@@ -83,5 +89,5 @@
 
 ## 唯一下一步
 
-Day 9 实现和发布检查点已完成。等待用户明确授权是否更新 `PLAN.md`，以及是否开始
-Day 10；在获得授权前不得执行这两项操作。
+Day 9 实现、发布和 `PLAN.md` 状态更新均已完成。下一步先只读审计现有 Day 10 BM25
+候选变更的来源、范围与测试状态；用户指定唯一动作前不得继续修改或提交这些文件。

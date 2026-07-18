@@ -152,11 +152,11 @@ rag-agent/
 
 ### Day 9 — 优化检索效果
 
-- [ ] 加 `top_k` 参数（默认 5，支持调整）
-- [ ] 加 metadata filter（按 doc_id 过滤，只查特定文档）
-- [ ] 对比 chunk size 300 / 500 / 800 对检索质量的影响
-- [ ] 记录每次检索返回的 chunks（用于后续评测）
-- [ ] 在 README 里写一段"检索优化实验"记录
+- [x] 加 `top_k` 参数（默认 5，支持调整）
+- [x] 加 metadata filter（按 doc_id 过滤，只查特定文档）
+- [x] 对比 chunk size 300 / 500 / 800 对检索质量的影响
+- [x] 记录每次检索返回的 chunks（用于后续评测）
+- [x] 在 README 里写一段"检索优化实验"记录
 
 **产出**：README 里有检索优化记录，能在面试中讲
 
@@ -384,7 +384,7 @@ rag-agent/
 | Day 6 | 已完成 | 固定 revision 的本地 BGE、CPU 512 维归一化向量、每批 32 条、tokenizer 截断预检和瞬时下载重试已实现；完整测试与 PostgreSQL 验收通过 |
 | Day 7 | 已完成 | 固定 Qdrant v1.18.1、512/Cosine collection、显式幂等索引与固定 Top 5 检索 API 已实现；标准测试 153 passed，真实 BGE/Qdrant 3 passed，三个受控问题均为 Top 1 |
 | Day 8 | 已完成 | `/chat` 接入 Day 7 固定 Top 5 检索，生成层按 `0.46` 门槛过滤 Context；结构化 system/user Prompt、JSON/SSE 均返回后端去重来源；无相关内容精确拒答且不调用 LLM；模型自由文本中的来源标记由 sanitizer 清理。标准套件 181 passed、5 skipped；真实 PostgreSQL/BGE/Qdrant 端到端与真实 DeepSeek JSON/SSE/拒答三路径均验收通过 |
-| Day 9 | | |
+| Day 9 | 已完成 | `/retrieval/search` 支持严格 `top_k=1..20`、Qdrant 内单 `doc_id` 过滤和安全单行 JSONL 检索日志；300/500/800 真实 BGE + Qdrant 实验完成，Hit@1、Hit@5、MRR@5 均为 1.0；标准套件 215 passed、7 skipped、0 warnings，实现提交 `4cccbe2` 已推送 |
 | Day 10 | | |
 | Day 11 | | |
 | Day 12 | | |

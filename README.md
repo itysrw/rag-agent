@@ -4,7 +4,8 @@
 实现提交为 `4cccbe26688de33ff25756fc10584060c82fd03f`。Day 9 检索优化包括：
 `POST /retrieval/search` 支持严格校验的 `top_k`（1～20，默认 5）和单文档 `doc_id`
 过滤（在 Qdrant 查询内生效），每次成功检索输出一条不含正文的单行 JSON 日志，并完成
-300/500/800 chunk size 的真实检索质量对比。`PLAN.md` 在 Day 9 实现和发布过程中未修改。
+300/500/800 chunk size 的真实检索质量对比。用户于 2026-07-19 明确授权后，`PLAN.md`
+的 Day 9 五项复选框和开发日志已标记完成；Day 10 及以后复选框未修改。
 Day 8 `/chat` 契约（固定 Top 5 + 0.46 门控）保持不变。BM25、Hybrid Search、Rerank、
 LangGraph Agent 等仍属于后续目标。
 
