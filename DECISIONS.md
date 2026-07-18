@@ -306,3 +306,58 @@
 - 原因：网络、账户余额、费用和模型自然语言均不稳定，不能破坏离线测试的可重复性。
 - 当前证据：2026-07-16 已覆盖报销 JSON、VPN SSE、Python 门控拒答；一次性脚本未提交。
 - 限制：不得把上述三条路径写成“年假”和“月球”也已真实调用；补充调用需新授权。
+
+## D-039：Day 9 top_k 使用严格整数校验，范围 1 至 20
+
+- 状态：已确认
+- 决策：`POST /retrieval/search` 的 `top_k` 使用 Pydantic `Field(strict=True, ge=1, le=20)`，
+  默认 5；`0`、`21`、`true`、`"5"`、`5.0`、`null` 均返回 422。`RetrievalService.search()`
+  在调用 Embedding 前对直接调用方再做一次防御性校验。
+- 原因：普通 `int` 会把布尔和可转换字符串静默接受；上限 20 与 Day 12 计划的
+  “召回 Top 20 再重排 Top 5”对齐，不提前实现 Rerank。
+- 边界：`/chat` 与 RAG 层不使用该参数，Day 8 固定 Top 5 + `0.46` 门控行为不变。
+
+## D-040：doc_id 过滤在 Qdrant 查询内执行并做返回一致性校验
+
+- 状态：已确认
+- 决策：`doc_id` 非空时构造顶层 `doc_id` 字段的 `MatchValue(str(doc_id))` 过滤器传给
+  `query_points(query_filter=...)`；`doc_id` 为 None 时不传该参数，保持原调用形状。
+  解析结果后再校验每条结果属于请求文档，越界抛 `QdrantResultError`（HTTP 502）。
+- 原因：搜索后在 Python 过滤会让其他文档挤占 limit 名额；payload `doc_id` 以字符串
+  存储，传 UUID 对象无法命中；返回侧校验防止过滤失效时跨文档泄露。
+- 语义：合法但无匹配的 doc_id 返回 200 空数组——检索接口不负责确认文档资源存在，
+  不引入 404。不建 Qdrant payload index，不修改 collection 初始化契约。
+
+## D-041：检索日志为单行 JSON，只含摘要身份信息
+
+- 状态：已确认
+- 决策：每次成功检索（含空结果）恰好输出一条 `retrieval_search_completed` 单行 JSON
+  日志，字段为 query_sha256、query_len、top_k、filter_doc_id、result_count 和
+  results（rank/chunk_id/doc_id/filename/page/score）。JSON 直接进入 message；序列化
+  失败只记录安全错误，不影响检索请求。
+- 原因：当前 Loguru formatter 只渲染 `{message}`，仅用 `logger.bind()` 的扩展字段不会
+  显示；日志需要机器可读以支持后续评测关联。
+- 边界：禁止记录 query 原文、Chunk 正文、metadata、向量或凭据。`query_sha256` 只降低
+  直接泄露，不等于匿名化。
+
+## D-042：Day 9 chunk size 实验使用确定性语料与唯一客观判据
+
+- 状态：已确认
+- 决策：语料与问题集以纯 Python 常量固定在 `backend/tests/day9_tuning_corpus.py`，内容
+  自撰、可公开提交、无随机或联网获取。共 8 页、8 个问题，每题必须有非空
+  `expected_phrase`。每页按 `o200k_base`、`disallowed_special=()` 计数大于 800 token，
+  300/60、500/100、800/160 必须产生不同 Chunk 数。
+- 判据：只执行 NFKC 规整和首尾 strip；Chunk 归一化正文包含归一化 expected_phrase
+  才算命中。Hit@1、Hit@5、MRR@5 对全部问题平均，不使用人工“肉眼相关”判断。
+- token 口径：平均 Chunk token 和全部问题的 Top-5 上下文 token 总量都使用相同的
+  `o200k_base` 口径。它不是 BGE 自有 tokenizer 或 DeepSeek 的精确 tokenizer，只是
+  跨配置可比的近似成本单位。
+- 执行：三配置均使用真实本地 BGE 与独立一次性 Qdrant collection，固定 Top 5；不使用
+  PostgreSQL，不触碰正式 collection，collection 在 finally 中删除。
+- 原因：短页会使 500/800 退化为相同 Chunk，填满 800 o200k token 的自然中文又可能
+  越过 BGE 512 上限，二者都无法产出三组可比真实指标。因此语料加入固定、自撰的长
+  审计标识以稳定 o200k 长度，而 BGE 将其压缩为极少 token；该人工结构必须在报告中
+  明确披露，结果不得外推到自然长文本。
+- 实测结论：三配置 Chunk 数为 40/24/16，Hit@1、Hit@5、MRR@5 均为 1.0；Top-5
+  上下文 token 总量为 7986/13590/18576。受控语料无法区分质量，但显示更大 Chunk
+  增加上下文成本。生产默认保持 `500/100`，不宣称任何配置普遍最优。

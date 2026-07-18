@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from backend.app.models.chunk import JSONScalar
 from backend.app.services.embedding import (
@@ -18,13 +18,19 @@ from backend.app.services.qdrant_store import (
     QdrantStoreError,
     QdrantUnavailableError,
 )
-from backend.app.services.retrieval import RetrievalService, get_retrieval_service
+from backend.app.services.retrieval import (
+    RETRIEVAL_TOP_K,
+    RETRIEVAL_TOP_K_MAX,
+    RETRIEVAL_TOP_K_MIN,
+    RetrievalService,
+    get_retrieval_service,
+)
 
 router = APIRouter()
 
 
 class RetrievalSearchRequest(BaseModel):
-    """One required query with no Day 9 retrieval controls."""
+    """One required query with an optional bounded limit and document filter."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -32,6 +38,11 @@ class RetrievalSearchRequest(BaseModel):
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=4096),
     ]
+    top_k: Annotated[
+        int,
+        Field(strict=True, ge=RETRIEVAL_TOP_K_MIN, le=RETRIEVAL_TOP_K_MAX),
+    ] = RETRIEVAL_TOP_K
+    doc_id: UUID | None = None
 
 
 class RetrievedChunkResponse(BaseModel):
@@ -69,9 +80,13 @@ def search_retrieval(
     request: RetrievalSearchRequest,
     service: Annotated[RetrievalService, Depends(require_retrieval_service)],
 ) -> RetrievalSearchResponse:
-    """Return up to five similar indexed Chunks for one user query."""
+    """Return the most similar indexed Chunks for one user query."""
     try:
-        results = service.search(request.query)
+        results = service.search(
+            request.query,
+            top_k=request.top_k,
+            doc_id=request.doc_id,
+        )
     except EmbeddingInputTooLongError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

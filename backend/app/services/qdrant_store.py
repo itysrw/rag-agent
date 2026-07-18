@@ -218,12 +218,26 @@ class QdrantVectorStore:
         query_vector: Sequence[float],
         *,
         limit: int,
+        doc_id: UUID | None = None,
     ) -> list[RetrievedChunk]:
         """Query validated payloads without returning stored vectors."""
         if isinstance(limit, bool) or limit <= 0:
             raise ValueError("limit must be positive")
+        if doc_id is not None and not isinstance(doc_id, UUID):
+            raise ValueError("doc_id must be a UUID or None")
         vector = _validated_vector(query_vector)
         self.validate_collection()
+
+        query_kwargs: dict[str, Any] = {}
+        if doc_id is not None:
+            query_kwargs["query_filter"] = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="doc_id",
+                        match=models.MatchValue(value=str(doc_id)),
+                    )
+                ]
+            )
 
         try:
             response = self._client.query_points(
@@ -232,6 +246,7 @@ class QdrantVectorStore:
                 limit=limit,
                 with_payload=True,
                 with_vectors=False,
+                **query_kwargs,
             )
         except MemoryError:
             raise
@@ -245,6 +260,12 @@ class QdrantVectorStore:
             raise QdrantResultError("Qdrant returned an invalid result set.")
 
         results = [_parse_scored_point(point) for point in points]
+        if doc_id is not None and any(
+            result.doc_id != doc_id for result in results
+        ):
+            raise QdrantResultError(
+                "Qdrant returned a result outside the requested document."
+            )
         results.sort(key=lambda item: item.score, reverse=True)
         return results
 

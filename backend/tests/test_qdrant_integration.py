@@ -94,6 +94,71 @@ def test_real_qdrant_is_idempotent_and_returns_payload_without_vectors() -> None
 
 
 @pytest.mark.skipif(
+    os.environ.get("RUN_QDRANT_INTEGRATION") != "1",
+    reason="set RUN_QDRANT_INTEGRATION=1 for the local Qdrant test",
+)
+def test_real_qdrant_doc_id_filter_returns_only_the_requested_document() -> None:
+    """Two interleaved documents stay separated by the in-query filter."""
+    collection = f"day9_filter_{uuid4().hex}"
+    settings = QdrantSettings(
+        _env_file=None,
+        host="127.0.0.1",
+        port=6333,
+        collection=collection,
+    )
+    client = QdrantClient(
+        url=settings.build_url(),
+        timeout=settings.timeout_seconds,
+        prefer_grpc=False,
+    )
+    store = QdrantVectorStore(settings, client=client)
+    first_doc = uuid4()
+    second_doc = uuid4()
+    chunks = [
+        VectorizedChunk(
+            chunk_id=uuid4(),
+            doc_id=doc_id,
+            chunk_index=index,
+            content=f"filter-content-{index}",
+            page=index + 1,
+            filename=f"{label}.pdf",
+            metadata={"token_count": index + 1},
+            vector=basis_vector(index),
+        )
+        for index, (doc_id, label) in enumerate(
+            [
+                (first_doc, "first"),
+                (second_doc, "second"),
+                (first_doc, "first"),
+                (second_doc, "second"),
+            ]
+        )
+    ]
+
+    try:
+        store.initialize_collection()
+        assert store.upsert_chunks(chunks) == 4
+
+        unfiltered = store.search(basis_vector(0), limit=5)
+        assert {result.doc_id for result in unfiltered} == {first_doc, second_doc}
+
+        for target_doc in (first_doc, second_doc):
+            filtered = store.search(basis_vector(0), limit=5, doc_id=target_doc)
+            expected_ids = {
+                chunk.chunk_id for chunk in chunks if chunk.doc_id == target_doc
+            }
+            assert len(filtered) == 2
+            assert {result.chunk_id for result in filtered} == expected_ids
+            assert all(result.doc_id == target_doc for result in filtered)
+
+        assert store.search(basis_vector(0), limit=5, doc_id=uuid4()) == []
+    finally:
+        if client.collection_exists(collection):
+            client.delete_collection(collection_name=collection)
+        client.close()
+
+
+@pytest.mark.skipif(
     os.environ.get("RUN_QDRANT_INTEGRATION") != "1"
     or os.environ.get("RUN_LOCAL_EMBEDDING_INTEGRATION") != "1",
     reason="enable both real Qdrant and local BGE integration tests",

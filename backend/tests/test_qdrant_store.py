@@ -319,6 +319,67 @@ def test_search_uses_query_points_and_excludes_vectors() -> None:
     assert "search" not in client.__class__.__dict__
 
 
+def test_search_with_doc_id_applies_top_level_string_filter_in_query() -> None:
+    """The document filter runs inside Qdrant before the limit is applied."""
+    chunk = vectorized_chunk(0)
+    client = FakeQdrantClient(query_points=[scored_point(chunk, 0.9)])
+    store = QdrantVectorStore(build_settings(), client=client)
+
+    results = store.search(basis_vector(), limit=5, doc_id=chunk.doc_id)
+
+    assert [result.chunk_id for result in results] == [chunk.chunk_id]
+    assert len(client.query_calls) == 1
+    call = client.query_calls[0]
+    query_filter = call["query_filter"]
+    assert isinstance(query_filter, models.Filter)
+    assert query_filter.must is not None and len(query_filter.must) == 1
+    condition = query_filter.must[0]
+    assert isinstance(condition, models.FieldCondition)
+    assert condition.key == "doc_id"
+    assert isinstance(condition.match, models.MatchValue)
+    assert condition.match.value == str(chunk.doc_id)
+    assert isinstance(condition.match.value, str)
+
+
+def test_search_without_doc_id_keeps_the_original_call_shape() -> None:
+    """No filter argument is sent when the caller does not restrict documents."""
+    chunk = vectorized_chunk(0)
+    client = FakeQdrantClient(query_points=[scored_point(chunk, 0.9)])
+    store = QdrantVectorStore(build_settings(), client=client)
+
+    store.search(basis_vector(), limit=5)
+
+    assert len(client.query_calls) == 1
+    assert "query_filter" not in client.query_calls[0]
+
+
+def test_search_rejects_results_outside_the_requested_document() -> None:
+    """A defective filter response fails closed instead of leaking documents."""
+    requested = vectorized_chunk(0)
+    other = vectorized_chunk(1)
+    client = FakeQdrantClient(
+        query_points=[scored_point(requested, 0.9), scored_point(other, 0.8)]
+    )
+    store = QdrantVectorStore(build_settings(), client=client)
+
+    with pytest.raises(QdrantResultError) as error:
+        store.search(basis_vector(), limit=5, doc_id=requested.doc_id)
+
+    assert str(other.doc_id) not in str(error.value)
+
+
+def test_search_rejects_non_uuid_doc_id_before_any_qdrant_call() -> None:
+    """Adapter-level identity hygiene mirrors the existing limit check."""
+    client = FakeQdrantClient()
+    store = QdrantVectorStore(build_settings(), client=client)
+
+    with pytest.raises(ValueError):
+        store.search(basis_vector(), limit=5, doc_id="not-a-uuid")  # type: ignore[arg-type]
+
+    assert client.exists_calls == 0
+    assert client.query_calls == []
+
+
 def test_search_does_not_create_a_missing_collection() -> None:
     """Online search fails safely instead of changing collection state."""
     client = FakeQdrantClient(exists=False)
@@ -393,5 +454,32 @@ def test_actual_qdrant_client_local_mode_supports_idempotent_round_trip() -> Non
         assert len(results) == 2
         assert results[0].chunk_id == chunks[0].chunk_id
         assert results[0].metadata == chunks[0].metadata
+    finally:
+        client.close()
+
+
+def test_actual_qdrant_client_local_mode_filters_by_doc_id() -> None:
+    """The real client model honors the top-level string doc_id filter."""
+    client = QdrantClient(":memory:")
+    store = QdrantVectorStore(
+        build_settings(collection="local-filter"),
+        client=client,
+    )
+    chunks = [vectorized_chunk(0), vectorized_chunk(1)]
+    try:
+        store.initialize_collection()
+        assert store.upsert_chunks(chunks) == 2
+
+        unfiltered = store.search(chunks[0].vector, limit=5)
+        assert {result.doc_id for result in unfiltered} == {
+            chunks[0].doc_id,
+            chunks[1].doc_id,
+        }
+
+        filtered = store.search(chunks[0].vector, limit=5, doc_id=chunks[1].doc_id)
+        assert [result.chunk_id for result in filtered] == [chunks[1].chunk_id]
+
+        unmatched = store.search(chunks[0].vector, limit=5, doc_id=uuid4())
+        assert unmatched == []
     finally:
         client.close()

@@ -4,9 +4,9 @@
 
 本文严格区分：
 
-- 已提交的 Day 1 至 Day 7；当前基线 HEAD 为 `683f516`；
-- 当前工作区已实现并验收、尚未提交的 Day 8；
-- 尚未实现的 Day 9 及以后目标。
+- 已提交的 Day 1 至 Day 8；当前基线 HEAD 为 `33689d3`；
+- 当前工作区已实现并验收、尚未提交的 Day 9；
+- 尚未实现的 Day 10 及以后目标。
 
 ## 当前实现架构
 
@@ -17,7 +17,7 @@ flowchart LR
     api --> health["GET /health"]
     api --> chat["POST /chat"]
     api --> upload["POST /documents/upload"]
-    api --> retrieval_api["POST /retrieval/search<br/>固定 Top 5"]
+    api --> retrieval_api["POST /retrieval/search<br/>top_k 1..20 默认 5 · 可选 doc_id"]
 
     chat --> rag["RAGService.prepare()<br/>检索在 SSE 建立前完成"]
     rag --> query_embedding["embed_query()<br/>固定 BGE instruction"]
@@ -47,7 +47,7 @@ flowchart LR
     init_qdrant --> qdrant
     retrieval_api --> query_embedding
     query_embedding --> qdrant
-    qdrant --> results["固定 Top 5<br/>payload + score · 无向量"]
+    qdrant --> results["Top k 结果<br/>payload + score · 无向量<br/>doc_id filter 在 Qdrant 内执行"]
     results --> gate
 
     chunks --> ordered
@@ -64,7 +64,10 @@ flowchart LR
 - Context 正文只进入 user message，sources 从实际 Context 生成，不依赖模型输出。
 - 模型正文中的文件名、页码和 `SNN` 类来源标记在完整/流式输出中清理；客户端只信任
   后端结构化 sources。
-- RAG 门槛不进入 `/retrieval/search`，不提前开放 Day 9 参数。
+- RAG 门槛不进入 `/retrieval/search`；`/chat` 不使用 Day 9 的 top_k/doc_id 参数，
+  仍固定 Top 5 + `0.46` 门控。
+- 检索日志只记录 query 摘要哈希与结果身份（rank/chunk_id/doc_id/filename/page/score），
+  不记录 query 原文、Chunk 正文、metadata 或向量。
 
 ## 当前 HTTP 接口
 
@@ -74,7 +77,7 @@ flowchart LR
 | POST /chat，stream=false | 已实现，返回 answer/model/sources |
 | POST /chat，stream=true | 已实现，返回 delta、sources event 与 DONE |
 | POST /documents/upload | 已实现，支持 PDF/MD/TXT |
-| POST /retrieval/search | 已实现，只接收 query，固定 Top 5，不返回向量 |
+| POST /retrieval/search | 已实现，接收 query、可选严格 top_k（1..20，默认 5）和可选 doc_id，不返回向量 |
 
 应用启动和 GET /health 均不连接 PostgreSQL、Qdrant、BGE 或 LLM。
 
@@ -148,14 +151,26 @@ BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
 5. Point ID 直接使用 chunk_id，payload 携带正文、页码、文件名和 metadata。
 6. 每批最多 32 条执行 `upsert(wait=True)`；部分成功后依靠相同 UUID 幂等重跑。
 
-在线检索顺序：
+在线检索顺序（Day 9 更新后）：
 
-1. `POST /retrieval/search` 校验请求体只包含非空 query。
-2. `embed_query()` 添加一次固定 BGE 查询 instruction，并包含 instruction 做长度预检。
-3. `query_points()` 固定 `limit=5`、`with_payload=True`、`with_vectors=False`。
-4. 校验 Point UUID、payload 必需字段和有限 score，再返回来源信息和正文。
+1. `POST /retrieval/search` 校验请求体：非空 query、可选严格整数 `top_k`（1..20，
+   默认 5，拒绝布尔/字符串/浮点）、可选 `doc_id`（UUID 或 null），禁止额外字段。
+2. `RetrievalService.search()` 在调用 Embedding 前防御性复验 top_k。
+3. `embed_query()` 添加一次固定 BGE 查询 instruction，并包含 instruction 做长度预检。
+4. `query_points()` 使用 `limit=top_k`、`with_payload=True`、`with_vectors=False`；
+   `doc_id` 非空时附加顶层 `doc_id` 的 `MatchValue(str(doc_id))` 过滤器，在 Qdrant
+   查询内部先过滤再取 limit。
+5. 校验 Point UUID、payload 必需字段和有限 score；带 filter 时再校验所有结果属于
+   请求文档，越界返回安全 502。
+6. 每次成功检索（含空结果）输出一条单行 JSON 日志（进入 message，当前 formatter
+   不显示 bind extra），字段为 event/query_sha256/query_len/top_k/filter_doc_id/
+   result_count/results（rank/chunk_id/doc_id/filename/page/score）。
 
-Day 7 不实现可调 top_k、doc_id filter、score threshold、BM25、Hybrid、Rerank 或 RAG。
+合法但无匹配的 `doc_id` 返回 200 空数组：检索接口表达"该过滤条件下没有匹配"，
+不负责确认 PostgreSQL 文档资源是否存在，因此不引入 404。
+
+Day 7 原始实现不含可调 top_k 和 doc_id filter；score threshold、BM25、Hybrid、
+Rerank 仍未实现。
 
 ## Day 8 基础 RAG 流程
 
@@ -172,6 +187,18 @@ Day 7 不实现可调 top_k、doc_id filter、score threshold、BM25、Hybrid、
 
 `0.46` 来自三条正样本和三条负样本的真实校准：正样本 Top-1 最小 `0.688781`，
 负样本 Top-1 最大 `0.326244`。它只对当前受控样本有证据，后续仍需更大评测集复验。
+
+## Day 9 检索优化
+
+- `/retrieval/search` 开放严格 `top_k`（1..20）和单文档 `doc_id` filter；`/chat`
+  与 RAG 生成层完全不变。
+- top_k 上限 20 与 Day 12 计划（召回 Top 20 再重排 Top 5）对齐。
+- 300/500/800 chunk size 使用固定、自撰的 8 页语料和 8 个带 `expected_phrase` 的问题，
+  已完成真实 BGE + Qdrant 对比；NFKC + strip 子串匹配是唯一命中判据，成本统一使用
+  `o200k_base` 近似口径。三配置 Chunk 数为 40/24/16，Hit@1/Hit@5/MRR@5 均为 1.0，
+  Top-5 token 总量为 7986/13590/18576。固定审计标识会被 BGE tokenizer 高度压缩，
+  因此结果不能外推到自然长文本；生产默认保持 `500/100`。方法、数据与局限见
+  `docs/day9-retrieval-tuning.md`。
 
 ## 异常与安全边界
 
@@ -219,7 +246,7 @@ backend/app/commands/embed_document.py 额外定义：
 
 - pgvector 或 PostgreSQL 向量字段；
 - 自动索引、删除同步、后台队列或 outbox；
-- 可调 top_k、doc_id filter 和 score threshold；
+- score threshold 请求参数、多 doc_id 列表过滤、Qdrant payload index；
 - BM25、RRF、Rerank；
 - LangGraph、Agent 工具和记忆；
 - 评测、trace、Streamlit 和完整 Docker Compose。
