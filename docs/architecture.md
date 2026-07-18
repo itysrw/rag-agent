@@ -1,11 +1,11 @@
 # 架构说明
 
-更新时间：2026-07-16（America/New_York）
+更新时间：2026-07-19（Asia/Shanghai）
 
 本文严格区分：
 
-- 已提交的 Day 1 至 Day 8；当前基线 HEAD 为 `33689d3`；
-- 当前工作区已实现并验收、尚未提交的 Day 9；
+- 已实现、验收并提交推送的 Day 1 至 Day 9；Day 9 实现提交为
+  `4cccbe26688de33ff25756fc10584060c82fd03f`，远端 `master` 已核对相同；
 - 尚未实现的 Day 10 及以后目标。
 
 ## 当前实现架构
@@ -68,6 +68,8 @@ flowchart LR
   仍固定 Top 5 + `0.46` 门控。
 - 检索日志只记录 query 摘要哈希与结果身份（rank/chunk_id/doc_id/filename/page/score），
   不记录 query 原文、Chunk 正文、metadata 或向量。
+- `backend/app/core/logging.py` 用 `JSONL_LOG_MARKER` 区分机器事件：普通 human handler
+  排除该标记，独立 `{message}` handler 只处理标记事件，确保完整单行 JSON 且不重复。
 
 ## 当前 HTTP 接口
 
@@ -162,9 +164,10 @@ BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
    查询内部先过滤再取 limit。
 5. 校验 Point UUID、payload 必需字段和有限 score；带 filter 时再校验所有结果属于
    请求文档，越界返回安全 502。
-6. 每次成功检索（含空结果）输出一条单行 JSON 日志（进入 message，当前 formatter
-   不显示 bind extra），字段为 event/query_sha256/query_len/top_k/filter_doc_id/
-   result_count/results（rank/chunk_id/doc_id/filename/page/score）。
+6. 每次成功检索（含空结果）输出一条带 `JSONL_LOG_MARKER` 的单行 JSON 日志，字段为
+   event/query_sha256/query_len/top_k/filter_doc_id/result_count/results
+   （rank/chunk_id/doc_id/filename/page/score）。普通 human handler 排除该标记，独立
+   `{message}` handler 只处理标记事件，保证 JSON 完整且不重复。
 
 合法但无匹配的 `doc_id` 返回 200 空数组：检索接口表达"该过滤条件下没有匹配"，
 不负责确认 PostgreSQL 文档资源是否存在，因此不引入 404。

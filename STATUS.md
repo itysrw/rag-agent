@@ -1,18 +1,15 @@
 # 项目状态
 
-更新时间：2026-07-16（America/New_York）
+更新时间：2026-07-19（Asia/Shanghai）
 
 ## 当前检查点
 
-- Day 1-8：已实现、验收并提交；当前提交基线为 `33689d3`（本地 `origin/master` 一致）。
-- Day 9：检索优化已在本地工作区实现并验收，尚未暂存、提交或推送。
-- Day 9 工作区：12 个已修改跟踪文件（6 个文档：`README.md`、`DECISIONS.md`、
-  `STATUS.md`、`TODO.md`、`HANDOFF.md`、`docs/architecture.md`；6 个代码/测试：
-  `backend/app/api/retrieval.py`、`backend/app/services/retrieval.py`、
-  `backend/app/services/qdrant_store.py`、`backend/tests/test_retrieval.py`、
-  `backend/tests/test_qdrant_store.py`、`backend/tests/test_qdrant_integration.py`），
-  3 个新增未跟踪文件（确定性实验语料、实验测试、实验文档）；另有须排除的无关
-  `.agents/`，未读取或修改；`.pytest-tmp/` 当前不存在。
+- Day 1-9：均已实现、验收并提交推送至 `master`。
+- Day 9 实现提交为 `4cccbe26688de33ff25756fc10584060c82fd03f`，已直接推送；远端
+  `master` 已实时核对为同一提交，无 PR。
+- Day 9 实现提交共 16 个文件：13 个既有跟踪文件修改、3 个新增文件；审查修复使
+  `backend/app/core/logging.py` 成为第 13 个既有跟踪差异。相关状态文档随本次状态提交
+  刷新；状态提交哈希不预写。状态提交推送后，除明确排除的 `.agents/` 外工作区应干净。
 - `PLAN.md`：本轮未修改 Day 9 复选框或日志，等待授权。
 - Day 10 及以后：尚未开始，未经用户明确授权不得开始。
 
@@ -27,8 +24,10 @@
   在 Qdrant 内先过滤再取 limit；`None` 时不传该参数。解析后防御性校验所有结果属于
   请求文档，越界抛 `QdrantResultError`（HTTP 502）。
 - 合法但无匹配的 `doc_id` 返回 200 空数组，不引入 404。
-- 每次成功检索（含空结果）输出一条 `retrieval_search_completed` 单行 JSON 日志，
-  进入 message（当前 formatter 不显示 bind extra）；字段为 query_sha256/query_len/
+- 每次成功检索（含空结果）输出一条 `retrieval_search_completed` 单行 JSON 日志；
+  `backend/app/core/logging.py` 用 `JSONL_LOG_MARKER` 标记这类事件，普通 human handler
+  排除该标记，独立 `{message}` handler 只接收标记事件，保证完整单行 JSON 且不重复。
+  字段为 query_sha256/query_len/
   top_k/filter_doc_id/result_count/results（rank/chunk_id/doc_id/filename/page/score）；
   不含 query 原文、正文、metadata、向量或凭据。
 - Day 7 遗留的"拒绝 Day 9 参数"测试已更新为接受合法 top_k/doc_id。
@@ -56,18 +55,20 @@
   `3 passed, 1 warning in 12.40s`；其中 filter 用例通过，临时 collection 已清理。
 - 真实 BGE + Qdrant chunk size 实验：`3 passed, 1 warning in 13.90s`，三个 `day9_tuning_*`
   collection 均在 finally 中删除。
-- 最终标准套件：`214 passed, 7 skipped, 1 warning in 14.12s`（7 个跳过均为真实集成
-  开关；warning 仍为 `.pytest_cache` WinError 5）。
-- `pip check`、`compileall -q backend`、`git diff --check`：通过；变更文件密钥模式
-  扫描 0 匹配。
+- 审查修复后的最终标准套件：收集 222 项，`215 passed, 7 skipped, 0 warnings`，pytest
+  用时 `49.04s`；7 个跳过均为真实集成开关。
+- `pip check`、`compileall -q backend`、`git diff --check`：通过。
+- 发布证据：实现提交 `4cccbe26688de33ff25756fc10584060c82fd03f` 已直接推送至
+  `master`，远端核对相同。
 - 当前失败测试：无。
 
-## 本轮发现的环境问题
+## 历史环境问题
 
 - `%TEMP%\pytest-of-袁伟鑫` 目录 ACL 损坏（列目录即 WinError 5），导致所有使用
   `tmp_path` 的测试 ERROR。本轮通过 `PYTEST_DEBUG_TEMPROOT` 重定向到会话 scratchpad
   后全部通过。损坏目录未删除（需要管理员权限），根因与既有 `.pytest_cache`
-  WinError 5 同族，待用户决定是否手工修复。
+  WinError 5 同族，待用户决定是否手工修复。审查修复后的最新标准套件为 0 warning；
+  这不等于上述 ACL 根因已经修复。
 
 ## 已知警告与残余风险
 
@@ -82,5 +83,5 @@
 
 ## 唯一下一步
 
-等待用户指定 Day 9 审查或检查点操作。不得修改 `PLAN.md`、暂存、commit、push 或
-开始 Day 10，除非分别获得明确授权。
+Day 9 实现和发布检查点已完成。等待用户明确授权是否更新 `PLAN.md`，以及是否开始
+Day 10；在获得授权前不得执行这两项操作。

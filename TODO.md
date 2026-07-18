@@ -1,27 +1,27 @@
 # 后续任务
 
-更新时间：2026-07-16（America/New_York）
+更新时间：2026-07-19（Asia/Shanghai）
 
-## P0：Day 9 工作区核验
+## P0：Day 9 实现、验收与发布（已完成）
 
-1. 核对 `master`、基线 HEAD `33689d3`、暂存区为空和 Day 9 工作区差异（12 个修改 +
-   3 个新增，另有须排除的 `.agents/`）。
-2. 阅读 `docs/day9-retrieval-tuning.md`、检索/适配层实现与新增测试。
-3. 确认标准测试 `214 passed/7 skipped/1 warning`、真实 Qdrant 回归 `3 passed`、真实
-   chunk size 实验 `3 passed`。
-4. 确认 `PLAN.md`、`/chat`、RAG 层无差异，并排除 `.env`、`.agents/`、`.pytest-tmp/`、
-   `data/models/`。
+1. Day 9 实现提交 `4cccbe26688de33ff25756fc10584060c82fd03f` 已直接推送至
+   `master`，远端核对相同，无 PR。
+2. 实现提交共 16 个文件：13 个既有跟踪文件修改、3 个新增文件；第 13 个既有跟踪差异
+   是审查修复涉及的 `backend/app/core/logging.py`。
+3. 最终标准套件收集 222 项：`215 passed/7 skipped/0 warnings`，pytest 用时 `49.04s`；
+   `pip check`、`compileall -q backend`、`git diff --check` 通过。
+4. 历史真实 Qdrant 回归 `3 passed/1 warning`、真实 BGE + Qdrant chunk size 实验
+   `3 passed/1 warning` 均保留为验收证据。
 
-## P1：计划状态更新
+## P1：Day 9 状态刷新（已完成）
+
+相关状态文档已改为 Day 9 实现提交已推送的真实状态，并补充审查后的 JSONL 输出设计；
+本次刷新随当前状态提交推送，不预写未知的状态提交哈希。
+
+## P2：计划状态更新（待授权）
 
 `PLAN.md` Day 9 尚未更新。只有用户明确授权后才能勾选并写入真实完成事实，不得修改
 Day 10。
-
-## P2：Day 9 检查点 Git 操作
-
-暂存、commit、实时远端核验和 push 是独立动作，必须分别获得明确授权。暂存时必须排除
-`.env`、`.agents/`、`.pytest-tmp/`、`data/models/`，并在提交前重新运行 pytest、
-pip check、compileall 和 `git diff --check`。
 
 ## P3：Day 10 及以后
 

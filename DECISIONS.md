@@ -1,6 +1,6 @@
 # 技术决策记录
 
-更新时间：2026-07-16（America/New_York）
+更新时间：2026-07-19（Asia/Shanghai）
 
 ## D-001：以 25 天计划控制范围
 
@@ -333,10 +333,12 @@
 - 状态：已确认
 - 决策：每次成功检索（含空结果）恰好输出一条 `retrieval_search_completed` 单行 JSON
   日志，字段为 query_sha256、query_len、top_k、filter_doc_id、result_count 和
-  results（rank/chunk_id/doc_id/filename/page/score）。JSON 直接进入 message；序列化
-  失败只记录安全错误，不影响检索请求。
-- 原因：当前 Loguru formatter 只渲染 `{message}`，仅用 `logger.bind()` 的扩展字段不会
-  显示；日志需要机器可读以支持后续评测关联。
+  results（rank/chunk_id/doc_id/filename/page/score）。JSON 直接进入 message；
+  `backend/app/core/logging.py` 定义 `JSONL_LOG_MARKER`，普通 human handler 排除该标记，
+  独立 `{message}` handler 只处理标记事件。序列化失败只记录安全错误，不影响检索请求。
+- 原因：仅用 `logger.bind()` 的扩展字段不能保证既有 human formatter 输出完整 JSON；若
+  同一事件同时进入 human 与 JSONL handler 又会重复。标记加互斥过滤保证完整单行 JSON、
+  不重复，并保留普通日志的人类可读格式，以支持后续评测关联。
 - 边界：禁止记录 query 原文、Chunk 正文、metadata、向量或凭据。`query_sha256` 只降低
   直接泄露，不等于匿名化。
 
