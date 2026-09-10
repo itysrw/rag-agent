@@ -1,419 +1,260 @@
 # 项目完整交接包
 
-更新时间：2026-07-19（Asia/Shanghai）
+更新时间：2026-09-10（Asia/Shanghai）
 仓库：`D:\2019\rag-agent`
 
-> 本文件是独立交接入口。Day 9 检索优化已完成审查、测试、修复，并于 2026-07-18
-> 直接提交和推送到 `master`。实现提交为
-> `4cccbe26688de33ff25756fc10584060c82fd03f`，推送后远端 `master` 已核对为同一哈希；
-> 无 PR。Day 9 未调用任何付费 API。用户于 2026-07-19 明确授权把 `PLAN.md` 的 Day 9
-> 五项任务和开发日志标记为已完成；本轮只提交计划/状态文档。当前工作区另有未提交的
-> Day 10 BM25 候选变更，来源、完成度与验收状态待确认，不属于本次提交。
+> 本文件是独立交接入口。Day 1-10 已实现、验收并形成 Git 检查点；Day 10 实现提交为
+> `a614a365ff52b8fa087ce651614c23e2e1017c0b`。未实现 Day 11 Hybrid，未调用付费 API。
 
 ## A. 详细交接文档
 
-### 1. 项目最终目标
+### 1. 项目目标与当前边界
 
-构建一个可写入简历、可在面试中完整讲解的企业知识库 RAG Agent：
+项目目标是构建可用于简历和面试讲解的企业知识库 RAG Agent：FastAPI、PostgreSQL、
+Qdrant、本地 BGE、OpenAI-compatible LLM、后续 Hybrid/Rerank/LangGraph、评测、
+Streamlit 与 Docker Compose。
 
-- FastAPI 提供文档上传、检索和问答 API；
-- PostgreSQL 保存 Document/Chunk 业务数据，Qdrant 保存本地 BGE 向量；
-- 后续使用 BM25、RRF、Rerank 优化检索；
-- OpenAI-compatible LLM 生成带来源引用的答案；
-- LangGraph 实现工具选择和多轮记忆；
-- 通过评测集量化检索、答案和延迟；
-- Streamlit 与 Docker Compose 提供最终演示和部署；
-- 形成 README、架构图、评测报告、简历描述和面试材料。
-
-`PLAN.md` 是 25 天范围基线。未来功能不得写成已完成；未经明确授权不得修改该文件。
+`PLAN.md` 是 25 天范围基线。Day 10 已完成独立 BM25 并更新计划状态；Day 11 RRF/Hybrid
+及以后尚未授权，不得把未来能力写成已完成。
 
 ### 2. 新会话阅读顺序
 
 1. `HANDOFF.md`
 2. `STATUS.md`
-3. `DECISIONS.md`（Day 9 新增 D-039 至 D-042）
+3. `DECISIONS.md`（Day 10 新增 D-043 至 D-046）
 4. `TODO.md`
 5. `AGENTS.md`
 6. `README.md`
-7. `PLAN.md`（Day 9 已勾选；后续未经明确授权不得修改）
+7. `PLAN.md`（Day 10 已勾选，Day 11 及以后未开始）
 8. `docs/architecture.md`
-9. `docs/day8-rag-smoke.md`
-10. `docs/day9-retrieval-tuning.md`
-11. `.env.example`（禁止读取 `.env`）
-12. `backend/app/api/retrieval.py`
-13. `backend/app/services/retrieval.py`
-14. `backend/app/services/qdrant_store.py`
-15. `backend/app/core/logging.py`
-16. `backend/app/services/rag.py`（Day 9 未修改，回归参照）
-17. `backend/tests/test_retrieval.py`
-18. `backend/tests/test_qdrant_store.py`
-19. `backend/tests/test_qdrant_integration.py`
-20. `backend/tests/day9_tuning_corpus.py`
-21. `backend/tests/test_retrieval_tuning_integration.py`
-22. `backend/tests/test_rag.py`、`backend/tests/test_chat.py`（回归参照）
+9. `docs/day9-retrieval-tuning.md`
+10. `docs/day10-vector-vs-bm25.md`
+11. `backend/app/services/bm25.py`
+12. `backend/app/api/bm25.py`
+13. `backend/app/main.py`
+14. `backend/requirements.txt`
+15. `backend/tests/day10_bm25_cases.py`
+16. `backend/tests/test_bm25.py`
+17. `backend/tests/test_bm25_api.py`
+18. `backend/tests/test_bm25_postgres.py`
+19. `backend/tests/test_bm25_comparison_integration.py`
+20. Day 8/9 回归参照：`backend/app/api/retrieval.py`、`backend/app/services/retrieval.py`、
+    `backend/app/services/qdrant_store.py`、`backend/app/services/rag.py`、
+    `backend/app/api/chat.py`、相关测试。
 
-禁止读取、输出或提交 `.env`、API Key、数据库真实密码；不得读取或提交无关 `.agents/`
-或测试产物 `.pytest-tmp/`，不得提交 `data/models/`。
+禁止读取、输出、暂存或提交 `.env`、API Key、数据库真实密码、无关 `.agents/`、
+`.pytest-tmp/`、测试临时目录或 `data/models/`。
 
 ### 3. 阶段状态
 
-#### Day 1-8：已提交
+#### Day 1-10：已提交
 
-- Day 1-3：项目边界、FastAPI、日志、OpenAI-compatible DeepSeek JSON/SSE。
-- Day 4-5：PDF/Markdown/TXT 上传解析、PostgreSQL、按页 `o200k_base` 500/100 切分。
-- Day 6：固定 revision 本地 BGE，CPU、512 维、归一化、批量 ≤32、tokenizer 预检。
-- Day 7：显式 `index_document` 写入 unnamed 512/Cosine Qdrant，固定 Top 5 检索 API。
-- Day 8：`/chat` 基础 RAG（固定 Top 5 → `0.46` 门控 → 结构化 Prompt → 后端 sources、
-  模型来源标记清理、固定拒答不调用 LLM）；真实 DeepSeek 冒烟覆盖报销 JSON、VPN SSE、
-  Python 门控拒答。
+- Day 1-8 基线：`33689d31018fcf35b7526fff33a1649f7a0430ac`。
+- Day 9 实现提交：`4cccbe26688de33ff25756fc10584060c82fd03f`，用户确认已推送。
+- Day 9 状态文档后继提交：`f3ca9ec1541d5e774f1eae92217d32160f15153f`。
+- Day 9 `PLAN.md` 状态提交：`5928fa0034aa0378ae164fe9bd1f38e0ca27b807`。
+- Day 10 实现提交：`a614a365ff52b8fa087ce651614c23e2e1017c0b`。
+- `PLAN.md` 的 Day 10 已按用户明确授权勾选；Day 11 及以后未修改。
 
-当前已提交基线：
+#### Day 10：已实现、验收并提交
 
-```text
-33689d31018fcf35b7526fff33a1649f7a0430ac feat: complete Day 8 basic RAG
-```
-
-#### Day 9：已实现、验收、提交并推送
-
-范围：仅独立检索层。`/chat`、RAG 门槛、上传、索引命令、collection 契约均未修改。
+范围仅包括独立 BM25 关键词检索、真实 PostgreSQL 刷新验收和纯向量/BM25 对比。
+`/chat`、RAG `0.46`、向量检索接口、上传、显式索引和 Qdrant collection 均未修改。
 
 已完成：
 
-- `POST /retrieval/search` 请求模型：`query`（1..4096，strip）、`top_k`
-  （`Field(strict=True, ge=1, le=20)`，默认 5）、`doc_id`（UUID|None）、禁止额外字段。
-  `0/21/true/"5"/5.0/null` 与非法 UUID 均 422。
-- `RetrievalService.search(query, *, top_k=5, doc_id=None)`：非法 top_k 在 Embedding
-  前抛 `ValueError`；Day 8 旧调用 `search(question)` 行为不变。
-- `QdrantVectorStore.search(vector, *, limit, doc_id=None)`：doc_id 非空时把顶层
-  `doc_id` 的 `MatchValue(str(doc_id))` 过滤器传入 `query_points(query_filter=...)`，
-  Qdrant 内先过滤再取 limit；None 时不传参数保持原调用形状；解析后校验所有结果属于
-  请求文档，越界抛 `QdrantResultError`（502）；非 UUID doc_id 直接 `ValueError`。
-- 合法但无匹配 doc_id：200 空数组，不引入 404。
-- 检索日志：每次成功检索（含空结果）恰好一条 `retrieval_search_completed` 单行 JSON
-  进入 message；字段 query_sha256/query_len/top_k/filter_doc_id/result_count/
-  results（rank/chunk_id/doc_id/filename/page/score）；无 query 原文/正文/metadata/
-  向量/凭据；序列化失败只记安全错误、不影响请求。
-- `backend/app/core/logging.py` 使用 `JSONL_LOG_MARKER` 区分结构化事件：普通 human
-  handler 排除带标记记录，独立 `{message}` handler 只输出带标记 JSONL，避免日志前缀
-  破坏 JSON，也避免同一事件重复输出。
-- Day 7 遗留"拒绝 Day 9 参数"测试已改为接受合法参数。
-- 确定性 300/500/800 真实实验、唯一命中判据与统一 token 口径（见第 5 节）。
+- 固定并安装 `rank-bm25==0.2.2`，使用 `BM25Okapi` 默认参数。
+- 新增 `POST /retrieval/bm25/search`，复用 Day 9 请求模型：query 1..4096、严格
+  top_k 1..20（默认 5）、可选单 UUID doc_id、额外字段禁止；响应复用 Chunk 结构。
+- raw BM25 score 可大于 1、为 0 或负数；只校验为有限 float，不与 Cosine 或 RAG
+  `0.46` 比较。
+- Tokenizer：NFKC + casefold；中文 unigram + bigram；英文、数字、`VPN-6203`、
+  `ERR_AUTH_42` 类复合编号同时保留完整与组成 token；query 有序去重、corpus 保留 TF。
+- PostgreSQL loader JOIN Document/Chunk，仅加载 `status=ready`，按
+  doc_id/chunk_index/chunk_id 排序；Session 内转不可变 DTO，关闭后再分词和建索引。
+- 每次可搜索请求扫描 corpus 并计算覆盖所有响应字段的 SHA-256 指纹；未变化复用索引，
+  变化时在同一锁内完整构建后原子替换。刷新失败时当前请求 fail closed，不返回 stale。
+- 空库或全无 token corpus 不构建 `BM25Okapi`；标点/emoji-only query 在数据库前返回空。
+- 使用 `get_scores()`，禁止 `get_top_n()`；无结果门控是 token overlap，不是 `score > 0`。
+  因此无关键词重合返回空数组，相关负分/零分不会被误删。
+- doc_id 在 Top-K 前过滤；稳定排序为 `(-score, doc_id, chunk_index, chunk_id)`。
+- 成功搜索（含空结果）恰好写一条 `bm25_search_completed` JSONL，复用
+  `JSONL_LOG_MARKER`；不含 query 原文、query tokens、正文、metadata、SQL 或凭据。
+- HTTP：请求非法 422；PostgreSQL/配置不可用 503；索引/score 非法安全 500；空库、
+  无 token、无 overlap、未知合法 doc_id 均为 200 空数组。
+- 应用 import、启动、lifespan 和 `/health` 不解析数据库配置、不读取 corpus、不建索引。
 
-### 4. Git 与工作区精确状态
-
-Day 9 实现推送后的精确核对：
+### 4. Git 检查点
 
 | 项目 | 当前值 |
 |---|---|
 | 分支 | `master` |
-| Day 9 实现提交 | `4cccbe26688de33ff25756fc10584060c82fd03f` |
-| 推送后远端 `master` | `4cccbe26688de33ff25756fc10584060c82fd03f`（已实时核对） |
-| 提交/推送日期 | 2026-07-18 |
-| 发布方式 | 直接提交并推送到 `master`；无 PR |
-| 状态文档刷新 | `f3ca9ec1541d5e774f1eae92217d32160f15153f`，已推送到 `master` |
-| `PLAN.md` Day 9 状态 | 用户于 2026-07-19 明确授权；五项复选框和开发日志已在本次计划状态提交更新 |
+| Day 10 实现提交 | `a614a365ff52b8fa087ce651614c23e2e1017c0b` |
+| Day 10 状态提交 | 本文件所在的后继提交 |
+| `PLAN.md` | 仅 Day 10 四项和开发日志更新为已完成 |
+| 无关工作区内容 | `.agents/` 保持未跟踪，未纳入提交 |
 
-Day 9 首次实现提交共包含 16 个文件，其中修改已跟踪文件 13 个：
+实现提交包含 13 个文件：BM25 API/服务、依赖和路由、5 个 Day 10 测试/数据文件，
+以及 DECISIONS、README、architecture 和对比报告。后继状态提交只包含 HANDOFF、PLAN、
+STATUS 和 TODO。Chat/RAG、Day 9 向量检索/Qdrant、`docker-compose.yml` 均无功能修改。
 
-- `README.md`
-- `DECISIONS.md`
-- `STATUS.md`
-- `TODO.md`
-- `HANDOFF.md`
-- `docs/architecture.md`
-- `backend/app/api/retrieval.py`
-- `backend/app/core/logging.py`
-- `backend/app/services/retrieval.py`
-- `backend/app/services/qdrant_store.py`
-- `backend/tests/test_retrieval.py`
-- `backend/tests/test_qdrant_store.py`
-- `backend/tests/test_qdrant_integration.py`
+### 5. 代码入口和数据流
 
-新增文件 3 个：
+- `backend/app/services/bm25.py`
+  - `BM25CorpusChunk`、`BM25RetrievedChunk`、`BM25Snapshot`。
+  - `tokenize_bm25()`、`load_bm25_chunks()`、`build_corpus_fingerprint()`、
+    `build_bm25_snapshot()`。
+  - `BM25Service.search(query, *, top_k=5, doc_id=None)`。
+  - `BM25UnavailableError`（数据库/配置）与 `BM25IndexError`（corpus/index/score）。
+- `backend/app/api/bm25.py`
+  - `require_bm25_service()` 只返回延迟服务，不加载 PostgreSQL。
+  - `search_bm25()` 复用 Day 9 Pydantic 请求/响应并映射 422/500/503。
+- `backend/app/main.py`
+  - 只新增 BM25 router 注册，没有 startup/lifespan 索引构建。
+- `backend/tests/day10_bm25_cases.py`
+  - 固定 12 个正样本（精确编号/语义改写/混合各 4）与 3 个负样本。
+- `backend/tests/test_bm25_comparison_integration.py`
+  - PostgreSQL 与临时 Qdrant 写入同一组 24 个 Chunk ID，按 expected_phrase 计算两路 rank。
 
-- `backend/tests/day9_tuning_corpus.py`
-- `backend/tests/test_retrieval_tuning_integration.py`
-- `docs/day9-retrieval-tuning.md`
+调用链：
 
-另有无关 `.agents/`，未读取、未修改且未提交，后续也必须排除；`.pytest-tmp/` 不属于提交。
-本次只修改 `PLAN.md` 与 Day 9 状态文档；不得暂存当前另有的 9 个 Day 10 BM25 候选文件：
-已跟踪修改为 `backend/app/main.py`、`backend/requirements.txt`；新增文件为
-`backend/app/api/bm25.py`、`backend/app/services/bm25.py`、
-`backend/tests/day10_bm25_cases.py`、`backend/tests/test_bm25.py`、
-`backend/tests/test_bm25_api.py`、`backend/tests/test_bm25_comparison_integration.py`、
-`backend/tests/test_bm25_postgres.py`。这些变更尚未在本轮读取或验收，来源、完成度和
-后续动作均为“待确认”。
-`backend/app/api/chat.py`、`backend/app/services/rag.py`、`docker-compose.yml` 无差异；
-未读取 `.env`。
-
-### 5. 精确代码位置、接口与运行入口
-
-- `backend/app/api/retrieval.py`
-  - `RetrievalSearchRequest`：`query`、严格 `top_k=5`、`doc_id: UUID | None`，额外字段禁止。
-  - `RetrievedChunkResponse`、`RetrievalSearchResponse`：响应结构保持不含向量。
-  - `require_retrieval_service()`：延迟解析依赖并把配置错误安全映射为 503。
-  - `search_retrieval()`：透传 `top_k/doc_id`，保留 422/502/503 错误契约。
-- `backend/app/services/retrieval.py`
-  - `RETRIEVAL_TOP_K=5`、`RETRIEVAL_TOP_K_MIN=1`、`RETRIEVAL_TOP_K_MAX=20`。
-  - `RETRIEVAL_SEARCH_EVENT="retrieval_search_completed"`。
-  - `RetrievalService.search(query, *, top_k=5, doc_id=None)`。
-  - `_validated_top_k()`：在 Embedding 前拒绝 bool、非 int 和范围外数值。
-  - `_log_search_event()`：把安全单行 JSON 实际写入 Loguru message。
-- `backend/app/core/logging.py`
-  - `JSONL_LOG_MARKER="jsonl"`：结构化单行事件的显式记录标记。
-  - `configure_logging(debug)`：普通 human handler 通过过滤器排除标记记录；另设
-    `{message}` handler，只接收带标记的 JSONL 记录。
-  - `_include_jsonl(record)`、`_exclude_jsonl(record)`：保证 JSONL 无 human 前缀且每条
-    仅输出一次；`RetrievalService` 绑定该标记后写入检索事件。
-- `backend/app/services/qdrant_store.py`
-  - `QdrantVectorStore.search(query_vector, *, limit, doc_id=None)`：构造可选
-    `models.Filter`/`FieldCondition`/`MatchValue(str(doc_id))`，并复验返回 doc_id。
-  - `_parse_scored_point()` 继续负责 UUID、payload、metadata 和有限 score 的安全校验。
-- `backend/tests/day9_tuning_corpus.py`
-  - `TuningQuestion`、`DETERMINISTIC_AUDIT_TOKEN`、`AUDIT_SUFFIX`、`CORPUS_PAGES`、
-    `QUESTIONS`、`page_texts()`。
-- `backend/tests/test_retrieval_tuning_integration.py`
-  - `normalized()`、`chunk_hits_phrase()`、`token_count()`、`configuration_drafts()`、
-    `ConfigReport`。
-  - `test_normalization_is_nfkc_and_outer_strip_only()`、
-    `test_corpus_satisfies_the_patched_structural_contract()` 在标准套件运行。
-  - `test_chunk_size_configurations_produce_real_metrics()` 由两个真实集成开关控制。
-- `backend/tests/test_retrieval.py`
-  - 新增/更新 `test_retrieval_service_defaults_to_fixed_top_five()`、
-    `test_retrieval_service_passes_top_k_and_doc_id_through()`、严格 top_k 参数化测试、
-    三个安全日志测试，以及 API 默认值/边界/doc_id/空结果/错误映射测试。
-- `backend/tests/test_qdrant_store.py`
-  - 新增 `test_search_with_doc_id_applies_top_level_string_filter_in_query()`、
-    `test_search_without_doc_id_keeps_the_original_call_shape()`、返回 doc_id 越界拒绝、
-    非 UUID 拒绝和本地模式过滤回归。
-- `backend/tests/test_qdrant_integration.py`
-  - `test_real_qdrant_doc_id_filter_returns_only_the_requested_document()` 使用两个 doc_id
-    验证 Qdrant 内过滤并在 finally 中清理临时 collection。
-
-安装、启动和测试均从仓库根目录运行：
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
-.\.venv\Scripts\python.exe -m pytest backend/tests -v
+```text
+POST /retrieval/bm25/search
+→ 严格 Pydantic 校验
+→ BM25Service.search
+→ query tokenizer + 有序去重
+→ 同一锁内读取 ready Chunk、关闭 Session、fingerprint 比较/完整刷新
+→ BM25Okapi.get_scores
+→ finite score 校验
+→ token overlap
+→ 可选 doc_id filter
+→ 稳定排序、Top-K
+→ 安全 JSONL
+→ 共享 Chunk 响应
 ```
 
-PostgreSQL 与 Qdrant 的本地启动、初始化和显式索引命令见 `README.md`；应用启动和
-`GET /health` 本身不会连接 PostgreSQL、BGE、Qdrant 或 LLM。
+### 6. 真实向量与 BM25 对比
 
-### 6. Day 9 技术决策与实验结论
+实验使用 Day 9 的 8 页自撰制度语料、固定 500/100、Top 5、同一 24 个 Chunk ID。
 
-决策记录：`DECISIONS.md` D-039（top_k 严格校验 1..20）、D-040（Qdrant 内过滤 +
-一致性校验 + 200 空数组语义）、D-041（单行 JSON 检索日志边界）、D-042（确定性实验
-语料、唯一命中判据与统一 token 口径）。
+| 范围 | 方法 | Hit@1 | Hit@5 | MRR@5 |
+|---|---|---:|---:|---:|
+| 全部 12 题 | 向量 | 0.750 | 0.917 | 0.812 |
+| 全部 12 题 | BM25 | 0.833 | 1.000 | 0.882 |
+| 精确编号 4 题 | 向量 | 0.750 | 1.000 | 0.812 |
+| 精确编号 4 题 | BM25 | 1.000 | 1.000 | 1.000 |
+| 语义改写 4 题 | 向量 | 0.500 | 0.750 | 0.625 |
+| 语义改写 4 题 | BM25 | 0.500 | 1.000 | 0.646 |
+| 混合表达 4 题 | 向量 | 1.000 | 1.000 | 1.000 |
+| 混合表达 4 题 | BM25 | 1.000 | 1.000 | 1.000 |
 
-chunk size 实验（`docs/day9-retrieval-tuning.md`，全部真实运行）：
+负样本返回率：向量 `1.000`，BM25 `0.000`。`6203` 在向量为第 4、BM25 为第 1；
+精确编号是当前 BM25 最明确的优势场景。语义改写中 BM25 依赖局部字面重合，不具备真正
+语义理解。详细逐题结果和局限见 `docs/day10-vector-vs-bm25.md`。
 
-| 配置 | Chunk 数 | 平均 token | Hit@1 | Hit@5 | MRR@5 | Top-5 context token 总量 |
-|---|---:|---:|---:|---:|---:|---:|
-| 300/60 | 40 | 199.3 | 1.00 | 1.00 | 1.000 | 7986 |
-| 500/100 | 24 | 332.9 | 1.00 | 1.00 | 1.000 | 13590 |
-| 800/160 | 16 | 499.9 | 1.00 | 1.00 | 1.000 | 18576 |
+结论只适用于当前小型受控语料，不证明 BM25 普遍优于向量，也不是 Hybrid/RRF 收益证据。
 
-关键结论：
+### 7. 验收证据
 
-- 语料与 8 个问题固定在纯 Python 常量中，自撰、可公开提交、不随机、不联网；每题有
-  `expected_phrase`，命中只按 NFKC + strip 后的子串包含判断。
-- 每页 982～1011 o200k token；三配置产生不同 Chunk 数（40/24/16）并全部通过真实 BGE
-  与 Qdrant。最大 BGE token 为 62/114/213。
-- 三配置命中指标均满分，当前简单事实语料不能区分质量；Top-5 上下文 token 总量随
-  chunk size 增加。固定长审计标识会被 BGE tokenizer 高度压缩，结果不外推到自然长文本。
-- 生产默认保持 `500/100`；不宣称普遍最优。
+- 安装：`rank-bm25==0.2.2` 成功，`pip check` 为 `No broken requirements found.`。
+- BM25 单元/API：`47 passed in 20.43s`。
+- 真实 PostgreSQL：`1 passed in 2.54s`，覆盖中文、复合编号、Top-K 前 doc_id、
+  add/update/delete 指纹刷新和 Document→Chunk cascade cleanup。
+- 真实 PostgreSQL + BGE + Qdrant 对比：`1 passed in 41.29s`，24 个共享 Chunk ID，
+  临时 PostgreSQL 记录和 `day10_compare_*` collection 已清理。
+- Day 10 真实模块合并复验：`4 passed in 21.80s`，覆盖真实 PostgreSQL 刷新/过滤、
+  清理防御和真实 BGE/Qdrant 对比，指标与首次运行完全一致。
+- 最终标准套件：`264 passed, 9 skipped in 21.49s`；9 个跳过均为显式真实集成开关。
+- 开启 PostgreSQL、Qdrant、本地 BGE 和 RAG 全部真实集成开关后：
+  `273 passed in 59.39s`，无跳过、无失败。
+- `compileall -q backend`、`git diff --check` 通过；当前失败测试为 0。
+- 未调用 DeepSeek、千问或其他付费 API。
 
-### 7. HTTP 与错误契约（Day 9 后）
-
-`POST /retrieval/search` 请求：
-
-```json
-{"query": "VPN 出现故障应该联系谁？", "top_k": 8, "doc_id": "可选 UUID 或 null"}
-```
-
-成功响应结构不变（results 数组，无向量）。错误映射：
-
-- 请求字段不合法（含 top_k 类型/范围、非法 UUID、额外字段）：`422`。
-- BGE Query 超限：`422`。
-- Embedding/Qdrant 不可用或 collection 不匹配：`503`。
-- Qdrant Point/Payload 无效，或 filter 查询返回其他文档：安全 `502`。
-- 无匹配结果：`200 {"results": []}`，不新增 404。
-
-`/chat` 契约与 Day 8 完全一致。应用启动和 `GET /health` 不连接任何外部服务。
-
-### 8. 不可违反的约束
-
-- 只实现 `PLAN.md` 当前获授权的 Day；Day 10 BM25 及以后尚未授权。
-- 未经明确授权不得修改 `PLAN.md`；不得把计划能力写成已完成。
-- Python 固定为 3.11；后端代码位于 `backend/`；公共函数保留类型标注；使用 pytest。
-- 不得读取、输出、暂存或提交 `.env`、真实 API Key、数据库密码、`.agents/`、
-  `.pytest-tmp/` 或 `data/models/`。
-- 不得再次调用 DeepSeek 或其他付费 API，除非用户给出新的明确授权。
-- 不得修改 `backend/app/api/chat.py`、`backend/app/services/rag.py`、RAG `0.46` 门槛、
-  `/chat` 请求/响应/sources/SSE 契约。
-- 不得修改上传、显式 `index_document` 流程或 Qdrant collection schema/初始化契约；
-  不得创建 payload index。
-- Day 9 只支持单个 `doc_id`；不得提前实现 score threshold、多 doc_id、BM25、Hybrid、
-  RRF、Rerank、request_logs、admin traces、LangGraph 或多轮记忆。
-- Day 9 已按用户授权直接推送到 `master`；后续状态文档刷新仅记录既成事实，不得夹带
-  Day 10 功能或排除目录内容。
-- 后续任何工作区修改仍不得用 reset/checkout 覆盖；暂存时必须逐项选择目标文件并排除
-  `.env`、`.agents/`、`.pytest-tmp/` 与 `data/models/`。
-
-### 9. 验证证据
-
-- 开发前门禁：HEAD `33689d3`，本地 `origin/master` 一致，工作区仅 `.agents/` 未跟踪。
-- 检索/适配层与实验前置校验：`68 passed, 1 skipped, 1 warning in 12.14s`；Day 8
-  定向回归历史证据：`27 passed`。
-- 真实 Qdrant 回归（含双文档 filter）：`3 passed, 1 warning in 12.40s`。
-- 真实 BGE + Qdrant 实验套件：`3 passed, 1 warning in 13.90s`；`day9_tuning_*`
-  collection 已清理。
-- 最新标准套件：共收集 222 项，`215 passed, 7 skipped, 0 warnings in 49.04s`。
-- `pip check`、`compileall -q backend`、`git diff --check`：通过；密钥模式扫描 0 匹配。
-- 当前失败测试：无。
-
-精确命令：
+验收命令：
 
 ```powershell
-# 标准套件（真实外部集成默认跳过）
 .\.venv\Scripts\python.exe -m pytest backend/tests -v
-
-# 静态/依赖检查
 .\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe -m compileall -q backend
 git diff --check
 
-# 真实 Qdrant 模块（含双文档 filter）
-$env:RUN_QDRANT_INTEGRATION='1'
-$env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_qdrant_integration.py -v
+$env:RUN_POSTGRES_INTEGRATION='1'
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_bm25_postgres.py -v
 
-# 真实 300/500/800 chunk size 实验
+$env:RUN_POSTGRES_INTEGRATION='1'
 $env:RUN_QDRANT_INTEGRATION='1'
 $env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_retrieval_tuning_integration.py -v -s
+.\.venv\Scripts\python.exe -m pytest `
+  backend/tests/test_bm25_comparison_integration.py -v -s
 ```
 
-历史环境注意：`%TEMP%\pytest-of-袁伟鑫` 目录 ACL 曾损坏并导致 `tmp_path` 测试 ERROR，
-当时通过设置 `PYTEST_DEBUG_TEMPROOT` 指向可写目录绕过；损坏目录是否已修复仍待确认。
-最新标准套件为 0 warnings。若以后再次出现大量 `PermissionError [WinError 5]` ERROR，
-可先核对临时目录权限，再按需使用该环境变量。
+### 8. 错误、失败尝试与风险
 
-### 10. 已尝试但失败或被否决的方案
+- 第一次真实 PostgreSQL 测试有一次失败：测试错误假设完整复合编号只返回一个 Chunk；
+  按既定 tokenizer，复合标识同时拆出共享前缀，因此其他 Chunk 也可低分重合。目标仍
+  正确 Top 1；测试改用唯一数字组成部分验证刷新后通过。未改变产品规则。
+- `rank-bm25` 首次安装在网络受限沙箱失败，获得允许后从已配置 PyPI 镜像成功安装。
+- 每次请求仍全量扫描 ready Chunk 计算指纹；多 Uvicorn worker 各持索引，不适合大规模。
+- unigram/bigram 可能产生常见单字的宽泛重合；未做停用词、词典或同义词。
+- PostgreSQL BM25 corpus 与 Qdrant vector corpus 无自动同步、跨存储事务、outbox、删除
+  同步或一致性修复；真实对比通过相同 Chunk ID 显式控制公平性。
+- 历史 `%TEMP%` pytest ACL 问题未修复；本轮使用独立可写 basetemp，0 warning。
+- Git 仍有 LF→CRLF 提示；`git diff --check` 无 whitespace error，`.gitattributes` 待确认。
+- `query_sha256` 不等于匿名化。
 
-- 已替换：短页语料会让 500/800 退化为相同 Chunk，长自然中文段落又可能超过 BGE 512
-  上限，均不能满足三配置完整指标。最终使用明确披露的固定审计标识构造确定性长页，
-  让三个配置产生不同 Chunk 数且均通过 BGE 预检。
-- 已否决：搜索后在 Python 中过滤 doc_id（其他文档挤占 limit 名额）。
-- 已否决：`metadata.doc_id` 作为 filter key（payload 的 doc_id 在顶层）、MatchValue
-  传 UUID 对象（payload 为字符串，无法命中）。
-- 已否决：为 doc_id 建 Qdrant payload index（扩大 Day 7 collection 初始化契约）。
-- 已失败并修复：`ConfigReport(slots=True)` 用 `__dict__` 序列化（AttributeError），
-  改用 `dataclasses.asdict`。
-- 环境障碍：强制修复 `%TEMP%\pytest-of-*` ACL 的操作被权限策略拒绝，改用
-  `PYTEST_DEBUG_TEMPROOT` 非破坏绕过。
+### 9. 不可违反的约束
 
-### 11. 当前错误、日志、未验证项与残余风险
+- 不修改 `PLAN.md`，除非用户明确授权；不开始 Day 11。
+- 不实现 RRF、Hybrid、mode 参数、score 融合、Rerank 或 BM25→Chat/RAG 接入。
+- 不直接相加或比较 BM25/Cosine score；不把 BM25 score 当概率。
+- 不新增 BM25 表、磁盘索引、无鉴权 refresh API、jieba 或 PostgreSQL/Qdrant 自动同步。
+- 不修改 `/chat`、RAG `0.46`、sources/SSE、上传、显式 Qdrant 索引或 collection schema。
+- Python 3.11；后端位于 `backend/`；公共函数有类型标注；完成前运行 pytest。
+- 不读取、输出、暂存或提交 `.env`、API Key、数据库密码、`.agents/`、`.pytest-tmp/`、
+  `data/models/` 或测试临时目录。
+- 不调用付费 API，除非获得新的明确授权。
+- Day 10 Git 检查点只包含本阶段文件；未来 Git 写操作仍需由用户任务授权。
 
-- 当前失败测试：无。
-- 最新标准套件为 `215 passed, 7 skipped, 0 warnings`；当前无 pytest warning。
-- Git 仍提示部分工作区 LF 将来可能转为 CRLF；`git diff --check` 已通过，是否增加
-  `.gitattributes` 为“待确认”。
-- 最终检查确认 `day9_tuning_*` / `day9_filter_*` 临时 Qdrant collection 残留数为 0；
-  本地 Markdown 失效链接 0，常见密钥模式匹配 0。
-- 实验语料受控且小规模，固定审计标识造成非自然 tokenizer 比例；三配置满分不外推为
-  普遍等价或最优，更大、更难且接近真实文档分布的评测集仍待后续建设。
-- `query_sha256` 不等于匿名化；`top_k=20` 的 Rerank 用途在 Day 12 之前不实现。
-- `%TEMP%\pytest-of-袁伟鑫` 历史 ACL 问题是否已从系统层修复、LF→CRLF 根因待确认；
-  两者均未阻止最新标准套件和 Day 9 推送。
-- Day 9 实现推送后，远端 `master` 已实时核对为
-  `4cccbe26688de33ff25756fc10584060c82fd03f`；状态文档刷新提交
-  `f3ca9ec1541d5e774f1eae92217d32160f15153f` 也已推送。
-- 真实 DeepSeek 四题全覆盖仍待用户确认（Day 9 未调用付费 API）。
-- PostgreSQL/Qdrant 无跨存储事务、outbox、删除同步或一致性修复。
+### 10. 下一步（最多 5 项）
 
-### 12. 待完成任务
+1. Day 10 已收口，不再扩展其范围。
+2. 等待用户明确授权 Day 11 Hybrid/RRF。
+3. Day 11 开始前复核远端、工作区和 `PLAN.md` 边界。
+4. 继续排除 `.env`、`.agents/`、模型缓存和测试临时目录。
+5. 不得提前开始 Rerank、LangGraph 或后续计划能力。
 
-- Day 9 功能、测试和首次文档已完成，并于 2026-07-18 直接提交、推送到 `master`；
-  紧随其后的状态文档刷新提交 `f3ca9ec` 也已推送；`PLAN.md` Day 9 状态已按用户明确授权更新。
-- 当前工作区存在未提交的 Day 10 BM25 候选变更；本轮未审查、未暂存，来源、完成度、
-  验收结果和是否继续均待确认，不得把它们写成已完成。
-- 更自然、更困难的 chunk size 评测语料与召回曲线属于后续复验，不是本检查点阻塞项。
-- pytest 临时目录/缓存 ACL、LF/CRLF 规范、真实 DeepSeek 年假/月球补充调用、
-  PostgreSQL/Qdrant 一致性方案均为“待确认”。
+### 11. Day 10 客观验收清单
 
-### 13. 下一步具体操作（最多 5 步）
-
-1. 新会话先只读核对当前 `master`、远端跟踪状态，以及本轮计划状态提交是否已同步。
-2. 确认 `PLAN.md` 仅 Day 9 五项和开发日志被更新；后续修改仍需明确授权。
-3. 继续排除 `.env`、`.agents/`、`.pytest-tmp/` 与 `data/models/`。
-4. 只读审计当前 Day 10 BM25 候选变更的来源、范围和测试状态，不得默认其已完成。
-5. 等待用户给出 Day 10 的唯一动作后，再决定审查、继续实现或 Git 操作。
-
-### 14. 当前检查点验收标准
-
-Day 9 只有同时满足以下条件才可视为完成；当前均已满足并已推送：
-
-- `POST /retrieval/search` 默认 Top 5；严格接受 `top_k=1..20`，拒绝
-  `0/21/true/"5"/5.0/null`；可选单个 UUID `doc_id`。
-- doc_id filter 在 Qdrant `query_points(query_filter=...)` 内、limit 前执行；返回结果
-  再做 doc_id 一致性检查；无匹配为 200 空数组。
-- 每次成功检索输出一条安全单行 JSON，不含 query 原文、Chunk 正文、metadata、向量
-  或凭据。
-- Day 8 `/chat` 仍通过 `RetrievalService.search(question)` 使用默认 Top 5，RAG `0.46`
-  门槛和 JSON/SSE/sources 契约无变化。
-- 固定语料至少 8 问且每题有 `expected_phrase`；每页 o200k token >800；三配置 Chunk
-  数互不相同；命中只使用 NFKC + strip 子串规则。
-- 300/60、500/100、800/160 都经真实本地 BGE + 临时 Qdrant 产生完整 Hit@1、Hit@5、
-  MRR@5、Chunk 数、平均 Chunk token、Top-5 context token 总量。
-- README 与 `docs/day9-retrieval-tuning.md` 写入实际数字和局限，不宣称普遍最优。
-- 标准测试、真实 Qdrant、真实实验、`pip check`、`compileall`、`git diff --check` 通过；
-  当前失败测试为 0，临时 collection 残留为 0。
-- `PLAN.md` 的 Day 9 五项复选框和开发日志已按明确授权标记完成，Day 10 及以后复选框
-  未改；Chat/RAG、docker-compose 无差异；未调用付费 API；Day 9 16 个实现文件已由提交
-  `4cccbe26688de33ff25756fc10584060c82fd03f` 推送到 `master`，推送后远端哈希已核对一致，
-  无 PR。当前 requirements/BM25 工作区差异不属于 Day 9 检查点。
+- [x] 固定 `rank-bm25==0.2.2`。
+- [x] 独立 `POST /retrieval/bm25/search`，严格契约与 Day 9 一致。
+- [x] 中文、英文、数字、复合编号 tokenizer；query 去重、corpus 保留 TF。
+- [x] ready Chunk loader、Session 边界、全局 IDF、指纹复用/刷新、fail closed。
+- [x] `get_scores()` + token overlap；不使用 `get_top_n()` 或 `score > 0`。
+- [x] doc_id 在 Top-K 前，稳定排序，有限 raw score。
+- [x] 空库/无 token/无 overlap/未知 doc_id 为 200 空数组。
+- [x] 数据库 503、索引/score 500、`/health` lazy、安全 JSONL。
+- [x] 真实 PostgreSQL与共享 Chunk 的真实向量/BM25 对比通过并完成清理。
+- [x] 对比文档包含逐题 rank、Hit@1、Hit@5、MRR@5 和负样本返回率。
+- [x] 完整 pytest、pip check、compileall、diff check 通过。
+- [x] Chat/RAG/Day 9 功能无回归；PLAN 仅更新 Day 10；未实现 Day 11；未调用付费 API。
+- [x] Day 10 实现已提交，PLAN 状态已更新；远端推送已获用户授权，因当前主机无法连接
+  GitHub 443 暂未完成。
 
 ## B. 300 字以内快速恢复摘要
 
-`D:\2019\rag-agent`，master。Day 9 已于 2026-07-18 直接提交并推送，实现提交
-`4cccbe2`，远端 master 已核对同哈希，无 PR；共 16 文件（13 改、3 新，含
-`backend/app/core/logging.py`）。检索支持严格 top_k、单 doc_id、无前缀且不重复的安全
-JSONL。8 页 8 问实验 Chunk 数 40/24/16，命中指标均 1.0。标准测试 215 passed/7 skipped/
-0 warnings；真实 Qdrant 与实验各 3 passed。PLAN Day 9 已按授权勾选完成。工作区另有
-未提交、未审查的 Day 10 BM25 候选变更，归属与验收待确认；继续排除 `.env`、`.agents/`、
-`.pytest-tmp/`、`data/models/`。
+`D:\2019\rag-agent` 的 Day 1-10 已完成。Day 10 实现提交 `a614a36`：独立 BM25 API、
+NFKC 中英混合 tokenizer、ready Chunk 指纹刷新、overlap 门控、Top-K 前 doc_id、安全
+JSONL。相同 24 Chunk 的 12 题对比：向量 0.750/0.917/0.812，BM25
+0.833/1.000/0.882；标准测试 264 passed/9 skipped，全部真实集成开启后 273 passed。
+PLAN 已更新且 Day 11 未开始，无付费 API；继续排除敏感与无关目录。
 
 ## C. 新会话启动提示词
 
 ```text
-这是已有项目的新会话，仓库 D:\2019\rag-agent。先完整阅读 HANDOFF.md、STATUS.md、
-DECISIONS.md、TODO.md、AGENTS.md、README.md、PLAN.md、docs/architecture.md、
-docs/day9-retrieval-tuning.md 及 HANDOFF 列出的 Day 9 代码/测试。第一轮只读核验并
-复述：Day 1-9 已提交；Day 9 于 2026-07-18 直接推送到 master，实现提交精确为
-4cccbe26688de33ff25756fc10584060c82fd03f，推送后远端 master 已核对同哈希，无 PR；
-首次实现提交共 16 文件（13 个已跟踪修改、3 个新增），其中包含此前漏记的
-backend/app/core/logging.py。该文件用 JSONL_LOG_MARKER、排除 JSONL 的普通 human handler
-及仅输出 {message} 的 JSONL handler，避免前缀破坏与重复。状态文档刷新作为紧随其后的
-docs commit 随当前 HEAD 推送，HANDOFF 不预写未知 docs commit 哈希；请只读核对当前 HEAD
-与远端 master。最新标准测试共收集 222 项：215 passed/7 skipped/0 warnings，49.04s；
-历史真实 Qdrant 回归 3 passed/1 warning，真实 BGE+Qdrant chunk size 实验
-3 passed/1 warning，三配置均有完整指标；PLAN.md 的 Day 9 五项和开发日志已按明确授权
-标记完成，Day 10 及以后复选框未改。当前工作区另有 9 个未提交 Day 10 候选文件：
-backend/app/main.py、backend/requirements.txt、backend/app/api/bm25.py、
-backend/app/services/bm25.py、backend/tests/day10_bm25_cases.py、
-backend/tests/test_bm25.py、backend/tests/test_bm25_api.py、
-backend/tests/test_bm25_comparison_integration.py、backend/tests/test_bm25_postgres.py；
-本轮未审查、不得写成已完成。
-禁止读取 .env 或无关 .agents/，排除 .pytest-tmp/ 和 data/models/。若 pytest 再出现大量
-WinError 5 ERROR，先核对临时目录权限，再按需设置 PYTEST_DEBUG_TEMPROOT。先复述已完成
-内容、当前 Git/工作区、错误/风险、约束和验收证据，列出矛盾/待确认项及最多 5 个下一步，
-然后等待我指定唯一动作；不要直接改代码、修改 PLAN.md、执行 Git 写操作或调用付费 API。
-
-当前唯一目标：只读确认 Day 9 已发布且 PLAN 状态已更新，并审计现有 Day 10 候选工作区；
-不得直接继续实现或执行 Git 写操作。
-本轮验收标准：复述与 HANDOFF/Git 一致，明确 Day 9 实现/文档/计划状态、测试证据、
-Day 10 候选变更边界、约束和待确认项；在我指定下一动作前不产生仓库或外部状态变更。
+仓库 D:\2019\rag-agent。先完整阅读 HANDOFF/STATUS/DECISIONS/TODO/AGENTS/README/PLAN、
+architecture、Day 10 报告及 HANDOFF 列出的 Day 10 代码测试。Day 10 实现提交为
+a614a365ff52b8fa087ce651614c23e2e1017c0b；标准测试 264 passed/9 skipped，全部真实
+集成开启后 273 passed。PLAN 已勾选 Day 10，Chat/RAG/Day 9 检索无功能回归。禁止读取
+.env 或纳入无关 .agents/、data/models/ 和测试临时目录。先只读核验工作区与远端，再等待
+唯一动作；不要直接开始 Day 11、执行未授权 Git 写操作或调用付费 API。
 ```

@@ -1,44 +1,37 @@
 # 后续任务
 
-更新时间：2026-07-19（Asia/Shanghai）
+更新时间：2026-09-10（Asia/Shanghai）
 
-## P0：Day 9 实现、验收与发布（已完成）
+## P0：Day 10 本地实现与验收（已完成）
 
-1. Day 9 实现提交 `4cccbe26688de33ff25756fc10584060c82fd03f` 已直接推送至
-   `master`，远端核对相同，无 PR。
-2. 实现提交共 16 个文件：13 个既有跟踪文件修改、3 个新增文件；第 13 个既有跟踪差异
-   是审查修复涉及的 `backend/app/core/logging.py`。
-3. 最终标准套件收集 222 项：`215 passed/7 skipped/0 warnings`，pytest 用时 `49.04s`；
-   `pip check`、`compileall -q backend`、`git diff --check` 通过。
-4. 历史真实 Qdrant 回归 `3 passed/1 warning`、真实 BGE + Qdrant chunk size 实验
-   `3 passed/1 warning` 均保留为验收证据。
+1. `rank-bm25==0.2.2`、确定性中英混合 tokenizer、PostgreSQL corpus loader、SHA-256
+   指纹刷新、进程内 `BM25Okapi` 和独立 API 已实现。
+2. `POST /retrieval/bm25/search` 复用严格 query/top_k/doc_id 契约；token-overlap 门控、
+   Top-K 前 doc_id 过滤、有限 raw score 和安全 JSONL 已覆盖。
+3. Day 10 真实模块合并验收 `4 passed`；覆盖真实 PostgreSQL 刷新/过滤及相同 24 个
+   Chunk ID 的真实向量/BM25 对比。
+4. 最终标准套件 `264 passed/9 skipped`；开启全部真实集成开关后 `273 passed`；
+   `pip check`、`compileall`、`git diff --check` 通过。
+5. `docs/day10-vector-vs-bm25.md` 已记录逐题排名、聚合指标、负样本返回率和局限。
 
-## P1：Day 9 状态刷新（已完成）
+## P1：Day 10 检查点（已完成）
 
-相关状态文档已改为 Day 9 实现提交已推送的真实状态，并补充审查后的 JSONL 输出设计；
-状态刷新提交 `f3ca9ec1541d5e774f1eae92217d32160f15153f` 已推送。
+- Day 10 实现提交为 `a614a365ff52b8fa087ce651614c23e2e1017c0b`。
+- `PLAN.md` Day 10 四项复选框与开发日志已更新；Day 11 未触及。
+- `.env`、`.agents/`、测试临时目录、项目内 tiktoken 缓存和 `data/models/` 均未纳入提交。
 
-## P2：计划状态更新（已完成）
+## P2：Day 11 及以后
 
-用户于 2026-07-19 明确授权；`PLAN.md` 的 Day 9 五项复选框和开发日志已标记完成，
-Day 10 及以后复选框未修改。
-
-## P3：Day 10 及以后
-
-当前工作区已有未提交的 Day 10 BM25 候选变更，来源、完成度与验收状态待确认。本轮
-不得读取、修改、暂存或提交这些文件；先等待用户指定审查、继续实现或 Git 操作中的
-唯一动作。Hybrid、RRF、Rerank、score threshold、多 doc_id 过滤、LangGraph、多轮记忆
-或 trace 仍不得提前开始。
+尚未授权。不得开始 Hybrid、RRF、统一 mode、score 融合、Rerank、LangGraph、多轮记忆
+或 trace。Day 10 的两路对比只提供后续研究动机，不代表已实现 Hybrid。
 
 ## 延后且待确认
 
-- 使用更接近自然企业文档分布的语料复验 300/500/800；当前固定审计标识会被 BGE
-  tokenizer 高度压缩，不能代表自然长文本的 BGE token 风险；
-- 用更大正负样本集重新校准 `RAG_MIN_RELEVANCE_SCORE`；
-- `%TEMP%\pytest-of-袁伟鑫` ACL 损坏目录的手工修复（需管理员），及 `.pytest_cache`
-  WinError 5 根因；
-- 真实 DeepSeek 四题全覆盖是否补充（需新授权）；
-- 新环境 Qdrant/BGE 与完全离线复现；
+- 用更大、更难且接近自然企业文档分布的评测集复验 BM25 tokenizer 与向量/BM25 排名；
+- 当前每请求全量扫描 PostgreSQL 指纹的扩展性方案，以及多 worker 索引一致性；
 - PostgreSQL/Qdrant outbox、删除同步和一致性修复；
-- 孤儿上传文件启动清理与 SQLAlchemy 私有 `_state` 兼容性；
-- `.gitattributes` 行尾规范和首次表结构迁移时是否引入 Alembic。
+- 中文停用词、领域词典或替代 tokenizer 是否值得在后续评测后引入；
+- 用更大正负样本集重新校准 `RAG_MIN_RELEVANCE_SCORE`；
+- `%TEMP%` pytest ACL、`.pytest_cache` 和 LF→CRLF 根因；
+- 真实 DeepSeek 四题全覆盖是否补充（需新付费授权）；
+- 首次表结构变化时是否引入 Alembic。

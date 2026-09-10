@@ -164,10 +164,10 @@ rag-agent/
 
 ### Day 10 — BM25 关键词检索
 
-- [ ] 安装 `rank_bm25`
-- [ ] 对 chunks 内容建 BM25 索引（内存中即可）
-- [ ] 实现关键词检索接口
-- [ ] 测试：纯向量 vs 纯 BM25，记录各自擅长的场景
+- [x] 安装 `rank_bm25`
+- [x] 对 chunks 内容建 BM25 索引（内存中即可）
+- [x] 实现关键词检索接口
+- [x] 测试：纯向量 vs 纯 BM25，记录各自擅长的场景
 
 **产出**：BM25 检索能独立跑通，有对比记录
 
@@ -385,7 +385,7 @@ rag-agent/
 | Day 7 | 已完成 | 固定 Qdrant v1.18.1、512/Cosine collection、显式幂等索引与固定 Top 5 检索 API 已实现；标准测试 153 passed，真实 BGE/Qdrant 3 passed，三个受控问题均为 Top 1 |
 | Day 8 | 已完成 | `/chat` 接入 Day 7 固定 Top 5 检索，生成层按 `0.46` 门槛过滤 Context；结构化 system/user Prompt、JSON/SSE 均返回后端去重来源；无相关内容精确拒答且不调用 LLM；模型自由文本中的来源标记由 sanitizer 清理。标准套件 181 passed、5 skipped；真实 PostgreSQL/BGE/Qdrant 端到端与真实 DeepSeek JSON/SSE/拒答三路径均验收通过 |
 | Day 9 | 已完成 | `/retrieval/search` 支持严格 `top_k=1..20`、Qdrant 内单 `doc_id` 过滤和安全单行 JSONL 检索日志；300/500/800 真实 BGE + Qdrant 实验完成，Hit@1、Hit@5、MRR@5 均为 1.0；标准套件 215 passed、7 skipped、0 warnings，实现提交 `4cccbe2` 已推送 |
-| Day 10 | | |
+| Day 10 | 已完成 | 新增独立 `/retrieval/bm25/search`、PostgreSQL Chunk 内存索引、稳定中英文/复合编号分词、指纹刷新与安全日志；同一 24 Chunk 语料对比中，向量 Hit@1/Hit@5/MRR@5 为 0.750/0.917/0.812，BM25 为 0.833/1.000/0.882；标准套件 264 passed、9 skipped，开启全部真实集成开关后 273 passed |
 | Day 11 | | |
 | Day 12 | | |
 | Day 13 | | |
