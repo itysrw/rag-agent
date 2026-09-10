@@ -363,3 +363,51 @@
 - 实测结论：三配置 Chunk 数为 40/24/16，Hit@1、Hit@5、MRR@5 均为 1.0；Top-5
   上下文 token 总量为 7986/13590/18576。受控语料无法区分质量，但显示更大 Chunk
   增加上下文成本。生产默认保持 `500/100`，不宣称任何配置普遍最优。
+
+## D-043：Day 10 使用确定性中英混合 tokenizer
+
+- 状态：已确认
+- 决策：BM25 corpus 与 query 共用唯一 tokenizer：Unicode NFKC + `casefold()`；中文连续段
+  生成 unigram + bigram；英文和数字按词保留；`VPN-6203`、`ERR_AUTH_42` 类复合标识
+  同时保留完整 token 和拆分组成部分。query token 有序去重，corpus token 保留重复词频。
+- 原因：`rank_bm25` 不负责分词，中文直接 `.split()` 会把整句视为一个 token；query
+  重复词会人为放大权重，而 corpus 去重会破坏 BM25 的 TF 信息。
+- 边界：不引入 jieba、停用词、同义词或自定义词典；unigram/bigram 可能产生宽泛单字
+  重合，后续必须由更真实评测集复验。
+
+## D-044：BM25 使用延迟 PostgreSQL 全局快照和指纹刷新
+
+- 状态：已确认
+- 决策：首次包含可搜索 token 的 BM25 请求才读取 `ready` Document 的全部 Chunk；按
+  doc_id/chunk_index/chunk_id 确定性排序，在 Session 内转 DTO，关闭 Session 后分词和
+  构建 `BM25Okapi`。每次请求重新扫描并计算 SHA-256 指纹，未变化复用索引，变化时在同一
+  锁内完整构建并原子替换。
+- 指纹：覆盖 chunk_id、doc_id、chunk_index、content、page、filename 和 canonical
+  metadata；新增、修改、删除或响应字段变化均触发重建。
+- 失败语义：数据库读取或新索引构建失败时当前请求失败，不静默返回旧快照；旧对象仅保留
+  在内存中供后续成功刷新比较。空 corpus 或全无 token corpus 不构建 `BM25Okapi`。
+- 限制：每次请求仍扫描 PostgreSQL 计算指纹，多 Uvicorn worker 各持一份索引；这不是
+  大规模生产索引方案，也不新增表、磁盘索引或 refresh API。
+
+## D-045：BM25 用 token overlap 门控并在 Top-K 前过滤 doc_id
+
+- 状态：已确认
+- 决策：使用 `BM25Okapi.get_scores()`，禁止 `get_top_n()`；只保留 query/document 至少
+  一个 token 重合的 Chunk，再应用可选单 doc_id，按
+  `(-score, doc_id, chunk_index, chunk_id)` 稳定排序并截取 top_k。
+- 原因：`get_top_n()` 会在无关键词重合时补齐无关零分结果；小语料相关结果可能为 0 或
+  负分，因此不能使用 `score > 0`。doc_id 在截断后过滤会让其他文档挤占名额。
+- 分数边界：BM25 raw score 不是概率、不限制在 `0..1`、随 corpus 变化，不能套用 RAG
+  `0.46` 门槛或与 Cosine score 直接比较；所有返回 score 必须转换为有限 float。
+
+## D-046：Day 10 保持独立 BM25 接口并只比较排名指标
+
+- 状态：已确认
+- 决策：新增 `POST /retrieval/bm25/search`，复用 Day 9 的严格 query/top_k/doc_id 请求和
+  Chunk 响应结构；不为 `/retrieval/search` 增加 mode，不接入 `/chat`，不融合向量与
+  BM25。成功检索输出安全 `bm25_search_completed` JSONL。
+- 实验：真实 PostgreSQL 与临时 Qdrant 使用相同 24 个 Chunk ID、固定 500/100 和 Top 5，
+  对比 12 个预先固定正样本；向量 Hit@1/Hit@5/MRR@5 为 `0.750/0.917/0.812`，BM25 为
+  `0.833/1.000/0.882`。三条知识库外英文问题返回率分别为 1.0 与 0.0。
+- 限制：只比较 rank 指标，不比较原始 score；该受控小样本不证明 BM25 普遍优于向量，
+  也不是 Day 11 Hybrid/RRF 的收益证据。

@@ -4,9 +4,10 @@
 
 本文严格区分：
 
-- 已实现、验收并提交推送的 Day 1 至 Day 9；Day 9 实现提交为
-  `4cccbe26688de33ff25756fc10584060c82fd03f`，远端 `master` 已核对相同；
-- 尚未实现的 Day 10 及以后目标。
+- 已实现、验收并发布的 Day 1 至 Day 9；Day 9 实现提交为 `4cccbe2`，状态文档提交为
+  `f3ca9ec`，计划状态提交为 `5928fa0`；
+- 已实现并真实验收的 Day 10 独立 BM25；
+- 尚未实现的 Day 11 及以后目标。
 
 ## 当前实现架构
 
@@ -18,6 +19,7 @@ flowchart LR
     api --> chat["POST /chat"]
     api --> upload["POST /documents/upload"]
     api --> retrieval_api["POST /retrieval/search<br/>top_k 1..20 默认 5 · 可选 doc_id"]
+    api --> bm25_api["POST /retrieval/bm25/search<br/>独立关键词检索"]
 
     chat --> rag["RAGService.prepare()<br/>检索在 SSE 建立前完成"]
     rag --> query_embedding["embed_query()<br/>固定 BGE instruction"]
@@ -51,6 +53,12 @@ flowchart LR
     results --> gate
 
     chunks --> ordered
+    chunks --> bm25_loader["ready Chunk 确定性快照<br/>每次请求计算 SHA-256 指纹"]
+    bm25_api --> bm25_service["BM25Service<br/>延迟加载 · 进程内快照"]
+    bm25_loader --> bm25_tokenizer["NFKC + casefold<br/>中文 unigram/bigram · 复合编号"]
+    bm25_tokenizer --> bm25_index["BM25Okapi<br/>全局 IDF · get_scores()"]
+    bm25_index --> bm25_results["token overlap → doc_id filter<br/>稳定排序 → Top k"]
+    bm25_results --> bm25_api
 ~~~
 
 关键隔离边界：
@@ -70,6 +78,9 @@ flowchart LR
   不记录 query 原文、Chunk 正文、metadata 或向量。
 - `backend/app/core/logging.py` 用 `JSONL_LOG_MARKER` 区分机器事件：普通 human handler
   排除该标记，独立 `{message}` handler 只处理标记事件，确保完整单行 JSON 且不重复。
+- BM25 首次请求才解析数据库；应用启动和 `/health` 不扫描 PostgreSQL 或构建索引。
+- BM25 与向量检索是两个独立接口；Day 10 不融合结果、不比较原始 score，也不接入
+  `/chat` 或 RAG `0.46` 门控。
 
 ## 当前 HTTP 接口
 
@@ -80,6 +91,7 @@ flowchart LR
 | POST /chat，stream=true | 已实现，返回 delta、sources event 与 DONE |
 | POST /documents/upload | 已实现，支持 PDF/MD/TXT |
 | POST /retrieval/search | 已实现，接收 query、可选严格 top_k（1..20，默认 5）和可选 doc_id，不返回向量 |
+| POST /retrieval/bm25/search | 已实现，复用同一请求/响应结构，返回 raw BM25 score，无词项重合为空数组 |
 
 应用启动和 GET /health 均不连接 PostgreSQL、Qdrant、BGE 或 LLM。
 
@@ -172,8 +184,8 @@ BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
 合法但无匹配的 `doc_id` 返回 200 空数组：检索接口表达"该过滤条件下没有匹配"，
 不负责确认 PostgreSQL 文档资源是否存在，因此不引入 404。
 
-Day 7 原始实现不含可调 top_k 和 doc_id filter；score threshold、BM25、Hybrid、
-Rerank 仍未实现。
+Day 7 原始实现不含可调 top_k 和 doc_id filter；score threshold、Hybrid、RRF、Rerank
+仍未实现。Day 10 BM25 是下文所述独立链路。
 
 ## Day 8 基础 RAG 流程
 
@@ -202,6 +214,30 @@ Rerank 仍未实现。
   Top-5 token 总量为 7986/13590/18576。固定审计标识会被 BGE tokenizer 高度压缩，
   因此结果不能外推到自然长文本；生产默认保持 `500/100`。方法、数据与局限见
   `docs/day9-retrieval-tuning.md`。
+
+## Day 10 BM25 关键词检索
+
+1. `POST /retrieval/bm25/search` 复用 Day 9 的严格 query、top_k、单 doc_id 请求模型和
+   Chunk 响应结构；raw BM25 score 不限制在 `0..1`。
+2. `get_bm25_service()` 只创建进程内服务，不读取 PostgreSQL。首次包含可搜索 token 的
+   BM25 请求才进入刷新流程。
+3. 同一刷新锁内 JOIN `Chunk + Document`，只读取 `Document.status == "ready"`，按
+   doc_id/chunk_index/chunk_id 排序并在 Session 内转为 DTO；Session 关闭后再分词建索引。
+4. 指纹覆盖 chunk_id、doc_id、chunk_index、content、page、filename 和 canonical metadata。
+   指纹未变复用 `BM25Okapi`；变化时完整构建后原子替换；读取或构建失败时当前请求失败，
+   不静默使用旧数据。
+5. Tokenizer 统一执行 NFKC + casefold；中文连续段生成 unigram + bigram；英文、数字和
+   `VPN-6203`/`ERR_AUTH_42` 类复合编号保留完整 token 和组成 token。query 有序去重，
+   corpus 保留重复词频。
+6. 搜索使用 `get_scores()`；先做 token overlap 门控，再做可选 doc_id 过滤，最后按
+   `(-score, doc_id, chunk_index, chunk_id)` 稳定排序并截取 top_k。相关负分/零分结果不会
+   被误删，无重合不会补齐零分 Chunk。
+7. 成功搜索输出带 `JSONL_LOG_MARKER` 的 `bm25_search_completed` 单行 JSON，不记录 query
+   原文、query tokens、正文、metadata、SQL 或凭据。
+
+真实对比在同一 24 个 Chunk ID、500/100、Top 5 上进行：向量 Hit@1/Hit@5/MRR@5 为
+`0.750/0.917/0.812`，BM25 为 `0.833/1.000/0.882`。详细逐题排名与限制见
+`docs/day10-vector-vs-bm25.md`。该实验不包含 Hybrid 或 RRF。
 
 ## 异常与安全边界
 
@@ -239,6 +275,7 @@ backend/app/commands/embed_document.py 额外定义：
 - RAGSettings：RAG_ 前缀；生成层固定相关性门槛，范围 `0..1`。
 - sentence-transformers==5.3.0 为 Day 6 新依赖。
 - qdrant-client==1.18.0 为 Day 7 固定依赖。
+- rank-bm25==0.2.2 为 Day 10 固定依赖。
 - 当前环境已解析到 torch 2.13.0、transformers 5.14.0、huggingface-hub 1.23.0。
 
 所有相对上传和模型缓存路径均从仓库根目录解析，不依赖当前工作目录。
@@ -250,7 +287,7 @@ backend/app/commands/embed_document.py 额外定义：
 - pgvector 或 PostgreSQL 向量字段；
 - 自动索引、删除同步、后台队列或 outbox；
 - score threshold 请求参数、多 doc_id 列表过滤、Qdrant payload index；
-- BM25、RRF、Rerank；
+- Hybrid、RRF、Rerank；
 - LangGraph、Agent 工具和记忆；
 - 评测、trace、Streamlit 和完整 Docker Compose。
 

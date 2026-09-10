@@ -9,6 +9,7 @@ from loguru import logger
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+from backend.app.api.bm25 import router as bm25_router
 from backend.app.api.chat import router as chat_router
 from backend.app.api.documents import router as documents_router
 from backend.app.api.health import router as health_router
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     application.include_router(chat_router)
     application.include_router(documents_router)
     application.include_router(retrieval_router)
+    application.include_router(bm25_router)
 
     @application.middleware("http")
     async def log_request(

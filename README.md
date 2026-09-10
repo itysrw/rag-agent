@@ -1,13 +1,13 @@
 # 企业知识库 RAG Agent 系统
 
-企业级 RAG 问答系统项目。Day 1 至 Day 9 已实现、验收并提交推送至 `master`；Day 9
-实现提交为 `4cccbe26688de33ff25756fc10584060c82fd03f`。Day 9 检索优化包括：
+企业级 RAG 问答系统项目。Day 1 至 Day 10 已实现并完成真实验收。Day 9 检索优化包括：
 `POST /retrieval/search` 支持严格校验的 `top_k`（1～20，默认 5）和单文档 `doc_id`
 过滤（在 Qdrant 查询内生效），每次成功检索输出一条不含正文的单行 JSON 日志，并完成
 300/500/800 chunk size 的真实检索质量对比。用户于 2026-07-19 明确授权后，`PLAN.md`
-的 Day 9 五项复选框和开发日志已标记完成；Day 10 及以后复选框未修改。
-Day 8 `/chat` 契约（固定 Top 5 + 0.46 门控）保持不变。BM25、Hybrid Search、Rerank、
-LangGraph Agent 等仍属于后续目标。
+的 Day 9 五项复选框和开发日志已标记完成；Day 10 复选框仍未修改。Day 10 新增
+`POST /retrieval/bm25/search`、确定性中英混合 tokenizer、PostgreSQL 指纹刷新和安全
+JSONL 日志；不接入 `/chat`。Day 8 `/chat` 契约（固定 Top 5 + 0.46 门控）保持不变。
+Hybrid Search、Rerank、LangGraph Agent 等仍属于后续目标。
 
 ## 项目状态文档
 
@@ -18,6 +18,7 @@ LangGraph Agent 等仍属于后续目标。
 - [架构说明](docs/architecture.md)
 - [Day 8 RAG 验收记录](docs/day8-rag-smoke.md)
 - [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)
+- [Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)
 
 ## 技术栈
 
@@ -28,7 +29,8 @@ LangGraph Agent 等仍属于后续目标。
 | 向量数据库 | Qdrant |
 | 关系数据库 | PostgreSQL · SQLAlchemy 2.x · psycopg 3 |
 | 文本向量 | SentenceTransformers · BAAI/bge-small-zh-v1.5 · CPU |
-| 检索增强 | Hybrid Search (向量 + BM25) · Rerank |
+| 关键词检索 | rank-bm25 0.2.2 · 进程内 BM25Okapi |
+| 后续检索增强 | Hybrid Search (向量 + BM25) · Rerank |
 | 前端 | Streamlit |
 | 部署 | Docker · Docker Compose |
 
@@ -105,6 +107,8 @@ Day 5 已完成 300/500/800 token 的结构性对比，结果见
 [Chunk Size 结构对比](docs/day5-chunk-size-comparison.md)。该实验不包含检索质量结论。
 Day 9 已在真实 BGE + Qdrant 上完成同一组配置的检索质量对比，见上方
 「检索优化实验」小节和 [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)。
+Day 10 使用相同的 24 个 Chunk 对比纯向量与纯 BM25，见
+[Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)。
 
 | 指标 | 数值 |
 |------|------|
@@ -229,6 +233,27 @@ Context 时后端直接返回 `知识库中没有相关信息`，不调用 DeepS
 
 完整方法、数据与局限性见 [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)。
 
+## BM25 关键词检索与向量对比（Day 10）
+
+`POST /retrieval/bm25/search` 复用 Day 9 的严格 `query/top_k/doc_id` 请求和 Chunk 响应
+结构，但 `score` 是原始 BM25 分数，不是概率、不限制在 `0..1`，也不能与 Cosine score
+直接比较。BM25 首次请求才读取 PostgreSQL 中 `ready` 文档的 Chunk；每次请求计算完整
+快照指纹，未变化时复用进程内索引，变化时在同一锁内完整构建后替换。刷新失败时当前
+请求安全失败，不静默返回旧索引。
+
+Tokenizer 固定执行 NFKC + casefold，中文生成 unigram/bigram，英文、数字和复合企业
+编号同时保留完整形式与组成部分。查询 token 有序去重，corpus 保留词频。检索使用
+`get_scores()` 和 token-overlap 门控，因此无关键词重合时返回空数组，负分或零分的真实
+匹配不会被误删；`doc_id` 在 Top-K 前过滤。
+
+真实 PostgreSQL + 本地 BGE + 临时 Qdrant 使用相同 24 个 Chunk ID、固定 500/100 和
+Top 5 对比 12 个正样本：向量 Hit@1/Hit@5/MRR@5 为 `0.750/0.917/0.812`，BM25 为
+`0.833/1.000/0.882`。精确编号类 BM25 三项均为 1.0；三条知识库外英文问题的返回率
+向量为 1.0、BM25 为 0.0。该小型受控实验不证明 BM25 普遍优于向量，也不包含 Hybrid。
+
+完整逐题排名、方法和局限见
+[Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)。
+
 ## 当前接口
 
 | 方法与路径 | 输入 | 当前响应 |
@@ -238,6 +263,7 @@ Context 时后端直接返回 `知识库中没有相关信息`，不调用 DeepS
 | `POST /chat` | `{"message": "...", "stream": true}` | RAG SSE：delta、sources、`[DONE]` |
 | `POST /documents/upload` | `multipart/form-data`，字段 `file` | 成功返回 `201` 文档元数据；支持 PDF / MD / TXT |
 | `POST /retrieval/search` | `{"query": "...", "top_k": 8, "doc_id": "UUID"}`（后两项可选） | 返回最多 `top_k` 个 Chunk、来源和 score，不返回向量 |
+| `POST /retrieval/bm25/search` | 同上 | 返回有词项重合的 Chunk 和 raw BM25 score；无重合为空数组 |
 
 LLM 使用 OpenAI-compatible 接口。当前默认配置为 `deepseek-v4-flash`，
 并通过 `LLM_EXTRA_BODY` 关闭思考模式；真实 `LLM_API_KEY` 只写入本地 `.env`。
@@ -256,6 +282,11 @@ instruction；文档 Chunk 保持直接编码。检索接口的 `top_k` 使用�
 分数），不记录 query 原文、Chunk 正文、metadata 或向量。score threshold 仍不开放；
 RAG 门槛只在服务内部使用，`/chat` 保持固定 Top 5。
 
+BM25 API 不依赖 BGE、Qdrant 或 LLM。它只索引 PostgreSQL `ready` 文档的 Chunk 正文，
+使用全局 BM25 IDF；可选 `doc_id` 只在排名截断前过滤，不改变全局计分体系。每次成功
+BM25 搜索输出 `bm25_search_completed` JSONL，额外记录 query token 数、corpus 大小和
+本次是否重建索引，但不记录 query tokens、正文、metadata、SQL 或凭据。
+
 JSONL 事件由 `backend/app/core/logging.py` 的 `JSONL_LOG_MARKER` 标记。普通 human handler
 排除该标记，独立 `{message}` handler 只处理标记事件，因此机器日志保持完整单行 JSON，
 同一事件不会在两类 handler 中重复输出。
@@ -271,7 +302,7 @@ JSONL 事件由 `backend/app/core/logging.py` 的 `JSONL_LOG_MARKER` 标记。�
 - [x] Qdrant 向量存储与检索（显式索引 · 固定 Top 5）
 - [x] 基础 RAG 链路（固定 Top 5 → 门控 → 生成 → 结构化来源）
 - [x] 检索优化（top_k · doc_id filter · 检索日志 · chunk size 真实对比）
-- [ ] BM25 关键词检索
+- [x] BM25 关键词检索（独立 API · PostgreSQL 指纹刷新 · 真实向量对比）
 - [ ] Hybrid Search（RRF 融合）
 - [ ] Rerank（cross-encoder 或 API）
 - [ ] LangGraph Agent 编排
