@@ -1,13 +1,19 @@
 # 架构说明
 
-更新时间：2026-07-19（Asia/Shanghai）
+更新时间：2026-10-28（Asia/Shanghai）
 
 本文严格区分：
 
 - 已实现、验收并发布的 Day 1 至 Day 9；Day 9 实现提交为 `4cccbe2`，状态文档提交为
   `f3ca9ec`，计划状态提交为 `5928fa0`；
-- 已实现并真实验收的 Day 10 独立 BM25；
-- 尚未实现的 Day 11 及以后目标。
+- 已实现、真实验收并推送的 Day 10 独立 BM25；实现提交为 `a614a36`，计划状态
+  提交为 `98ff9d3`。两提交已核对远端；
+- 工作区中已实现、通过真实三路对比的 Day 11 独立 Hybrid/RRF；2026-10-28 用户确认
+  审查、测试与修复通过，已授权在 `PLAN.md` 标记完成，尚未提交；
+- 尚未实现的 Day 12 及以后目标。
+
+当前功能开发暂停，恢复入口为 [完整交接包](../HANDOFF.md)。新会话先只读确认 Day 11
+检查点；完成标记不等于已提交，也不授权自动开始 Day 12。当前运行时状态待确认。
 
 ## 当前实现架构
 
@@ -20,6 +26,12 @@ flowchart LR
     api --> upload["POST /documents/upload"]
     api --> retrieval_api["POST /retrieval/search<br/>top_k 1..20 默认 5 · 可选 doc_id"]
     api --> bm25_api["POST /retrieval/bm25/search<br/>独立关键词检索"]
+    api --> hybrid_api["POST /retrieval/hybrid/search"]
+    hybrid_api --> hybrid["HybridRetrievalService<br/>向量后 BM25 · 各取 20"]
+    hybrid --> query_embedding
+    hybrid --> bm25_service
+    hybrid --> rrf["chunk_id 聚合 + payload 一致性<br/>等权 RRF k=60 · 稳定排序 · 最终 top_k"]
+    rrf --> hybrid_api
 
     chat --> rag["RAGService.prepare()<br/>检索在 SSE 建立前完成"]
     rag --> query_embedding["embed_query()<br/>固定 BGE instruction"]
@@ -81,6 +93,8 @@ flowchart LR
 - BM25 首次请求才解析数据库；应用启动和 `/health` 不扫描 PostgreSQL 或构建索引。
 - BM25 与向量检索是两个独立接口；Day 10 不融合结果、不比较原始 score，也不接入
   `/chat` 或 RAG `0.46` 门控。
+- Day 11 以第三个独立接口编排两路，按 rank 融合；任何分支失败整体失败，跨存储同 ID
+  payload 冲突安全失败。融合不接入 `/chat`，也不把 RRF score 送入 `0.46` 门控。
 
 ## 当前 HTTP 接口
 
@@ -92,6 +106,7 @@ flowchart LR
 | POST /documents/upload | 已实现，支持 PDF/MD/TXT |
 | POST /retrieval/search | 已实现，接收 query、可选严格 top_k（1..20，默认 5）和可选 doc_id，不返回向量 |
 | POST /retrieval/bm25/search | 已实现，复用同一请求/响应结构，返回 raw BM25 score，无词项重合为空数组 |
+| POST /retrieval/hybrid/search | 已实现，两路固定各取 20，标准 RRF 返回最终 top_k，score 为 RRF score |
 
 应用启动和 GET /health 均不连接 PostgreSQL、Qdrant、BGE 或 LLM。
 
@@ -184,8 +199,8 @@ BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
 合法但无匹配的 `doc_id` 返回 200 空数组：检索接口表达"该过滤条件下没有匹配"，
 不负责确认 PostgreSQL 文档资源是否存在，因此不引入 404。
 
-Day 7 原始实现不含可调 top_k 和 doc_id filter；score threshold、Hybrid、RRF、Rerank
-仍未实现。Day 10 BM25 是下文所述独立链路。
+Day 7 原始实现不含可调 top_k 和 doc_id filter；Day 9 增加这些参数。Day 10 BM25 与
+Day 11 Hybrid 是下文所述独立链路；score threshold 请求参数和 Rerank 尚未实现。
 
 ## Day 8 基础 RAG 流程
 
@@ -239,6 +254,24 @@ Day 7 原始实现不含可调 top_k 和 doc_id filter；score threshold、Hybri
 `0.750/0.917/0.812`，BM25 为 `0.833/1.000/0.882`。详细逐题排名与限制见
 `docs/day10-vector-vs-bm25.md`。该实验不包含 Hybrid 或 RRF。
 
+## Day 11 Hybrid/RRF 流程
+
+1. 独立 API 复用严格的 query/top_k/doc_id 模型，服务在调用分支前防御性校验参数。
+2. 向量 `search(top_k=20, doc_id=...)` 后调用 BM25 同一参数，不引入线程池或并发。
+3. 以 chunk_id 聚合两路并集；分支内重复 ID 拒绝，跨分支共同 ID 的 payload 必须一致。
+4. 使用 `Σ 1/(60+rank)`，一基 rank，缺席一路贡献为 0；原始 score 不参与。
+5. 按 `(-rrf_score, best_rank, doc_id, chunk_index, chunk_id)` 排序，再截取用户 top_k。
+6. 返回统一 Chunk 结构，score 为 RRF score；内部两路 rank 仅用于测试和日志。
+7. 输出安全 `hybrid_search_completed` JSONL。成功请求自然产生两条分支日志和一条
+   Hybrid 日志；序列化失败只记安全错误，不影响成功结果。
+
+请求非法或 BGE query 超限为 422，BM25 内部索引/计算失败为 500，非法向量结果或
+跨存储 payload 冲突为 502，分支服务不可用为 503。任一路失败不返回部分结果。
+
+相同 24 Chunk、候选 20、Top 5 的真实三路对比已完成，Hybrid 指标为
+`0.917/1.000/0.944`（Hit@1/Hit@5/MRR@5）。负样本返回率仍为 1.0；此能力不提供
+拒答。完整方法、逐题排名与局限见 `docs/day11-hybrid-comparison.md`。
+
 ## 异常与安全边界
 
 backend/app/services/embedding.py 定义的安全异常：
@@ -287,7 +320,7 @@ backend/app/commands/embed_document.py 额外定义：
 - pgvector 或 PostgreSQL 向量字段；
 - 自动索引、删除同步、后台队列或 outbox；
 - score threshold 请求参数、多 doc_id 列表过滤、Qdrant payload index；
-- Hybrid、RRF、Rerank；
+- Rerank、Hybrid 接入 `/chat`、加权 RRF 或故障降级；
 - LangGraph、Agent 工具和记忆；
 - 评测、trace、Streamlit 和完整 Docker Compose。
 

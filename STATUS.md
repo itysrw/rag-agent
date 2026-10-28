@@ -1,8 +1,15 @@
 # 项目状态
 
-更新时间：2026-09-10（Asia/Shanghai）
+更新时间：2026-10-28（Asia/Shanghai）
 
 ## 当前检查点
+
+- 当前模式：按用户要求暂停功能开发，仅完成文档交接。下一会话先只读核对 Day 11
+  检查点、复述状态并列出待确认项，再等待用户指定唯一动作。
+- 当前分支为 `master`，本地 HEAD 与 `origin/master` tracking ref 均为
+  `98ff9d3860e845f47df91e366811663c71a0ec5d`；Day 10 两个提交已推送并核对实时远端。
+  2026-10-27 收尾再次查询实时远端时 GitHub 443 连接失败（21063 ms），当前实时 HEAD 待网络恢复
+  后复查；保留开工成功核对的发布证据，不用本地 tracking ref 替代该次实时结论。
 
 - Day 1-9：已实现、验收并提交；Day 9 实现提交为
   `4cccbe26688de33ff25756fc10584060c82fd03f`。
@@ -11,9 +18,45 @@
   `5928fa0034aa0378ae164fe9bd1f38e0ca27b807` 更新。Day 10 未混入旧工作区差异。
 - Day 10：独立 BM25 关键词检索已实现并通过标准、真实 PostgreSQL、真实 BGE/Qdrant
   及全量集成验收；实现提交为 `a614a365ff52b8fa087ce651614c23e2e1017c0b`。
-- `PLAN.md`：Day 10 四项任务和开发日志已按用户授权标记完成；Day 11 及以后未开始。
+- Day 11：独立 Hybrid API、标准 RRF、安全日志、测试与真实三路对比已完成；
+  2026-10-28 用户确认审查、测试与修复通过，并授权更新完成进度。
+  代码与文档尚未暂存、提交或推送；Day 12 及以后未开始。
+- `PLAN.md`：Day 11 四项复选框及开发日志已按本次授权标记完成；Day 1-11 每日任务完成，
+  Day 12 及以后未勾选。
 - `.agents/` 是须排除的无关未跟踪目录，未纳入提交。`.env`、测试临时目录、项目内
   tiktoken 缓存和 `data/models/` 均由 Git 忽略且未纳入提交。
+- 在原有 6 份未提交交接文档基础上合并更新；新增 Hybrid 服务/API/3 个测试文件、实验
+  文档和 Docker 恢复记录，`main.py` 仅注册路由。无关 `.agents/` 和 PDF 保持排除。
+
+## Day 11 已完成内容与最新证据
+
+- 两路同步顺序各召回 20，标准等权 `1/(60+rank)`；chunk_id 聚合、稳定排序后截取
+  最终严格 top_k=1..20。原始分支 score 不参与融合，响应 score 为 RRF score。
+- 分支内重复 ID、跨分支同 ID payload 冲突安全失败；任一路异常整体失败，不静默降级。
+- 独立 `POST /retrieval/hybrid/search`，共享请求/响应模型与可选 doc_id；422/500/502/503
+  错误契约、安全 JSONL、空结果和 health lazy 均覆盖。
+- 最近一次进度收口标准测试（2026-10-28）：`335 passed, 10 skipped in 57.73s`；
+  10 个跳过均为显式真实集成，未新增代码修改。
+- 实现阶段标准测试（2026-10-27）：`333 passed, 10 skipped in 14.39s`。
+- 最近一次全部真实集成记录（2026-10-27）：开启 PostgreSQL、Qdrant、本地 BGE、RAG
+  全部真实开关后 `343 passed in 35.42s`，无跳过、无失败；本轮未重跑该套件。
+  LLM 使用测试替身，无付费 API 调用。
+- 首次三路真实实验：`1 passed in 28.65s`；真实接口含 doc_id 的成功和空结果路径通过。
+  相同 24 Chunk、12 正样本、候选 20、Top 5 的向量/BM25/Hybrid 指标分别为
+  `0.750/0.917/0.812`、`0.833/1.000/0.882`、`0.917/1.000/0.944`。
+- 负样本返回率分别为 1.0/0.0/1.0；RRF 不提供拒答。逐题排名、候选重合和局限见
+  `docs/day11-hybrid-comparison.md`。临时 PostgreSQL/Qdrant 资源由 finally 清理并验证。
+- `pip check`、`compileall -q backend`、`git diff --check` 通过；保留既有 LF→CRLF 提示。
+- `/chat`、RAG `0.46`、现有两路接口、依赖、数据库 schema 和 Compose 未改动；无 Rerank。
+- Docker 已升级 4.97.0，默认 C 盘 socket 仍有访问故障；D 盘进程级运行时目录方案已
+  通过正常停止/重启及原有容器恢复验证。启动脚本 `D:\Docker\Start-DockerDesktop.ps1`，
+  完整数据盘备份仍保留；详见 `docs/docker-desktop-recovery.md`。
+- 本次完整交接仅核对文件、本地 Git、文档一致性与外部脚本/备份文件存在性；
+  未重新运行代码测试、真实集成、实时远端查询或服务探测。当前运行状态待确认，
+  不能把历史成功记录写成当前服务健康或当前代码全真实重新通过。
+- 本次实际修改 6 份核心文档：HANDOFF、STATUS、DECISIONS、TODO、README 和 architecture；
+  代码/测试、PLAN、requirements 和 Compose 的交接前后校验一致。本地失效链接 0，
+  快速摘要 275 字符，`git diff --check` 通过；无暂存、提交或推送。
 
 ## Day 10 已完成内容
 
@@ -90,5 +133,6 @@
 
 ## 唯一下一步
 
-Day 10 已收口。下一步仅在用户明确授权后开始 Day 11 Hybrid Search/RRF；不得提前实现
-Rerank、LangGraph 或后续计划能力。
+新会话只读确认 Day 11 完成检查点与 `HANDOFF.md` 一致：核对 Git/工作区、PLAN、
+带日期的测试证据和 Docker 规避方式，列出矛盾及最多 5 个步骤，然后等待用户指定动作。
+Day 11 已完成但未提交；不自动暂存、提交、推送、重启服务、重跑测试或开始 Day 12。

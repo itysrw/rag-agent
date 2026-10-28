@@ -175,12 +175,14 @@ rag-agent/
 
 ### Day 11 — Hybrid Search 融合
 
-- [ ] 实现 RRF（Reciprocal Rank Fusion）融合两路结果
-- [ ] 融合后统一排序返回 top-k
-- [ ] 对比三种检索效果：纯向量 · 纯 BM25 · Hybrid
-- [ ] 把对比结果写进 README（这是面试亮点）
+- [x] 实现 RRF（Reciprocal Rank Fusion）融合两路结果
+- [x] 融合后统一排序返回 top-k
+- [x] 对比三种检索效果：纯向量 · 纯 BM25 · Hybrid
+- [x] 把对比结果写进 README（这是面试亮点）
 
 **产出**：检索模块支持 hybrid search，有量化对比
+
+**完成确认**：2026-10-28，用户确认审查、测试与修复通过，授权标记 Day 11 每日任务完成。
 
 ---
 
@@ -386,7 +388,7 @@ rag-agent/
 | Day 8 | 已完成 | `/chat` 接入 Day 7 固定 Top 5 检索，生成层按 `0.46` 门槛过滤 Context；结构化 system/user Prompt、JSON/SSE 均返回后端去重来源；无相关内容精确拒答且不调用 LLM；模型自由文本中的来源标记由 sanitizer 清理。标准套件 181 passed、5 skipped；真实 PostgreSQL/BGE/Qdrant 端到端与真实 DeepSeek JSON/SSE/拒答三路径均验收通过 |
 | Day 9 | 已完成 | `/retrieval/search` 支持严格 `top_k=1..20`、Qdrant 内单 `doc_id` 过滤和安全单行 JSONL 检索日志；300/500/800 真实 BGE + Qdrant 实验完成，Hit@1、Hit@5、MRR@5 均为 1.0；标准套件 215 passed、7 skipped、0 warnings，实现提交 `4cccbe2` 已推送 |
 | Day 10 | 已完成 | 新增独立 `/retrieval/bm25/search`、PostgreSQL Chunk 内存索引、稳定中英文/复合编号分词、指纹刷新与安全日志；同一 24 Chunk 语料对比中，向量 Hit@1/Hit@5/MRR@5 为 0.750/0.917/0.812，BM25 为 0.833/1.000/0.882；标准套件 264 passed、9 skipped，开启全部真实集成开关后 273 passed |
-| Day 11 | | |
+| Day 11 | 已完成 | 2026-10-28 确认审查、测试与修复通过；独立 Hybrid API、标准等权 RRF（k=60、两路各召回 20）、chunk_id 去重与 payload 一致性、安全日志已完成；三路真实对比中 Hybrid Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.944；本轮标准测试 335 passed、10 skipped，2026-10-27 全部真实集成记录 343 passed；README 与实验文档已更新 |
 | Day 12 | | |
 | Day 13 | | |
 | Day 14 | | |
