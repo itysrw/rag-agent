@@ -1,18 +1,22 @@
 # 企业知识库 RAG Agent 系统
 
-企业级 RAG 问答系统项目。Day 1 至 Day 11 每日任务已完成；Day 11 于 2026-10-28 经用户确认审查、测试与修复通过。Day 9 检索优化包括：
-`POST /retrieval/search` 支持严格校验的 `top_k`（1～20，默认 5）和单文档 `doc_id`
-过滤（在 Qdrant 查询内生效），每次成功检索输出一条不含正文的单行 JSON 日志，并完成
-300/500/800 chunk size 的真实检索质量对比。用户明确授权后，`PLAN.md`
-的 Day 9 至 Day 11 复选框及开发日志均已标记完成；Day 12 及以后未开始。Day 10 新增
-`POST /retrieval/bm25/search`、确定性中英混合 tokenizer、PostgreSQL 指纹刷新和安全
-JSONL 日志；不接入 `/chat`。Day 8 `/chat` 契约（固定 Top 5 + 0.46 门控）保持不变。
-Day 11 新增独立 Hybrid API，以标准 RRF 融合两路排名。Rerank、LangGraph Agent 等仍属于
-后续目标。当前本地 `master` 与 `origin/master` 均为 `98ff9d3`；Day 10 两个提交已经推送
-并核对远端，Day 11 代码和文档尚未提交。`PLAN.md` Day 11 已按本次授权标记完成。
+企业知识库RAG问答系统。当前检查点：2026-10-29（Asia/Shanghai），**Day1–12任务已完成，继续暂停功能开发**。
+Day1–11已有发布检查点；Day11于2026-10-28独立推送b68b590并实时核验。
+当前本地分支`codex/day12-rerank`，本提交包含Day12完整实现、测试、实验和状态文档共26个文件；
+精确提交哈希以`git log -1 --format=%H`为准。本地origin/master tracking ref仍为Day11的b68b590，Day12尚未推送。
+`PLAN.md`的Day12四项及开发日志已于2026-10-29按用户授权标记完成；Day13及以后未开始。
+当前实时远端与服务现状待确认，推送或合并等待用户另行指定。
 
-当前功能开发暂停；新会话请按 [完整交接包](HANDOFF.md) 先只读核对 Day 11 检查点，
-复述状态后等待用户指定唯一动作。历史真实集成与最新标准测试需按日期分别引用。
+当前问答链路：向量/BM25各20 → RRF Hybrid20 → 固定CPU BGE Rerank5 →
+原始向量分数0.46证据门 → LLM答案及后端来源。JSON/SSE格式保持不变，无相关证据固定
+拒答且不调用LLM。向量、BM25、Hybrid、Rerank均有独立调试接口。
+
+2026-10-29本地提交前重新运行标准测试：**403 passed/12 skipped，15.93s**，覆盖ReadError重试和严格质量退化普通回归。
+最近全部真实集成仍为2026-10-28的**413 passed**；本次未重跑真实集成，保留PLAN已勾选状态。
+10月28受控评测Rerank Hit@1/Hit@5/MRR@5为0.917/1.000/0.958；保留实验原日期，不推算新全真实通过数。
+历史方法、失败案例与性能边界见[Day12报告](docs/day12-rerank-comparison.md)。
+LangGraph、记忆、前端和完整一键部署仍是后续目标。
+恢复先阅读[完整交接包](HANDOFF.md)，只读核对并复述，等待用户指定唯一动作；不自动测试、发布或开始Day13。
 
 ## 项目状态文档
 
@@ -25,6 +29,7 @@ Day 11 新增独立 Hybrid API，以标准 RRF 融合两路排名。Rerank、Lan
 - [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)
 - [Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)
 - [Day 11 三路 Hybrid 对比](docs/day11-hybrid-comparison.md)
+- [Day 12 本地 Rerank 对比](docs/day12-rerank-comparison.md)
 - [本机 Docker Desktop 恢复记录](docs/docker-desktop-recovery.md)
 
 ## 技术栈
@@ -38,7 +43,7 @@ Day 11 新增独立 Hybrid API，以标准 RRF 融合两路排名。Rerank、Lan
 | 文本向量 | SentenceTransformers · BAAI/bge-small-zh-v1.5 · CPU |
 | 关键词检索 | rank-bm25 0.2.2 · 进程内 BM25Okapi |
 | 排名融合 | 标准 RRF · 向量与 BM25 各召回 20 |
-| 后续检索增强 | Rerank |
+| 精排 | 本地 BAAI/bge-reranker-base · CPU · 固定 revision |
 | 前端 | Streamlit |
 | 部署 | Docker · Docker Compose |
 
@@ -124,7 +129,7 @@ Day 11 在相同语料上加入标准 RRF，真实三路结果见
 |------|------|
 | Source Hit Rate | - |
 | 平均延迟 | - |
-| 评测集大小 | 50 条 |
+| 评测集大小 | 50 条为 Day17 目标，尚未建立 |
 
 ## 快速启动
 
@@ -209,7 +214,8 @@ $env:RUN_QDRANT_INTEGRATION='1'
 
 ## 基础 RAG 问答
 
-Day 8 的 `/chat` 先执行 Day 7 固定 Top 5 检索，再在生成层用 `0.46` 门槛过滤 Context。
+Day8历史基础链路为固定向量Top5及生成层`0.46`门控。Day12已升级为Hybrid20→Rerank5，
+再以保留的原始`vector_score`执行同一`0.46`证据门；BM25-only候选不作为生成依据。
 该值来自三条知识库内问题和三条知识库外问题的真实 BGE/Qdrant 校准，详细分数与限制见
 [Day 8 RAG 验收记录](docs/day8-rag-smoke.md)。门槛不是可调 API 参数，也不是概率。
 
@@ -285,12 +291,28 @@ Top 5，12 个正样本得到：
 
 Hybrid 补回向量 Top 5 漏掉的 1 题，但三条负样本仍全部返回结果，不能将 RRF 当成拒答
 机制，也不能由此小样本宣称普遍优于单路。逐题排名、分组指标和局限见
-[完整实验](docs/day11-hybrid-comparison.md)。`/chat` 保持原有向量检索与生成门控，
-尚未接入 Hybrid 或 Rerank。
+[完整实验](docs/day11-hybrid-comparison.md)。Day11时`/chat`保留向量检索与生成门控；
+Day12已按独立授权升级为Hybrid→Rerank→生成，见下节。
 
 成功请求会自然产生向量、BM25、Hybrid 三条完成日志。`hybrid_search_completed` 仅记录
 query 哈希/长度、参数、候选数、结果身份、两路 rank 和 RRF score，不记录 query、正文、
 tokens、metadata、向量或原始分支 score。
+
+## 本地 Rerank 与三阶段问答（Day12）
+
+`POST /retrieval/rerank/search`只接受`query`与可选`doc_id`，固定Hybrid Top20→Rerank Top5。
+使用CPU `BAAI/bge-reranker-base`，revision为
+`2cfc18c9415c912f9d8155881c133215df768a70`；safetensors、禁止remote code、首次请求懒加载。
+query完整保留，超出模型容量安全422；只显式截断passage并记录数量。
+
+响应`score`为原始logit，同时返回`hybrid_rank`、`rerank_rank`、`rank_change`；内部向量分数
+不公开。`rank_change=hybrid_rank-rerank_rank`，正数表示上升。日志记录所有候选前后排名，
+不记录问题或正文。`/chat`已经使用该链路，JSON/SSE和可信来源结构保留。
+
+2026-10-28同一24 Chunk/12正样本历史实验：Hybrid指标0.917/1.000/0.944，Rerank为0.917/1.000/0.958。
+远程接入正确目标3→2，Hit@1没有改善；无关候选升位也有记录。3负样本经RAG证据门全部
+固定拒答，LLM零调用。实例首次装载约2.83s、热推理约6.29s/20候选，属于已缓存的同进程
+测量。完整逐题、至少三个名次变化、测试和局限见[实验报告](docs/day12-rerank-comparison.md)。
 
 ## 当前接口
 
@@ -303,6 +325,7 @@ tokens、metadata、向量或原始分支 score。
 | `POST /retrieval/search` | `{"query": "...", "top_k": 8, "doc_id": "UUID"}`（后两项可选） | 返回最多 `top_k` 个 Chunk、来源和 score，不返回向量 |
 | `POST /retrieval/bm25/search` | 同上 | 返回有词项重合的 Chunk 和 raw BM25 score；无重合为空数组 |
 | `POST /retrieval/hybrid/search` | 同上 | 两路各取 20，按 Chunk UUID 做标准 RRF，返回最终 top_k；score 为 RRF score |
+| `POST /retrieval/rerank/search` | query、可选单 UUID doc_id；不接受 top_k | Hybrid20→Rerank5，返回原始logit与前后名次 |
 
 LLM 使用 OpenAI-compatible 接口。当前默认配置为 `deepseek-v4-flash`，
 并通过 `LLM_EXTRA_BODY` 关闭思考模式；真实 `LLM_API_KEY` 只写入本地 `.env`。
@@ -319,7 +342,7 @@ instruction；文档 Chunk 保持直接编码。检索接口的 `top_k` 使用�
 返回结果会再做一次文档一致性防御校验。合法但无匹配的 `doc_id` 返回 200 空数组。
 每次成功检索输出一条单行 JSON 日志（query 摘要哈希、top_k、结果名次/Chunk ID/页码/
 分数），不记录 query 原文、Chunk 正文、metadata 或向量。score threshold 仍不开放；
-RAG 门槛只在服务内部使用，`/chat` 保持固定 Top 5。
+RAG门槛只在服务内部使用；`/chat`固定Hybrid20→Rerank5，再用原始向量证据门控。
 
 BM25 API 不依赖 BGE、Qdrant 或 LLM。它只索引 PostgreSQL `ready` 文档的 Chunk 正文，
 使用全局 BM25 IDF；可选 `doc_id` 只在排名截断前过滤，不改变全局计分体系。每次成功
@@ -343,7 +366,7 @@ JSONL 事件由 `backend/app/core/logging.py` 的 `JSONL_LOG_MARKER` 标记。�
 - [x] 检索优化（top_k · doc_id filter · 检索日志 · chunk size 真实对比）
 - [x] BM25 关键词检索（独立 API · PostgreSQL 指纹刷新 · 真实向量对比）
 - [x] Hybrid Search（标准 RRF · 两路各 20 · 独立 API · 三路真实对比）
-- [ ] Rerank（cross-encoder 或 API）
+- [x] Rerank（固定本地CrossEncoder · Hybrid20→Rerank5 · Chat证据门与真实对比）
 - [ ] LangGraph Agent 编排
 - [ ] Agent 工具调用（search / detail / list）
 - [ ] 多轮对话记忆

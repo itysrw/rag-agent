@@ -35,6 +35,12 @@ from backend.app.services.rag import (
     RAGService,
     RAGSource,
 )
+from backend.app.services.bm25 import BM25IndexError, BM25UnavailableError
+from backend.app.services.hybrid import HybridError, HybridResultError
+from backend.app.services.reranker import (
+    RerankedChunk, RerankOutcome, RerankerInputError, RerankerResultError,
+    RerankerUnavailableError,
+)
 
 FABRICATED_REFERENCE = "[fake.pdf page 99] [S99]"
 FABRICATED_REFERENCE_MARKERS = ("fake.pdf", "page 99", "[S99]")
@@ -109,10 +115,10 @@ class StubRAGService:
 class FixedRetrievalService:
     """Return one trusted source without contacting Embedding or Qdrant."""
 
-    def search(self, question: str) -> list[RetrievedChunk]:
+    def search(self, question: str) -> RerankOutcome:
         del question
-        return [
-            RetrievedChunk(
+        return RerankOutcome((
+            RerankedChunk(
                 chunk_id=uuid4(),
                 doc_id=uuid4(),
                 chunk_index=0,
@@ -121,8 +127,10 @@ class FixedRetrievalService:
                 filename="real.pdf",
                 metadata={},
                 score=0.9,
+                hybrid_score=0.02, hybrid_rank=1, rerank_rank=1, rank_change=0,
+                vector_score=0.9, vector_rank=1, bm25_rank=1,
             )
-        ]
+        ,), (), 1, 0)
 
 
 class FabricatingLLMClient:
@@ -354,6 +362,13 @@ def test_chat_returns_503_without_llm_configuration(
             502,
             "The retrieval service returned an invalid result.",
         ),
+        (BM25UnavailableError("private database"), 503, "The retrieval service is unavailable."),
+        (BM25IndexError("private index"), 500, "The retrieval service failed."),
+        (HybridError("private fusion"), 500, "The retrieval service failed."),
+        (HybridResultError("private conflict"), 502, "The retrieval service returned an invalid result."),
+        (RerankerUnavailableError("private model"), 503, "The retrieval service is unavailable."),
+        (RerankerResultError("private scores"), 502, "The retrieval service returned an invalid result."),
+        (RerankerInputError("private query"), 422, "The chat message exceeds the reranker model limit."),
     ],
 )
 def test_chat_maps_retrieval_failures_before_streaming(

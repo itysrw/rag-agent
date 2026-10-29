@@ -95,6 +95,8 @@ def test_hybrid_api_returns_shared_payload_with_rrf_score(
     assert response.json()["results"][0]["score"] == 0.032522
     assert "vector_rank" not in response.json()["results"][0]
     assert "bm25_rank" not in response.json()["results"][0]
+    assert "vector_score" not in response.json()["results"][0]
+    assert "bm25_score" not in response.json()["results"][0]
 
 
 def test_hybrid_api_passes_top_k_and_doc_id(

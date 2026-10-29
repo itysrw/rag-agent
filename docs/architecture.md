@@ -1,6 +1,6 @@
 # 架构说明
 
-更新时间：2026-10-28（Asia/Shanghai）
+更新时间：2026-10-29（Asia/Shanghai）
 
 本文严格区分：
 
@@ -8,12 +8,21 @@
   `f3ca9ec`，计划状态提交为 `5928fa0`；
 - 已实现、真实验收并推送的 Day 10 独立 BM25；实现提交为 `a614a36`，计划状态
   提交为 `98ff9d3`。两提交已核对远端；
-- 工作区中已实现、通过真实三路对比的 Day 11 独立 Hybrid/RRF；2026-10-28 用户确认
-  审查、测试与修复通过，已授权在 `PLAN.md` 标记完成，尚未提交；
-- 尚未实现的 Day 12 及以后目标。
+- Day11独立Hybrid/RRF已完成并发布为b68b590，2026-10-28实时核验；
+- Day12本地Rerank与Chat三阶段链路已完成，2026-10-29用户确认并授权勾选PLAN四项和开发日志；
+  10月29提交前标准403/12通过（15.93s），最近全真实为10月28的413；本提交位于codex/day12-rerank，尚未推送；
+- 尚未实现的Day13及以后目标，任务及复选框保持未开始。
 
-当前功能开发暂停，恢复入口为 [完整交接包](../HANDOFF.md)。新会话先只读确认 Day 11
-检查点；完成标记不等于已提交，也不授权自动开始 Day 12。当前运行时状态待确认。
+恢复入口为[完整交接包](../HANDOFF.md)。功能开发暂停，先只读恢复并复述，等待用户指定唯一动作。
+Day12已按用户要求纳入本地提交，后续不自动推送、运行测试或开始Day13。PG/Qdrant正常是10月28历史记录；
+10月29运行时、实时远端与缓存现状待确认，独立后端常驻状态也未确认。
+
+当前源码包含10月29的后续变更线索：模型下载有限重试包括httpx.ReadError；
+test_reranker.py新增对应退避回归；test_rerank_comparison_integration.py的
+_assert_quality_acceptance严格核对聚合指标、逐题排名、20候选与0截断，普通退化回归
+test_quality_acceptance_rejects_all_correct_results_falling_to_fifth不随真实集成跳过。
+这两项后续普通回归已随2026-10-29标准403/12通过；作者/独立审查记录未补查。
+本地提交前已重跑标准403/12（15.93s），未重跑真实集成；413按10月28记录引用。PLAN完成标记保持不变，仅同步Git状态说明。
 
 ## 当前实现架构
 
@@ -27,15 +36,19 @@ flowchart LR
     api --> retrieval_api["POST /retrieval/search<br/>top_k 1..20 默认 5 · 可选 doc_id"]
     api --> bm25_api["POST /retrieval/bm25/search<br/>独立关键词检索"]
     api --> hybrid_api["POST /retrieval/hybrid/search"]
+    api --> rerank_api["POST /retrieval/rerank/search"]
+    rerank_api --> reranked["RerankedRetrievalService<br/>固定Hybrid20→Rerank5"]
+    reranked --> hybrid
     hybrid_api --> hybrid["HybridRetrievalService<br/>向量后 BM25 · 各取 20"]
-    hybrid --> query_embedding
+    hybrid --> query_embedding["embed_query()<br/>固定BGE查询instruction"]
     hybrid --> bm25_service
     hybrid --> rrf["chunk_id 聚合 + payload 一致性<br/>等权 RRF k=60 · 稳定排序 · 最终 top_k"]
     rrf --> hybrid_api
 
     chat --> rag["RAGService.prepare()<br/>检索在 SSE 建立前完成"]
-    rag --> query_embedding["embed_query()<br/>固定 BGE instruction"]
-    gate["生成层相关性门控<br/>固定 0.46"]
+    rag --> reranked
+    rrf --> reranker["本地BGE CrossEncoder<br/>CPU / safetensors / Identity logit<br/>完整query / passage-only截断 / Top5"]
+    reranker --> gate["生成层证据门<br/>原始vector_score≥0.46"]
     gate -->|"无 Context"| refusal["固定拒答<br/>不调用 LLM"]
     gate -->|"有 Context"| prompt["system 规则 + user JSON Context"]
     prompt --> llm["LLMClient messages<br/>OpenAI-compatible"]
@@ -62,7 +75,6 @@ flowchart LR
     retrieval_api --> query_embedding
     query_embedding --> qdrant
     qdrant --> results["Top k 结果<br/>payload + score · 无向量<br/>doc_id filter 在 Qdrant 内执行"]
-    results --> gate
 
     chunks --> ordered
     chunks --> bm25_loader["ready Chunk 确定性快照<br/>每次请求计算 SHA-256 指纹"]
@@ -85,7 +97,7 @@ flowchart LR
 - 模型正文中的文件名、页码和 `SNN` 类来源标记在完整/流式输出中清理；客户端只信任
   后端结构化 sources。
 - RAG 门槛不进入 `/retrieval/search`；`/chat` 不使用 Day 9 的 top_k/doc_id 参数，
-  仍固定 Top 5 + `0.46` 门控。
+  当前固定Hybrid20→Rerank5，再对原始vector_score使用`0.46`门控。
 - 检索日志只记录 query 摘要哈希与结果身份（rank/chunk_id/doc_id/filename/page/score），
   不记录 query 原文、Chunk 正文、metadata 或向量。
 - `backend/app/core/logging.py` 用 `JSONL_LOG_MARKER` 区分机器事件：普通 human handler
@@ -94,7 +106,7 @@ flowchart LR
 - BM25 与向量检索是两个独立接口；Day 10 不融合结果、不比较原始 score，也不接入
   `/chat` 或 RAG `0.46` 门控。
 - Day 11 以第三个独立接口编排两路，按 rank 融合；任何分支失败整体失败，跨存储同 ID
-  payload 冲突安全失败。融合不接入 `/chat`，也不把 RRF score 送入 `0.46` 门控。
+  payload 冲突安全失败。Day12按独立授权接入/chat；RRF与logit均不进入`0.46`门控。
 
 ## 当前 HTTP 接口
 
@@ -107,8 +119,9 @@ flowchart LR
 | POST /retrieval/search | 已实现，接收 query、可选严格 top_k（1..20，默认 5）和可选 doc_id，不返回向量 |
 | POST /retrieval/bm25/search | 已实现，复用同一请求/响应结构，返回 raw BM25 score，无词项重合为空数组 |
 | POST /retrieval/hybrid/search | 已实现，两路固定各取 20，标准 RRF 返回最终 top_k，score 为 RRF score |
+| POST /retrieval/rerank/search | 已实现，仅query/doc_id，Hybrid20→Rerank5，返回logit及前后名次 |
 
-应用启动和 GET /health 均不连接 PostgreSQL、Qdrant、BGE 或 LLM。
+应用启动和GET /health均不连接PostgreSQL、Qdrant、BGE、Reranker或LLM。
 
 ## 文档上传流程
 
@@ -200,9 +213,12 @@ BGE 的 max_seq_length，因此必须保留独立的推理前长度检查。
 不负责确认 PostgreSQL 文档资源是否存在，因此不引入 404。
 
 Day 7 原始实现不含可调 top_k 和 doc_id filter；Day 9 增加这些参数。Day 10 BM25 与
-Day 11 Hybrid 是下文所述独立链路；score threshold 请求参数和 Rerank 尚未实现。
+Day 11 Hybrid 是下文所述独立链路；score threshold 请求参数尚未实现，Rerank已于Day12完成。
 
-## Day 8 基础 RAG 流程
+## Day 8 基础 RAG 历史流程
+
+下述为Day8基础行为；Day12已将检索替换为Hybrid20→Rerank5并仅保留原始向量证据门，
+当前链路见Day12章节。Prompt、来源、拒答和JSON/SSE规则保留。
 
 1. `/chat` 校验并规范化 message。
 2. `RAGService.prepare()` 调用 Day 7 `RetrievalService.search()`，固定取得最多 5 个结果。
@@ -272,6 +288,21 @@ Day 11 Hybrid 是下文所述独立链路；score threshold 请求参数和 Rera
 `0.917/1.000/0.944`（Hit@1/Hit@5/MRR@5）。负样本返回率仍为 1.0；此能力不提供
 拒答。完整方法、逐题排名与局限见 `docs/day11-hybrid-comparison.md`。
 
+## Day12本地重排与Chat
+
+1. RerankedRetrievalService.search只接受query/doc_id，固定调用Hybrid top_k=20。
+2. RerankerService首次使用时取得固定revision的六个安全文件，CPU/safetensors加载；
+   空候选不加载模型，配置无效只在请求时安全503。
+3. query完整成对预检；PassageOnlyTokenizer只截passage并记录数量，超长query安全422。
+4. 显式Identity得到原始logit；候选按位置映射、数量/唯一性/有限性校验，稳定排序取5。
+5. RerankOutcome保留全部候选movement与耗时；独立HTTP只公开Top5与名次字段。
+6. RAG在Top5上仅以vector_score>=0.46作证据门；BM25-only排除，无通过项固定拒答。
+7. 日志不含query/正文/metadata；422/500/502/503分层，任一分支失败不降级。
+
+2026-10-28历史真实同语料Hit@1/Hit@5/MRR@5=0.917/1.000/0.958，3负样本拒答零LLM；CPU热推理约6.29s，
+小样本和无关候选升位的局限见[实验报告](day12-rerank-comparison.md)。
+原Day11技术决策保留，Day12决策为D-050至D-053。
+
 ## 异常与安全边界
 
 backend/app/services/embedding.py 定义的安全异常：
@@ -306,6 +337,7 @@ backend/app/commands/embed_document.py 额外定义：
 - EmbeddingSettings：EMBEDDING_ 前缀；模型名、revision、维度和设备使用 Literal 固定。
 - QdrantSettings：QDRANT_ 前缀；本地 REST URL、collection、timeout 和最大 32 条 upsert batch。
 - RAGSettings：RAG_ 前缀；生成层固定相关性门槛，范围 `0..1`。
+- RerankerSettings：RERANKER_前缀；固定模型/revision、CPU/512、默认batch4、懒加载安全权重。
 - sentence-transformers==5.3.0 为 Day 6 新依赖。
 - qdrant-client==1.18.0 为 Day 7 固定依赖。
 - rank-bm25==0.2.2 为 Day 10 固定依赖。
@@ -320,7 +352,7 @@ backend/app/commands/embed_document.py 额外定义：
 - pgvector 或 PostgreSQL 向量字段；
 - 自动索引、删除同步、后台队列或 outbox；
 - score threshold 请求参数、多 doc_id 列表过滤、Qdrant payload index；
-- Rerank、Hybrid 接入 `/chat`、加权 RRF 或故障降级；
+- 加权RRF或故障降级（本地Rerank与Hybrid接入/chat已于Day12完成）；
 - LangGraph、Agent 工具和记忆；
 - 评测、trace、Streamlit 和完整 Docker Compose。
 

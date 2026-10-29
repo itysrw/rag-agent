@@ -1,4 +1,4 @@
-"""Day 8 retrieval-augmented generation orchestration."""
+"""Reranked RAG preserving vector evidence, prompts, sources, and refusal."""
 
 from __future__ import annotations
 
@@ -17,7 +17,11 @@ from backend.app.services.llm import (
     get_llm_client,
 )
 from backend.app.services.qdrant_store import RetrievedChunk
-from backend.app.services.retrieval import RetrievalService, get_retrieval_service
+from backend.app.services.reranker import (
+    RerankedChunk,
+    RerankedRetrievalService,
+    get_reranked_retrieval_service,
+)
 
 NO_RELEVANT_KNOWLEDGE = "知识库中没有相关信息"
 RAG_SYSTEM_PROMPT = """你是企业知识库问答助手。
@@ -91,24 +95,26 @@ class RAGAnswer:
 
 
 def select_relevant_chunks(
-    chunks: Sequence[RetrievedChunk],
+    chunks: Sequence[RerankedChunk],
     *,
     min_score: float,
-) -> tuple[RetrievedChunk, ...]:
-    """Keep only results meeting the fixed generation-layer score gate."""
+) -> tuple[RerankedChunk, ...]:
+    """Gate only on retained vector Cosine evidence, never RRF or logits."""
     if not math.isfinite(min_score) or not 0.0 <= min_score <= 1.0:
         raise ValueError("min_score must be between zero and one")
 
-    relevant: list[RetrievedChunk] = []
+    relevant: list[RerankedChunk] = []
     for chunk in chunks:
-        if not math.isfinite(chunk.score):
+        if chunk.vector_score is None:
+            continue
+        if isinstance(chunk.vector_score, bool) or not math.isfinite(chunk.vector_score):
             raise ValueError("retrieval scores must be finite")
-        if chunk.score >= min_score:
+        if chunk.vector_score >= min_score:
             relevant.append(chunk)
     return tuple(relevant)
 
 
-def build_sources(chunks: Sequence[RetrievedChunk]) -> tuple[RAGSource, ...]:
+def build_sources(chunks: Sequence[RerankedChunk | RetrievedChunk]) -> tuple[RAGSource, ...]:
     """Deduplicate filename/page sources while preserving retrieval order."""
     sources: list[RAGSource] = []
     seen: set[tuple[str, int]] = set()
@@ -123,7 +129,7 @@ def build_sources(chunks: Sequence[RetrievedChunk]) -> tuple[RAGSource, ...]:
 
 def build_rag_messages(
     question: str,
-    chunks: Sequence[RetrievedChunk],
+    chunks: Sequence[RerankedChunk | RetrievedChunk],
 ) -> tuple[LLMMessage, ...]:
     """Render untrusted Chunk data as JSON in a user-role message."""
     normalized_question = question.strip()
@@ -162,7 +168,7 @@ class RAGService:
 
     def __init__(
         self,
-        retrieval_service: RetrievalService,
+        retrieval_service: RerankedRetrievalService,
         llm_client: LLMClient,
         settings: RAGSettings,
     ) -> None:
@@ -181,7 +187,7 @@ class RAGService:
         if not normalized_question:
             raise ValueError("question must not be blank")
 
-        retrieved = self._retrieval_service.search(normalized_question)
+        retrieved = self._retrieval_service.search(normalized_question).results
         relevant = select_relevant_chunks(
             retrieved,
             min_score=self._settings.min_relevance_score,
@@ -464,9 +470,9 @@ def _is_word_character(character: str | None) -> bool:
 
 @lru_cache
 def get_rag_service() -> RAGService:
-    """Return one lazy process-wide Day 8 RAG service."""
+    """Return one lazy process-wide Hybrid/Rerank RAG service."""
     return RAGService(
-        get_retrieval_service(),
+        get_reranked_retrieval_service(),
         get_llm_client(),
         get_rag_settings(),
     )

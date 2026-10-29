@@ -8,6 +8,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
+from numbers import Real
 from typing import Any
 from uuid import UUID
 
@@ -56,6 +57,8 @@ class HybridRetrievedChunk:
     score: float
     vector_rank: int | None
     bm25_rank: int | None
+    vector_score: float | None = None
+    bm25_score: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +73,7 @@ class _RankedPayload:
     filename: str
     metadata: dict[str, JSONScalar]
     rank: int
+    branch_score: float
 
 
 def reciprocal_rank_fusion(
@@ -122,6 +126,8 @@ def reciprocal_rank_fusion(
                 score=score,
                 vector_rank=vector_rank,
                 bm25_rank=bm25_rank,
+                vector_score=None if vector_item is None else vector_item.branch_score,
+                bm25_score=None if bm25_item is None else bm25_item.branch_score,
             )
         )
 
@@ -213,6 +219,7 @@ def _validated_payload(result: Any, *, rank: int) -> _RankedPayload:
         page = result.page
         filename = result.filename
         metadata = result.metadata
+        branch_score = result.score
     except AttributeError as exc:
         raise HybridResultError(
             "A retrieval branch returned an invalid Chunk payload."
@@ -233,6 +240,12 @@ def _validated_payload(result: Any, *, rank: int) -> _RankedPayload:
     if not isinstance(filename, str) or not filename.strip():
         raise HybridResultError("A retrieval branch returned an invalid filename.")
     validated_metadata = _validated_metadata(metadata)
+    if (
+        isinstance(branch_score, bool)
+        or not isinstance(branch_score, Real)
+        or not math.isfinite(branch_score)
+    ):
+        raise HybridResultError("A retrieval branch returned an invalid score.")
     return _RankedPayload(
         chunk_id=chunk_id,
         doc_id=doc_id,
@@ -242,6 +255,7 @@ def _validated_payload(result: Any, *, rank: int) -> _RankedPayload:
         filename=filename,
         metadata=validated_metadata,
         rank=rank,
+        branch_score=float(branch_score),
     )
 
 

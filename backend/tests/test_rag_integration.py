@@ -20,6 +20,7 @@ from backend.app.core.config import (
     PROJECT_ROOT,
     QdrantSettings,
     RAGSettings,
+    RerankerSettings,
     get_chunking_settings,
     get_document_settings,
 )
@@ -32,6 +33,9 @@ from backend.app.services.llm import LLMMessage
 from backend.app.services.qdrant_store import QdrantVectorStore
 from backend.app.services.rag import NO_RELEVANT_KNOWLEDGE, RAGService
 from backend.app.services.retrieval import RetrievalService
+from backend.app.services.bm25 import BM25Service, load_bm25_chunks
+from backend.app.services.hybrid import HybridRetrievalService
+from backend.app.services.reranker import RerankedRetrievalService, RerankerService
 from backend.tests.pdf_fixtures import build_text_pdf
 
 pytestmark = pytest.mark.integration
@@ -62,6 +66,7 @@ class StubMessagesLLMClient:
             "RUN_POSTGRES_INTEGRATION",
             "RUN_LOCAL_EMBEDDING_INTEGRATION",
             "RUN_QDRANT_INTEGRATION",
+            "RUN_RERANKER_INTEGRATION",
         )
     ),
     reason="enable real PostgreSQL, local BGE, Qdrant, and RAG integration",
@@ -105,7 +110,14 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
     )
     llm_client = StubMessagesLLMClient()
     rag_service = RAGService(
-        RetrievalService(embedding_client, vector_store),
+        RerankedRetrievalService(
+            HybridRetrievalService(
+                RetrievalService(embedding_client, vector_store),
+                BM25Service(lambda: tuple(chunk for chunk in load_bm25_chunks()
+                                          if chunk.doc_id == document_id)),
+            ),
+            RerankerService(RerankerSettings(_env_file=None)),
+        ),
         llm_client,  # type: ignore[arg-type]
         RAGSettings(_env_file=None, min_relevance_score=0.46),
     )

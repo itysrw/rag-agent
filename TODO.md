@@ -1,65 +1,41 @@
 # 后续任务
 
-更新时间：2026-10-28（Asia/Shanghai）
+更新时间：2026-10-29（Asia/Shanghai）
+Day1–12任务已完成。用户已确认Day12完成，计划状态已同步，继续暂停功能开发。本提交收录Day12的26个相关文件；提交前已重跑标准测试，不操作服务。
 
-## 当前唯一下一步：新会话只读恢复
+## Day12完成清单
 
-功能开发已暂停。按 `HANDOFF.md` 的 A/B/C 核对 Day 11 完成检查点：本地 Git、15 个
-相关未提交文件、空暂存区、PLAN 已完成、最新标准 335/10 与历史真实集成 343 的区别。
-先复述状态，列矛盾/待确认项及最多 5 个步骤，再等待用户指定唯一动作。
-本轮交接不重跑代码测试、不探测/重启服务、不查询远端、不改代码或 PLAN、不执行 Git 写操作。
+- [x] 固定本地CPU/safetensors BGE Reranker、惰性加载与有限安全下载。
+- [x] Hybrid20→Rerank5、完整query保护、显式passage截断、稳定排序与完整movement日志。
+- [x] 独立rerank API及Chat原始vector_score 0.46证据门、JSON/SSE/后端来源/拒答保留。
+- [x] ReadError指数退避及质量退化普通回归，已随2026-10-29标准套件通过。
+- [x] 2026-10-29已执行标准403 passed/12 skipped（45.66s），无失败、无付费调用。
+- [x] 2026-10-28历史真实集成413 passed；同语料Hit@5=1.000、MRR@5=0.958、3负样本拒答零LLM。
+- [x] 2026-10-29按用户确认勾选PLAN Day12四项并更新开发日志，相关状态文档同步。
 
-## P0：Day 11 每日任务（已完成，Git 发布待用户指定）
+- [x] 按用户要求独立本地提交Day12共26个相关文件；提交前标准403 passed/12 skipped（15.93s）。
 
-1. 独立 Hybrid API、标准等权 RRF k=60、两路候选 20、chunk_id 一致性和安全日志已完成。
-2. 真实三路对比已完成：Hybrid Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.944，补回向量
-   Top 5 漏检 1 题；负样本仍全部返回，局限与逐题排名已记录。
-3. 2026-10-28 标准测试 `335 passed/10 skipped`；2026-10-27 真实集成记录 `343 passed`，
-   本轮未重跑真实集成；既有静态检查通过。
-4. 6 份既有交接文档合并更新，新代码/测试/实验文档仍未暂存、提交或推送。
-5. 2026-10-28 用户确认审查、测试与修复通过；已授权勾选 `PLAN.md` Day 11 四项任务，
-   并将开发日志标记为已完成。Git 发布与 Day 12 仍待用户指定，不自动开始。
-6. Docker 4.97.0 已安装；本机通过 `D:\Docker\Start-DockerDesktop.ps1` 在 D 盘创建运行时
-   目录恢复启动，已验证重启与原有容器。默认 C 盘 socket 故障的长期修复另行处理。
+## 等待用户指定
 
-## P0：Day 10 本地实现与验收（已完成）
+- [ ] 是否推送或合并Day12；本地提交尚未推送，精确哈希用git log -1 --format=%H核验。
+- [ ] Day13 LangGraph的独立范围与开始时间；当前未开始，不自动推进。
+- [ ] 若用户需要当前全部真实组合的再次验收，按指定范围执行并记录新日期/计数；
+  现有最新全真实证据仍为2026-10-28的413，本次不重复运行。
+- [ ] 按具体任务需要再核查实时远端、运行时和缓存；不为文档交接操作服务。
 
-1. `rank-bm25==0.2.2`、确定性中英混合 tokenizer、PostgreSQL corpus loader、SHA-256
-   指纹刷新、进程内 `BM25Okapi` 和独立 API 已实现。
-2. `POST /retrieval/bm25/search` 复用严格 query/top_k/doc_id 契约；token-overlap 门控、
-   Top-K 前 doc_id 过滤、有限 raw score 和安全 JSONL 已覆盖。
-3. Day 10 真实模块合并验收 `4 passed`；覆盖真实 PostgreSQL 刷新/过滤及相同 24 个
-   Chunk ID 的真实向量/BM25 对比。
-4. 最终标准套件 `264 passed/9 skipped`；开启全部真实集成开关后 `273 passed`；
-   `pip check`、`compileall`、`git diff --check` 通过。
-5. `docs/day10-vector-vs-bm25.md` 已记录逐题排名、聚合指标、负样本返回率和局限。
+## 新会话恢复顺序（最多5步）
 
-## P1：Day 10 检查点（已完成）
+1. 阅读HANDOFF A/B/C及相关文档，确认Day12已完成、PLAN已勾选、Day13未开始。
+2. 只读核对codex/day12-rerank的Day12提交、Day11 tracking ref b68b590、26个提交内文件；相关改动应为0、暂存区应为空，无关untracked保留。
+3. 区分2026-10-29提交前标准403/12（15.93s）和2026-10-28全真实413，保留运行时/远端未知项。
+4. 复述当前实现、计划、Git发布和证据边界，列必要待确认项。
+5. 等待用户指定唯一下一动作，不自动推送、合并或开始Day13。
 
-- Day 10 实现提交为 `a614a365ff52b8fa087ce651614c23e2e1017c0b`。
-- `PLAN.md` Day 10 四项复选框与开发日志已更新；Day 11 于 2026-10-28 单独授权标记完成。
-- `.env`、`.agents/`、测试临时目录、项目内 tiktoken 缓存和 `data/models/` 均未纳入提交。
+## 长期延后
 
-## P1b：Day 10 发布状态（已完成）
+自然长文/表格/多跳评测、CPU batch2/4/8与p50/p95/QPS、BM25扩展性/多worker、
+PostgreSQL/Qdrant outbox/删除同步、BM25-only可信生成证据、Docker默认socket/历史pytest ACL、
+LF/CRLF与未来迁移方案。不得为通过而改问题/expected_phrase/基线或隐藏失败。
 
-- Day 11 开工门禁中已推送 `a614a36`、`98ff9d3`，并独立查询实时远端确认。
-- 本地 HEAD 与 `origin/master` 均为 `98ff9d3860e845f47df91e366811663c71a0ec5d`。
-- 该发布只包含 Day 10 已有提交，不包含 Day 11 工作区或原有未提交交接文档。
-- 收尾 `git ls-remote` 再次遇到 GitHub 443 连接失败；网络恢复后只读复查实时 HEAD，
-  不把 tracking ref 当作实时远端结论。
-
-## P2：Day 12 及以后（未开始）
-
-Day 11 独立 Hybrid/RRF 已完成；不得自动开始 Rerank、Hybrid 接入 /chat、统一 mode、
-score 融合、LangGraph、多轮记忆或 trace。Day 12 需用户明确指定。
-
-## 延后且待确认
-
-- 用更大、更难且接近自然企业文档分布的评测集复验 BM25 tokenizer 与向量/BM25 排名；
-- 当前每请求全量扫描 PostgreSQL 指纹的扩展性方案，以及多 worker 索引一致性；
-- PostgreSQL/Qdrant outbox、删除同步和一致性修复；
-- 中文停用词、领域词典或替代 tokenizer 是否值得在后续评测后引入；
-- 用更大正负样本集重新校准 `RAG_MIN_RELEVANCE_SCORE`；
-- `%TEMP%` pytest ACL、`.pytest_cache` 和 LF→CRLF 根因；
-- 真实 DeepSeek 四题全覆盖是否补充（需新付费授权）；
-- 首次表结构变化时是否引入 Alembic。
+保留提交后的工作区与所有用户修改；不读取或提交.env、凭据、无关.agents/、PDF或模型/测试缓存，
+不使用git add .。恢复入口：[HANDOFF.md](HANDOFF.md)。

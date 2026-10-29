@@ -13,6 +13,14 @@ from backend.app.services.embedding import (
     EmbeddingError,
     EmbeddingInputTooLongError,
 )
+from backend.app.services.bm25 import BM25Error, BM25UnavailableError
+from backend.app.services.hybrid import HybridError, HybridResultError
+from backend.app.services.reranker import (
+    RerankerError,
+    RerankerInputError,
+    RerankerResultError,
+    RerankerUnavailableError,
+)
 from backend.app.services.llm import (
     LLMConfigurationError,
     LLMServiceError,
@@ -132,6 +140,14 @@ def chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The retrieval service is unavailable.",
         ) from exc
+    except RerankerInputError as exc:
+        raise HTTPException(422, "The chat message exceeds the reranker model limit.") from exc
+    except (HybridResultError, RerankerResultError) as exc:
+        raise HTTPException(502, "The retrieval service returned an invalid result.") from exc
+    except (BM25UnavailableError, RerankerUnavailableError) as exc:
+        raise HTTPException(503, "The retrieval service is unavailable.") from exc
+    except (BM25Error, HybridError, RerankerError) as exc:
+        raise HTTPException(500, "The retrieval service failed.") from exc
 
     if request.stream:
         return StreamingResponse(

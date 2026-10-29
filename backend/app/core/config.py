@@ -17,6 +17,8 @@ EMBEDDING_DIMENSION = 512
 EMBEDDING_MAX_BATCH_SIZE = 32
 QDRANT_MAX_BATCH_SIZE = 32
 RAG_MIN_RELEVANCE_SCORE = 0.46
+RERANKER_MODEL_NAME = "BAAI/bge-reranker-base"
+RERANKER_MODEL_REVISION = "2cfc18c9415c912f9d8155881c133215df768a70"
 
 
 class Settings(BaseSettings):
@@ -203,6 +205,42 @@ class QdrantSettings(BaseSettings):
         return f"http://{self.host}:{self.port}"
 
 
+class RerankerSettings(BaseSettings):
+    """Pinned CPU CrossEncoder settings, resolved only on first use."""
+
+    model_name: Literal["BAAI/bge-reranker-base"] = RERANKER_MODEL_NAME
+    model_revision: Literal[
+        "2cfc18c9415c912f9d8155881c133215df768a70"
+    ] = RERANKER_MODEL_REVISION
+    device: Literal["cpu"] = "cpu"
+    batch_size: int = Field(default=4, ge=1, le=8)
+    max_length: Literal[512] = 512
+    cache_dir: Path = PROJECT_ROOT / "data" / "models"
+    download_max_retries: int = Field(default=3, ge=0, le=3)
+    retry_base_delay_seconds: float = Field(default=1.0, gt=0)
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="RERANKER_",
+        extra="ignore",
+    )
+
+    @field_validator("cache_dir", mode="after")
+    @classmethod
+    def resolve_cache_dir(cls, value: Path) -> Path:
+        """Anchor relative cache paths at the project root."""
+        return (PROJECT_ROOT / value).resolve()
+
+    @field_validator("batch_size", mode="before")
+    @classmethod
+    def reject_boolean_batch_size(cls, value: Any) -> Any:
+        """Allow environment integers without accepting boolean batch sizes."""
+        if isinstance(value, bool):
+            raise ValueError("batch_size must be an integer")
+        return value
+
+
 class RAGSettings(BaseSettings):
     """Generation-layer relevance gate for the Day 8 RAG flow."""
 
@@ -266,3 +304,9 @@ def get_qdrant_settings() -> QdrantSettings:
 def get_rag_settings() -> RAGSettings:
     """Return cached Day 8 RAG relevance settings."""
     return RAGSettings()
+
+
+@lru_cache
+def get_reranker_settings() -> RerankerSettings:
+    """Return cached local reranker settings without loading its model."""
+    return RerankerSettings()

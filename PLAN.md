@@ -188,12 +188,14 @@ rag-agent/
 
 ### Day 12 — Rerank
 
-- [ ] 选择方案：API rerank（Cohere / 硅基流动）或本地 cross-encoder（`BAAI/bge-reranker-base`）
-- [ ] 对 top-20 检索结果重排，输出 top-5
-- [ ] 记录 rerank 前后排名变化
-- [ ] 完整检索链路：query → hybrid search (top-20) → rerank (top-5) → answer
+- [x] 选择方案：API rerank（Cohere / 硅基流动）或本地 cross-encoder（`BAAI/bge-reranker-base`）
+- [x] 对 top-20 检索结果重排，输出 top-5
+- [x] 记录 rerank 前后排名变化
+- [x] 完整检索链路：query → hybrid search (top-20) → rerank (top-5) → answer
 
 **产出**：三阶段检索链路跑通，rerank 前后有对比
+
+**完成确认**：2026-10-29，用户确认 Day 12 已完成，授权更新四项任务与开发日志。标准回归 403 passed、12 skipped；最近全真实集成记录为 2026-10-28 的 413 passed。Day12本地提交纳入本检查点，尚未推送；Day 13 未开始。
 
 ---
 
@@ -389,7 +391,7 @@ rag-agent/
 | Day 9 | 已完成 | `/retrieval/search` 支持严格 `top_k=1..20`、Qdrant 内单 `doc_id` 过滤和安全单行 JSONL 检索日志；300/500/800 真实 BGE + Qdrant 实验完成，Hit@1、Hit@5、MRR@5 均为 1.0；标准套件 215 passed、7 skipped、0 warnings，实现提交 `4cccbe2` 已推送 |
 | Day 10 | 已完成 | 新增独立 `/retrieval/bm25/search`、PostgreSQL Chunk 内存索引、稳定中英文/复合编号分词、指纹刷新与安全日志；同一 24 Chunk 语料对比中，向量 Hit@1/Hit@5/MRR@5 为 0.750/0.917/0.812，BM25 为 0.833/1.000/0.882；标准套件 264 passed、9 skipped，开启全部真实集成开关后 273 passed |
 | Day 11 | 已完成 | 2026-10-28 确认审查、测试与修复通过；独立 Hybrid API、标准等权 RRF（k=60、两路各召回 20）、chunk_id 去重与 payload 一致性、安全日志已完成；三路真实对比中 Hybrid Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.944；本轮标准测试 335 passed、10 skipped，2026-10-27 全部真实集成记录 343 passed；README 与实验文档已更新 |
-| Day 12 | | |
+| Day 12 | 已完成 | 2026-10-29 用户确认完成并授权更新状态；固定本地 CPU BGE Reranker、Hybrid Top20→Rerank Top5、独立重排 API、Chat 原始向量 0.46 证据门及完整排名日志已实现；历史真实对比 Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.958；本次标准回归 403 passed、12 skipped，覆盖 ReadError 重试及质量退化回归；2026-10-28 全真实记录 413 passed；本地提交纳入本检查点，尚未推送，Day13未开始 |
 | Day 13 | | |
 | Day 14 | | |
 | Day 15 | | |

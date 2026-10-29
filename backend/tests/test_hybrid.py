@@ -84,6 +84,10 @@ def test_rrf_uses_one_based_ranks_and_accumulates_both_branches() -> None:
         bm25_only.chunk_id,
     ]
     assert results[0].score == pytest.approx(1 / 62 + 1 / 61)
+    assert results[0].vector_score == shared.score
+    assert results[0].bm25_score == 3.7
+    assert results[1].bm25_score is None
+    assert results[2].vector_score is None
     assert (results[0].vector_rank, results[0].bm25_rank) == (2, 1)
     assert results[1].score == pytest.approx(1 / 61)
     assert results[2].score == pytest.approx(1 / 62)

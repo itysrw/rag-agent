@@ -15,6 +15,7 @@ from backend.app.api.documents import router as documents_router
 from backend.app.api.health import router as health_router
 from backend.app.api.hybrid import router as hybrid_router
 from backend.app.api.retrieval import router as retrieval_router
+from backend.app.api.rerank import router as rerank_router
 from backend.app.core.config import get_settings
 from backend.app.core.logging import configure_logging
 
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     application.include_router(retrieval_router)
     application.include_router(bm25_router)
     application.include_router(hybrid_router)
+    application.include_router(rerank_router)
 
     @application.middleware("http")
     async def log_request(

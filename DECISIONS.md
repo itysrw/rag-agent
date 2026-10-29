@@ -1,11 +1,19 @@
 # 技术决策记录
 
-更新时间：2026-10-28（Asia/Shanghai）
+更新时间：2026-10-29（Asia/Shanghai）
 
 > Day 11 按用户提供的每日规划新增 D-047 至 D-049；D-001 至 D-046 保留原有适用范围。
 
-> 2026-10-28 完整交接复核未新增或推翻技术决策；当前有效记录为 D-001 至 D-049。
-> 功能开发已暂停；Day 11 完成标记与尚未执行的 Git 发布保持区分。
+> D-001至D-049为前序决策，D-050至D-053为Day12实施决策。本次按用户要求收录Day12本地提交，不新增或推翻技术决策。
+> 2026-10-29用户确认Day12已完成，PLAN四项和开发日志已勾选；Day12纳入本地提交但未推送，Day13未开始。
+> 最近标准为2026-10-29本地提交前重跑的403 passed/12 skipped（15.93s）；最近全真实仍为2026-10-28的413，本次未重跑真实集成。
+
+交接只读观察：ensure_reranker_snapshot当前将httpx.ReadError纳入有限重试；
+test_reranker.py包含test_download_retries_read_errors_with_exponential_backoff；
+test_rerank_comparison_integration.py包含_assert_quality_acceptance及
+test_quality_acceptance_rejects_all_correct_results_falling_to_fifth。
+当前质量基线严格检查聚合指标、逐题首次命中、每题20候选/0截断，防止Hit@5掩盖质量回退。
+这些实现细节不构成本轮新增决策；后续普通回归已随2026-10-29标准403/12通过，作者/独立审查记录未补查，详见[交接包](HANDOFF.md)。
 
 ## D-001：以 25 天计划控制范围
 
@@ -452,3 +460,39 @@
 - 边界：不实现 Day 12 Rerank，不调用付费 API；实现阶段未修改 `PLAN.md`。
   2026-10-28 用户确认审查、测试与修复通过，单独授权勾选 Day 11 四项任务并更新开发
   日志；该完成标记不授权 Git 发布或开始 Day 12，也不改变上述技术决策。
+
+## D-050：Day12 固定本地CPU模型和安全载入
+
+- 已实现并通过2026-10-28真实验收。固定BAAI/bge-reranker-base revision
+  2cfc18c9415c912f9d8155881c133215df768a70，CPU/512 token，默认batch4，范围1..8。
+- 复用sentence-transformers==5.3.0；缓存优先、匿名限六个安全文件、safetensors、
+  trust_remote_code=False、惰性加载。空候选不加载，瞬时网络错误最多重试3次。
+- 原因：数据和模型本地运行、固定版本可复现，不增加供应商Key、依赖或外部费用。
+
+## D-051：固定Hybrid20→Rerank5，分数与名次独立
+
+- 显式Identity保留原始logit，只作排序，不与Cosine/BM25/RRF相加或作拒答阈值。
+- 全部至多20候选按位置一一映射；校验数量/唯一性/有限分数；按
+  (-logit, hybrid_rank, doc_id, chunk_index, chunk_id)排序后固定取5。
+- rank_change=hybrid_rank-rerank_rank。日志记录全部候选名次、logit与耗时，不含正文。
+- 原因：不能提前截成5，不能用重复正文作身份，平分必须可复现。
+
+## D-052：完整query预检，只显式截passage
+
+- 使用模型tokenizer成对预检；完整query加特殊token不能为passage留空间则安全422。
+- 包装CrossEncoder内部tokenizer，将truncation=True变为only_second/max_length512，
+  记录截断数，不静默截query，不通过解码后再编码来猜测长度。
+- 原因：本机5.3.0的predict内部固定truncation=True，仅设置max_length不足以保护query。
+
+## D-053：按Day12授权升级Chat并保留向量证据门
+
+- 附件明确授权独立rerank API与/chat接入；D-049“Day11不改/chat”属于历史日范围。
+  Hybrid内部保存两路raw score，不参与RRF、不进入Hybrid公共响应。
+- RAG在Rerank Top5后仅用vector_score>=0.46；BM25-only不作生成依据。保持固定拒答、
+  后端sources与JSON/SSE，承认保守证据门可能损失召回。
+- 原因：RRF/logit量纲不可套入0.46；当前未校准BM25-only的可信生成门。
+- 2026-10-28同语料指标0.917/1.000/0.958，Hit@1不变、MRR小幅提升；无关候选升位如实记录，
+  不据小样本改阈值、模型、权重或切分。当日标准401/12、全真实413，无付费LLM调用；
+  不把这组历史结果当作10月29后续变更的重测证据。
+- Day11先独立推送b68b590；Day12实现阶段按原附件保留PLAN。2026-10-29用户确认Day12完成，
+  单独授权勾选四项任务和更新日志，2026-10-29标准403/12通过；之后按用户要求收录Day12本地提交，提交前重跑403/12（15.93s），未推送，Day13未开始。

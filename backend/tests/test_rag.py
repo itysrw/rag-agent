@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from collections.abc import Iterator
 from typing import Any
 from uuid import uuid4
@@ -12,7 +13,7 @@ from pydantic import ValidationError
 
 from backend.app.core.config import RAGSettings
 from backend.app.services.llm import LLMMessage, LLMServiceError
-from backend.app.services.qdrant_store import RetrievedChunk
+from backend.app.services.reranker import RerankedChunk, RerankOutcome
 from backend.app.services.rag import (
     NO_RELEVANT_KNOWLEDGE,
     RAG_SYSTEM_PROMPT,
@@ -30,9 +31,9 @@ def retrieved_chunk(
     page: int = 1,
     content: str = "报销票据每月二十五日前提交。",
     index: int = 0,
-) -> RetrievedChunk:
+) -> RerankedChunk:
     """Return one complete controlled retrieval result."""
-    return RetrievedChunk(
+    return RerankedChunk(
         chunk_id=uuid4(),
         doc_id=uuid4(),
         chunk_index=index,
@@ -41,19 +42,21 @@ def retrieved_chunk(
         filename=filename,
         metadata={"token_count": 12},
         score=score,
+        hybrid_score=0.02, hybrid_rank=index+1, rerank_rank=index+1,
+        rank_change=0, vector_score=score, vector_rank=index+1, bm25_rank=index+1,
     )
 
 
 class StubRetrievalService:
     """Record normalized questions and return controlled ranked results."""
 
-    def __init__(self, results: list[RetrievedChunk]) -> None:
+    def __init__(self, results: list[RerankedChunk]) -> None:
         self.results = results
         self.questions: list[str] = []
 
-    def search(self, question: str) -> list[RetrievedChunk]:
+    def search(self, question: str) -> RerankOutcome:
         self.questions.append(question)
-        return self.results
+        return RerankOutcome(tuple(self.results), (), len(self.results), 0)
 
 
 class StubLLMClient:
@@ -79,7 +82,7 @@ class StubLLMClient:
 
 
 def build_service(
-    results: list[RetrievedChunk],
+    results: list[RerankedChunk],
     *,
     min_score: float = 0.46,
     stream_deltas: list[str] | None = None,
@@ -195,7 +198,7 @@ def test_prepare_includes_all_five_qualified_context_chunks() -> None:
 
 @pytest.mark.parametrize("results", [[], [retrieved_chunk(score=0.2)]])
 def test_no_relevant_context_refuses_without_llm(
-    results: list[RetrievedChunk],
+    results: list[RerankedChunk],
 ) -> None:
     """Empty or low-score retrieval bypasses complete and streaming LLM calls."""
     service, _, llm = build_service(results)
@@ -236,3 +239,52 @@ def test_empty_model_stream_is_a_service_failure() -> None:
 
     with pytest.raises(LLMServiceError, match="empty stream"):
         list(service.stream(prepared))
+
+
+@pytest.mark.parametrize(("vector_score", "logit", "allowed"), [
+    (None, 100.0, False), (0.2, 100.0, False), (0.46, -100.0, True),
+])
+def test_generation_gate_uses_only_original_vector_evidence(
+    vector_score: float | None, logit: float, allowed: bool,
+) -> None:
+    chunk = replace(retrieved_chunk(score=0.8), score=logit, vector_score=vector_score)
+    rag, _, llm = build_service([chunk])
+    prepared = rag.prepare("question")
+    assert prepared.has_relevant_context is allowed
+    if not allowed:
+        assert rag.complete(prepared).answer == NO_RELEVANT_KNOWLEDGE
+        assert llm.complete_calls == []
+
+
+def test_rag_runs_hybrid_twenty_then_rerank_five_before_generation() -> None:
+    from backend.app.services.reranker import RerankedRetrievalService
+    from backend.tests.test_reranker import FakeModel, candidates, service
+    calls: list[dict[str, Any]] = []
+    class Hybrid:
+        def search(self, query: str, **kwargs: Any) -> Any:
+            calls.append(kwargs)
+            return candidates()
+    model = FakeModel()
+    pipeline = RerankedRetrievalService(Hybrid(), service(model))  # type: ignore[arg-type]
+    llm = StubLLMClient()
+    rag = RAGService(pipeline, llm, RAGSettings(_env_file=None))  # type: ignore[arg-type]
+    prepared = rag.prepare("question")
+    rag.complete(prepared)
+    assert calls == [{"top_k": 20, "doc_id": None}]
+    assert len(model.calls[0][0]) == 20
+    context = json.loads(prepared.messages[1]["content"].split("\n", 1)[1].split("\n\n", 1)[0])
+    assert [item["page"] for item in context] == [20, 19, 18, 17, 16]
+    assert len(llm.complete_calls) == 1
+
+
+def test_default_rag_factory_uses_reranked_retrieval(monkeypatch: pytest.MonkeyPatch) -> None:
+    from backend.app.services import rag as module
+    pipeline = object()
+    monkeypatch.setattr(module, "get_reranked_retrieval_service", lambda: pipeline)
+    monkeypatch.setattr(module, "get_llm_client", StubLLMClient)
+    monkeypatch.setattr(module, "get_rag_settings", lambda: RAGSettings(_env_file=None))
+    module.get_rag_service.cache_clear()
+    try:
+        assert module.get_rag_service()._retrieval_service is pipeline
+    finally:
+        module.get_rag_service.cache_clear()

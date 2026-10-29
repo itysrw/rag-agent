@@ -1,0 +1,660 @@
+{
+  "experiment": "day12_hybrid_vs_rerank",
+  "model_name": "BAAI/bge-reranker-base",
+  "revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+  "corpus_chunk_count": 24,
+  "positive_question_count": 12,
+  "negative_question_count": 3,
+  "hybrid": {
+    "hit_at_1": 0.917,
+    "hit_at_5": 1.0,
+    "mrr_at_5": 0.944
+  },
+  "rerank": {
+    "hit_at_1": 0.917,
+    "hit_at_5": 1.0,
+    "mrr_at_5": 0.958
+  },
+  "cold_model_load_seconds": 2.831613100002869,
+  "cold_inference_seconds": 6.56168830000388,
+  "warm_inference_seconds": 6.291024900012417,
+  "negative_refusal_rate": 1.0,
+  "queries": [
+    {
+      "category": "exact_identifier",
+      "question": "6203",
+      "expected_phrase": "服务分机是 6203",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 2.831613100002869,
+      "inference_seconds": 6.56168830000388,
+      "top5": [
+        {
+          "chunk_index": 6,
+          "page": 3,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 4.616673946380615
+        },
+        {
+          "chunk_index": 5,
+          "page": 2,
+          "hybrid_rank": 17,
+          "rerank_rank": 2,
+          "rank_change": 15,
+          "score": -3.641885757446289
+        },
+        {
+          "chunk_index": 11,
+          "page": 4,
+          "hybrid_rank": 2,
+          "rerank_rank": 3,
+          "rank_change": -1,
+          "score": -3.8243792057037354
+        },
+        {
+          "chunk_index": 1,
+          "page": 1,
+          "hybrid_rank": 8,
+          "rerank_rank": 4,
+          "rank_change": 4,
+          "score": -3.8256497383117676
+        },
+        {
+          "chunk_index": 14,
+          "page": 5,
+          "hybrid_rank": 10,
+          "rerank_rank": 5,
+          "rank_change": 5,
+          "score": -3.959390640258789
+        }
+      ]
+    },
+    {
+      "category": "exact_identifier",
+      "question": "五万元采购",
+      "expected_phrase": "总经理审批",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.337333100003889,
+      "top5": [
+        {
+          "chunk_index": 18,
+          "page": 7,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 4.815572261810303
+        },
+        {
+          "chunk_index": 19,
+          "page": 7,
+          "hybrid_rank": 2,
+          "rerank_rank": 2,
+          "rank_change": 0,
+          "score": -1.451483130455017
+        },
+        {
+          "chunk_index": 20,
+          "page": 7,
+          "hybrid_rank": 10,
+          "rerank_rank": 3,
+          "rank_change": 7,
+          "score": -3.4662926197052
+        },
+        {
+          "chunk_index": 1,
+          "page": 1,
+          "hybrid_rank": 3,
+          "rerank_rank": 4,
+          "rank_change": -1,
+          "score": -3.6431870460510254
+        },
+        {
+          "chunk_index": 2,
+          "page": 1,
+          "hybrid_rank": 14,
+          "rerank_rank": 5,
+          "rank_change": 9,
+          "score": -4.9613423347473145
+        }
+      ]
+    },
+    {
+      "category": "exact_identifier",
+      "question": "网络组",
+      "expected_phrase": "服务分机是 6203",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.325141099994653,
+      "top5": [
+        {
+          "chunk_index": 6,
+          "page": 3,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 2.530716896057129
+        },
+        {
+          "chunk_index": 7,
+          "page": 3,
+          "hybrid_rank": 4,
+          "rerank_rank": 2,
+          "rank_change": 2,
+          "score": -2.4598708152770996
+        },
+        {
+          "chunk_index": 8,
+          "page": 3,
+          "hybrid_rank": 5,
+          "rerank_rank": 3,
+          "rank_change": 2,
+          "score": -2.9760537147521973
+        },
+        {
+          "chunk_index": 22,
+          "page": 8,
+          "hybrid_rank": 9,
+          "rerank_rank": 4,
+          "rank_change": 5,
+          "score": -3.5104165077209473
+        },
+        {
+          "chunk_index": 9,
+          "page": 4,
+          "hybrid_rank": 2,
+          "rerank_rank": 5,
+          "rank_change": -3,
+          "score": -4.391260147094727
+        }
+      ]
+    },
+    {
+      "category": "exact_identifier",
+      "question": "全量备份",
+      "expected_phrase": "每周日凌晨两点",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.307701700003236,
+      "top5": [
+        {
+          "chunk_index": 9,
+          "page": 4,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 4.41141414642334
+        },
+        {
+          "chunk_index": 10,
+          "page": 4,
+          "hybrid_rank": 2,
+          "rerank_rank": 2,
+          "rank_change": 0,
+          "score": -0.6976556777954102
+        },
+        {
+          "chunk_index": 0,
+          "page": 1,
+          "hybrid_rank": 6,
+          "rerank_rank": 3,
+          "rank_change": 3,
+          "score": -2.9234113693237305
+        },
+        {
+          "chunk_index": 20,
+          "page": 7,
+          "hybrid_rank": 8,
+          "rerank_rank": 4,
+          "rank_change": 4,
+          "score": -2.9842278957366943
+        },
+        {
+          "chunk_index": 17,
+          "page": 6,
+          "hybrid_rank": 4,
+          "rerank_rank": 5,
+          "rank_change": -1,
+          "score": -3.195197105407715
+        }
+      ]
+    },
+    {
+      "category": "semantic_paraphrase",
+      "question": "远程接入工具坏了应该找谁处理？",
+      "expected_phrase": "服务分机是 6203",
+      "hybrid_rank": 3,
+      "rerank_rank": 2,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.388195499996073,
+      "top5": [
+        {
+          "chunk_index": 17,
+          "page": 6,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": -1.812768578529358
+        },
+        {
+          "chunk_index": 6,
+          "page": 3,
+          "hybrid_rank": 3,
+          "rerank_rank": 2,
+          "rank_change": 1,
+          "score": -1.914434790611267
+        },
+        {
+          "chunk_index": 7,
+          "page": 3,
+          "hybrid_rank": 11,
+          "rerank_rank": 3,
+          "rank_change": 8,
+          "score": -1.9414563179016113
+        },
+        {
+          "chunk_index": 8,
+          "page": 3,
+          "hybrid_rank": 19,
+          "rerank_rank": 4,
+          "rank_change": 15,
+          "score": -2.2807137966156006
+        },
+        {
+          "chunk_index": 23,
+          "page": 8,
+          "hybrid_rank": 20,
+          "rerank_rank": 5,
+          "rank_change": 15,
+          "score": -3.6318817138671875
+        }
+      ]
+    },
+    {
+      "category": "semantic_paraphrase",
+      "question": "新人多久能拿到办公设备？",
+      "expected_phrase": "三个工作日内发放",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.417570899997372,
+      "top5": [
+        {
+          "chunk_index": 21,
+          "page": 8,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 3.40908145904541
+        },
+        {
+          "chunk_index": 3,
+          "page": 2,
+          "hybrid_rank": 13,
+          "rerank_rank": 2,
+          "rank_change": 11,
+          "score": -3.534564256668091
+        },
+        {
+          "chunk_index": 17,
+          "page": 6,
+          "hybrid_rank": 5,
+          "rerank_rank": 3,
+          "rank_change": 2,
+          "score": -3.5726370811462402
+        },
+        {
+          "chunk_index": 14,
+          "page": 5,
+          "hybrid_rank": 7,
+          "rerank_rank": 4,
+          "rank_change": 3,
+          "score": -3.7601983547210693
+        },
+        {
+          "chunk_index": 5,
+          "page": 2,
+          "hybrid_rank": 20,
+          "rerank_rank": 5,
+          "rank_change": 15,
+          "score": -4.166175842285156
+        }
+      ]
+    },
+    {
+      "category": "semantic_paraphrase",
+      "question": "差旅单据交财务的截止日是什么时候？",
+      "expected_phrase": "每月二十五日前",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.361544300001697,
+      "top5": [
+        {
+          "chunk_index": 0,
+          "page": 1,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": -1.2389501333236694
+        },
+        {
+          "chunk_index": 5,
+          "page": 2,
+          "hybrid_rank": 4,
+          "rerank_rank": 2,
+          "rank_change": 2,
+          "score": -3.851484537124634
+        },
+        {
+          "chunk_index": 17,
+          "page": 6,
+          "hybrid_rank": 17,
+          "rerank_rank": 3,
+          "rank_change": 14,
+          "score": -6.223930835723877
+        },
+        {
+          "chunk_index": 15,
+          "page": 6,
+          "hybrid_rank": 2,
+          "rerank_rank": 4,
+          "rank_change": -2,
+          "score": -6.334109783172607
+        },
+        {
+          "chunk_index": 3,
+          "page": 2,
+          "hybrid_rank": 12,
+          "rerank_rank": 5,
+          "rank_change": 7,
+          "score": -6.665067195892334
+        }
+      ]
+    },
+    {
+      "category": "semantic_paraphrase",
+      "question": "周末什么时候做整库备份？",
+      "expected_phrase": "每周日凌晨两点",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.3426932000002125,
+      "top5": [
+        {
+          "chunk_index": 9,
+          "page": 4,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": -0.26726481318473816
+        },
+        {
+          "chunk_index": 11,
+          "page": 4,
+          "hybrid_rank": 2,
+          "rerank_rank": 2,
+          "rank_change": 0,
+          "score": -1.5632113218307495
+        },
+        {
+          "chunk_index": 10,
+          "page": 4,
+          "hybrid_rank": 3,
+          "rerank_rank": 3,
+          "rank_change": 0,
+          "score": -2.450320243835449
+        },
+        {
+          "chunk_index": 17,
+          "page": 6,
+          "hybrid_rank": 6,
+          "rerank_rank": 4,
+          "rank_change": 2,
+          "score": -5.006155014038086
+        },
+        {
+          "chunk_index": 5,
+          "page": 2,
+          "hybrid_rank": 17,
+          "rerank_rank": 5,
+          "rank_change": 12,
+          "score": -5.621182918548584
+        }
+      ]
+    },
+    {
+      "category": "mixed",
+      "question": "VPN 出错后拨打哪个 6203 服务？",
+      "expected_phrase": "服务分机是 6203",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.385497200011741,
+      "top5": [
+        {
+          "chunk_index": 6,
+          "page": 3,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 5.167511463165283
+        },
+        {
+          "chunk_index": 7,
+          "page": 3,
+          "hybrid_rank": 2,
+          "rerank_rank": 2,
+          "rank_change": 0,
+          "score": -0.6976433992385864
+        },
+        {
+          "chunk_index": 8,
+          "page": 3,
+          "hybrid_rank": 3,
+          "rerank_rank": 3,
+          "rank_change": 0,
+          "score": -0.8922529220581055
+        },
+        {
+          "chunk_index": 22,
+          "page": 8,
+          "hybrid_rank": 11,
+          "rerank_rank": 4,
+          "rank_change": 7,
+          "score": -7.403016567230225
+        },
+        {
+          "chunk_index": 16,
+          "page": 6,
+          "hybrid_rank": 4,
+          "rerank_rank": 5,
+          "rank_change": -1,
+          "score": -8.084815979003906
+        }
+      ]
+    },
+    {
+      "category": "mixed",
+      "question": "采购超过五万元要找最高负责人审批吗？",
+      "expected_phrase": "总经理审批",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.416784500004724,
+      "top5": [
+        {
+          "chunk_index": 18,
+          "page": 7,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 5.86714506149292
+        },
+        {
+          "chunk_index": 14,
+          "page": 5,
+          "hybrid_rank": 5,
+          "rerank_rank": 2,
+          "rank_change": 3,
+          "score": -4.689611911773682
+        },
+        {
+          "chunk_index": 19,
+          "page": 7,
+          "hybrid_rank": 2,
+          "rerank_rank": 3,
+          "rank_change": -1,
+          "score": -5.4444780349731445
+        },
+        {
+          "chunk_index": 2,
+          "page": 1,
+          "hybrid_rank": 13,
+          "rerank_rank": 4,
+          "rank_change": 9,
+          "score": -6.698890209197998
+        },
+        {
+          "chunk_index": 20,
+          "page": 7,
+          "hybrid_rank": 18,
+          "rerank_rank": 5,
+          "rank_change": 13,
+          "score": -7.073562145233154
+        }
+      ]
+    },
+    {
+      "category": "mixed",
+      "question": "访客登记后如何进入办公区？",
+      "expected_phrase": "访客登记",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.5076482000004034,
+      "top5": [
+        {
+          "chunk_index": 12,
+          "page": 5,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 5.82554292678833
+        },
+        {
+          "chunk_index": 13,
+          "page": 5,
+          "hybrid_rank": 2,
+          "rerank_rank": 2,
+          "rank_change": 0,
+          "score": -0.9894136190414429
+        },
+        {
+          "chunk_index": 14,
+          "page": 5,
+          "hybrid_rank": 3,
+          "rerank_rank": 3,
+          "rank_change": 0,
+          "score": -1.6789520978927612
+        },
+        {
+          "chunk_index": 16,
+          "page": 6,
+          "hybrid_rank": 5,
+          "rerank_rank": 4,
+          "rank_change": 1,
+          "score": -3.190370559692383
+        },
+        {
+          "chunk_index": 6,
+          "page": 3,
+          "hybrid_rank": 4,
+          "rerank_rank": 5,
+          "rank_change": -1,
+          "score": -4.130342483520508
+        }
+      ]
+    },
+    {
+      "category": "mixed",
+      "question": "会议室最多能占用多久？",
+      "expected_phrase": "最长不得超过两个小时",
+      "hybrid_rank": 1,
+      "rerank_rank": 1,
+      "candidate_count": 20,
+      "truncated_candidate_count": 0,
+      "model_load_seconds": 0.0,
+      "inference_seconds": 6.350539799997932,
+      "top5": [
+        {
+          "chunk_index": 15,
+          "page": 6,
+          "hybrid_rank": 1,
+          "rerank_rank": 1,
+          "rank_change": 0,
+          "score": 1.7547409534454346
+        },
+        {
+          "chunk_index": 14,
+          "page": 5,
+          "hybrid_rank": 5,
+          "rerank_rank": 2,
+          "rank_change": 3,
+          "score": -2.358476161956787
+        },
+        {
+          "chunk_index": 17,
+          "page": 6,
+          "hybrid_rank": 3,
+          "rerank_rank": 3,
+          "rank_change": 0,
+          "score": -3.5615835189819336
+        },
+        {
+          "chunk_index": 16,
+          "page": 6,
+          "hybrid_rank": 2,
+          "rerank_rank": 4,
+          "rank_change": -2,
+          "score": -4.3318352699279785
+        },
+        {
+          "chunk_index": 10,
+          "page": 4,
+          "hybrid_rank": 7,
+          "rerank_rank": 5,
+          "rank_change": 2,
+          "score": -4.544400691986084
+        }
+      ]
+    }
+  ]
+}
