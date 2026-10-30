@@ -1,0 +1,383 @@
+{
+  "date_asia_shanghai": "2026-10-30",
+  "implementation_day": 15,
+  "branch": "codex/day15-agent-tools",
+  "parent_day14_head": "b76987934663f7d90603dbc4abb2432d52baf91f",
+  "publication_scope": "Containing local Day15 commit only; no push or merge performed. Verify hash with git log -1.",
+  "existing_day14_checkpoint_reused": true,
+  "old_six_document_changes_excluded_from_commit": true,
+  "baseline_scope": "Existing Day14 suite before graph/test migration; additive selector and catalog definitions already present.",
+  "baseline": {
+    "label": "baseline-offline",
+    "exit_code": 0,
+    "python": "3.11.15",
+    "seconds": 46.87,
+    "counts": {
+      "dotenv_attempts": 0,
+      "external_connect_attempts": 0
+    },
+    "stats": {
+      "": 918,
+      "passed": 453,
+      "skipped": 12
+    },
+    "arguments": [
+      "backend/tests",
+      "-v",
+      "--basetemp=C:\\Users\\袁伟鑫\\.codex\\visualizations\\2026\\10\\30\\01a18d2e-ee85-7d93-981a-6b35e55d4d74\\day15-validation\\baseline-offline-c1ab50a4b90944e190b369eea54f5886",
+      "-p",
+      "no:cacheprovider",
+      "-p",
+      "no:langsmith_plugin"
+    ]
+  },
+  "final_standard": {
+    "label": "final",
+    "exit_code": 0,
+    "python": "3.11.15",
+    "seconds": 45.44,
+    "counts": {
+      "dotenv_attempts": 0,
+      "external_connect_attempts": 0
+    },
+    "stats": {
+      "": 1138,
+      "passed": 563,
+      "skipped": 12
+    },
+    "arguments": [
+      "backend/tests",
+      "-v",
+      "--basetemp=C:\\Users\\袁伟鑫\\.codex\\visualizations\\2026\\10\\30\\01a18d2e-ee85-7d93-981a-6b35e55d4d74\\day15-validation\\final-f68ef1e8faa446afbcc7e0b00670ea95",
+      "-p",
+      "no:cacheprovider",
+      "-p",
+      "no:langsmith_plugin"
+    ],
+    "pytest_seconds": 44.52
+  },
+  "earlier_attempts": [
+    {
+      "label": "baseline",
+      "accepted": false,
+      "reason": "Windows pytest temp-directory access restriction"
+    },
+    {
+      "label": "baseline-verified",
+      "accepted": false,
+      "reason": "Offline guard incorrectly blocked Windows asyncio socketpair; fixed without changing application behavior"
+    },
+    {
+      "label": "targeted",
+      "passed": 178,
+      "failed": 1,
+      "reason": "Compile-count test wrapper needed to forward the new catalog_factory keyword; corrected without removing assertions"
+    },
+    {
+      "label": "full",
+      "passed": 562,
+      "skipped": 12,
+      "failed": 0,
+      "reason": "Passed; final run adds escaped supplementary-Unicode boundary coverage"
+    }
+  ],
+  "contracts": {
+    "openapi_exactly_unchanged": true,
+    "json_sse_unchanged": true,
+    "public_tool_calls": 1,
+    "internal_prepared_tool_calls": 0,
+    "selector_sdk_retries": 0,
+    "argument_json_max_utf8_bytes": 65536,
+    "query_characters": [
+      1,
+      4096
+    ],
+    "catalog_limit": 50,
+    "catalog_read_limit": 51,
+    "catalog_sources": [],
+    "catalog_queries_source_text": false,
+    "search_uses_original_question": true,
+    "detail_uuid_must_be_in_question": true,
+    "search_pipeline": "Hybrid20 -> CPU BGE Rerank5 -> original vector_score >= configured threshold (default 0.46)",
+    "prefetch_nodes": [
+      "select_tool_node",
+      "tool_node"
+    ],
+    "no_tools_events_in_http": true,
+    "backpressure_and_cancellation_preserved": true
+  },
+  "verification": {
+    "protected_baseline_count": 37,
+    "unchanged_protected_count": 22,
+    "protected_files": [
+      {
+        "path": "PLAN.md",
+        "sha256": "c1a6dbb5c081c15ea285a2826548d13806b147f2541569eb81017d188fb31099",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "AGENTS.md",
+        "sha256": "7be7cc1a8df4a0d5c4ed64bcdb395ddf76fdc978efcefb4eb2a896f8d9a2e394",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/main.py",
+        "sha256": "c0888dd1d9141aabe6e944676421597e1f7c1edded20e90c23159349f088e4dd",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/core/config.py",
+        "sha256": "f41e05be1e5854152b491229422ca7bbe484dd60e238e43dc0770cdf290691b1",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/services/llm.py",
+        "sha256": "6eeb8d67f3837e159c1f27828d982c86355d86cbbdf162ea84bd60482b3147a8",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/services/reranker.py",
+        "sha256": "f90b512dc11da898636c1414111671eea086393d1bc96dd655ffcd77c0aa4f86",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/services/hybrid.py",
+        "sha256": "7f501464e2d10fd541460c60a046478167492a607c100e29b50e44adb04fc771",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/services/bm25.py",
+        "sha256": "d26c49be73e8ad8133ab6ab9bf0788fba1cb660c9a49fd092005f4af362180b0",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/services/retrieval.py",
+        "sha256": "ba104acb083903ebb5f12f28bd10a51b2f4bde54481e58a02d09bad466a23cf3",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/services/embedding.py",
+        "sha256": "5f4e20ccccdf970abd34a4dcad6c06937b73c660481da6be3474c14518eb7ac0",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/services/qdrant_store.py",
+        "sha256": "50f016d4b027c00ae485e06b0482cb3b355e1abdc256799379bcf27df55e3630",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/api/rerank.py",
+        "sha256": "e6155a21329a85735bbea1fc685ca827df0f1ff51f522719030d19dbd63e0cb5",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "docs/day12-rerank-results.json",
+        "sha256": "43fc6d0ad73dca87dea7e94b3cf15ab2f9d91f9e2d786672897c9247e31c7538",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "docs/day12-rerank-comparison.md",
+        "sha256": "a2ab837a4cbdea2a070777fbe6aea7a43865149c9164b1933ba02511de61a094",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/tests/test_rerank_comparison_integration.py",
+        "sha256": "e48b06ac09288e588d9c12a0f2f809ac3406085cf8ba088cdea02ac5247975df",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/tests/test_reranker.py",
+        "sha256": "5d95af897b0e6f614a958baa1ce9300676253e307a00b75f0e94c1f91e8202e6",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/tests/test_reranker_integration.py",
+        "sha256": "79b296d2b0ebd4bf25d18090e0adaa312f4fe031edfd5e9b63e7e5cdf468010d",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "docker-compose.yml",
+        "sha256": "704967b993637e56752b87ef9dfd8f38666dd0fa8bb3ee0bcf1843b10c959e68",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/app/agent/__init__.py",
+        "sha256": "c0dc982ad6628ca2cbd7121525449e6be0b884ccc95b1284acfd65f1f4661f99",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/agent/state.py",
+        "sha256": "cc3e84d3b9c8e17526ba5374ce684ac4f0e9f47df480b412440f548c2f3916ce",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/agent/nodes.py",
+        "sha256": "503658968cbf804abc3bb2731293bc28368f2ef0e07bead4859e1ecd842c69fe",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/agent/graph.py",
+        "sha256": "8b3ddbed12047a77c1019fb03f5cf9f0821e38fee933039ca2489fc8fe1354a5",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/agent/service.py",
+        "sha256": "ef6975439b4fe1faaa7f6f98263cdacbcaab05fc93905a94499741f738d782b8",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/api/chat.py",
+        "sha256": "e63c01dd4325e9a7256c561526cd4f296011457a720fb2f1ea7d65355275e491",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/app/services/rag.py",
+        "sha256": "80050a18ebee077aef86fe35e9eb255483f77a25dc52d24082a60e1ecedc79a7",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/requirements.txt",
+        "sha256": "a2d8568a2531e650e736ff0004f416f3f13d274e9bfa117169229d38524771f7",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/tests/test_agent_state.py",
+        "sha256": "c758fec353d50cf4693d7fbb1555848d04273ec51c7a49ac83bc4b7a931431f8",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/tests/test_agent_nodes.py",
+        "sha256": "b7c8e2f69678f2b564ebbad6aa734f6115586bec311830d926c8fe3966b46b9e",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/tests/test_agent_graph.py",
+        "sha256": "22f31758ff58d084ea1399948578fd0327d7a027cdfbbb5d7d33e65f16449096",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/tests/test_agent_service.py",
+        "sha256": "0e8fa31410069b7c7c2c5e1306fa429e83e6af88e9ad347ac74e38d8935e3c95",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/tests/test_chat.py",
+        "sha256": "871a80b7e19948c0a0385e29e068e2c5a641a782d6d3584e6ee92052f70061ab",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/tests/test_main.py",
+        "sha256": "0ae59168dd5d028805332eefd374c066d7688864c8989f9e6513aa16893deba6",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "backend/tests/test_rag.py",
+        "sha256": "011927e1eb501c28679e74859ff5dac27123092a269fb31ad1ae709d65c664b8",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "backend/tests/test_rag_integration.py",
+        "sha256": "93804cbd22b9e8114c2a86f716737f56776963f32f70425e96bcae80dff5abd3",
+        "unchanged": false,
+        "day15_change_authorized": true
+      },
+      {
+        "path": "docs/day14-agent-graph.mmd",
+        "sha256": "d96244164afd722a688655372e66ce6db42fb4bbe959499c0cde738e60594e58",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "docs/day14-langgraph-migration.md",
+        "sha256": "b81a7fe45667e04b4e2e3aa32db779aa6bd4473279fd340d90e90a06e7b0957b",
+        "unchanged": true,
+        "day15_change_authorized": false
+      },
+      {
+        "path": "docs/day14-langgraph-results.json",
+        "sha256": "ab62eed9f2a3440373b218773fdfb61e6d64eaf7a90ed79b129fae0950166602",
+        "unchanged": true,
+        "day15_change_authorized": false
+      }
+    ],
+    "implementation_sha256": {
+      "backend/app/agent/__init__.py": "c0dc982ad6628ca2cbd7121525449e6be0b884ccc95b1284acfd65f1f4661f99",
+      "backend/app/agent/graph.py": "8b3ddbed12047a77c1019fb03f5cf9f0821e38fee933039ca2489fc8fe1354a5",
+      "backend/app/agent/nodes.py": "503658968cbf804abc3bb2731293bc28368f2ef0e07bead4859e1ecd842c69fe",
+      "backend/app/agent/service.py": "ef6975439b4fe1faaa7f6f98263cdacbcaab05fc93905a94499741f738d782b8",
+      "backend/app/agent/state.py": "cc3e84d3b9c8e17526ba5374ce684ac4f0e9f47df480b412440f548c2f3916ce",
+      "backend/app/agent/tools.py": "24437adfeb41aa359c0f301ee4063a5040832d439b81a2f3c92fa1abf7e70d1a",
+      "backend/app/api/chat.py": "e63c01dd4325e9a7256c561526cd4f296011457a720fb2f1ea7d65355275e491",
+      "backend/app/services/document_catalog.py": "31ef98c8c75cac86be0a5253aec01aa7079ef3af71693e2ee5ed0ee85656d2a6",
+      "backend/app/services/llm.py": "6eeb8d67f3837e159c1f27828d982c86355d86cbbdf162ea84bd60482b3147a8",
+      "backend/app/services/rag.py": "80050a18ebee077aef86fe35e9eb255483f77a25dc52d24082a60e1ecedc79a7",
+      "backend/tests/test_agent_graph.py": "22f31758ff58d084ea1399948578fd0327d7a027cdfbbb5d7d33e65f16449096",
+      "backend/tests/test_agent_nodes.py": "b7c8e2f69678f2b564ebbad6aa734f6115586bec311830d926c8fe3966b46b9e",
+      "backend/tests/test_agent_service.py": "0e8fa31410069b7c7c2c5e1306fa429e83e6af88e9ad347ac74e38d8935e3c95",
+      "backend/tests/test_agent_state.py": "c758fec353d50cf4693d7fbb1555848d04273ec51c7a49ac83bc4b7a931431f8",
+      "backend/tests/test_agent_tools.py": "3aa63b4859670b72ebe2943088e355629249afe4173b77380a7dd1ce7278215b",
+      "backend/tests/test_chat.py": "871a80b7e19948c0a0385e29e068e2c5a641a782d6d3584e6ee92052f70061ab",
+      "backend/tests/test_document_catalog.py": "4f8944bebad69d6a9100775854729fc6fd9097ca0df809dcc087e45d6fb9f3df",
+      "backend/tests/test_llm.py": "0ef8254313d3c9282dd0f5bbc4d5f9bee08edd123c7ea41c650765661b046e97",
+      "backend/tests/test_rag.py": "011927e1eb501c28679e74859ff5dac27123092a269fb31ad1ae709d65c664b8",
+      "backend/tests/test_rag_integration.py": "93804cbd22b9e8114c2a86f716737f56776963f32f70425e96bcae80dff5abd3"
+    },
+    "D001_through_D058_original_body_preserved": true,
+    "plan_changed": false,
+    "requirements_changed": false,
+    "new_production_dependencies": [],
+    "new_tables_or_http_routes": [],
+    "paid_api_calls": 0,
+    "real_services_tested": false,
+    "model_downloads": false,
+    "service_operations": false,
+    "day16_started": false,
+    "tools_or_state_exported_to_langsmith": false
+  },
+  "historical_real_evidence": [
+    {
+      "date": "2026-10-29",
+      "scope": "Day14 targeted local retrieval with LLM stub",
+      "passed": 3
+    },
+    {
+      "date": "2026-10-28",
+      "scope": "Day12 historical all-real local integration with LLM stub",
+      "passed": 413
+    }
+  ],
+  "evidence_note": "Raw logs, guards and OpenAPI snapshots are local validation artifacts. No live DeepSeek routing accuracy or current PostgreSQL/Qdrant availability is claimed."
+}

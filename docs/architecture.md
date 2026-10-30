@@ -1,3 +1,33 @@
+<!-- DAY15 CHECKPOINT BEGIN -->
+## Day15 当前检查点（2026-10-30）
+
+Day15 单次工具调用实现与标准回归已完成，分支 `codex/day15-agent-tools`，
+父提交为已发布Day14 `b76987934663f7d90603dbc4abb2432d52baf91f`。本交付为独立本地提交，精确hash以 `git log -1` 为准；未推送或合并。
+最终标准：**563 passed / 12 skipped，44.52s，0失败/0警告**；dotenv/服务连接尝试0，未调用付费API。
+PLAN保持原样，Day15勾选未修改，Day16未开始。
+本节为当前恢复入口；下方原Day14段落完整保留作历史快照，不覆盖本节。
+
+```mermaid
+flowchart LR
+    START --> route{needs_tool_selection}
+    route -->|公共 True| select_tool_node
+    route -->|内部PreparedRAG False| generate_node
+    select_tool_node --> tool_node
+    tool_node --> generate_node
+    generate_node --> END
+```
+
+select_tool_node只调用一次非流式LLM并严格验证；tool_node显式分派三个受控工具。
+search复用原检索/证据门；list/detail懒开Session，只读安全元数据、sources为空。
+流在同一迭代器预取消费两个update后才建立HTTP响应，生成继续custom delta及既有背压/取消。
+State仅将needs_retrieval改为needs_tool_selection、tool_calls改为已验证调用类型；依赖不进入State。
+没有新HTTP端点、表、依赖、checkpointer或记忆。
+实际图与证据：[图](day15-agent-tools.mmd)、[验收](day15-agent-tools.md)。
+
+<!-- DAY15 CHECKPOINT END -->
+
+---
+
 # 架构说明
 
 更新时间：2026-10-30（Asia/Shanghai）

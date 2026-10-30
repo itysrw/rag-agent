@@ -42,6 +42,7 @@ from backend.app.services.reranker import (
     RerankedChunk, RerankOutcome, RerankerInputError, RerankerResultError,
     RerankerUnavailableError,
 )
+from backend.tests.test_rag import StubLLMClient
 
 FABRICATED_REFERENCE = "[fake.pdf page 99] [S99]"
 FABRICATED_REFERENCE_MARKERS = ("fake.pdf", "page 99", "[S99]")
@@ -140,7 +141,7 @@ class FixedRetrievalService:
         ,), (), 1, 0)
 
 
-class FabricatingLLMClient:
+class FabricatingLLMClient(StubLLMClient):
     """Return a source reference that is absent from the trusted Context."""
 
     model = "test-model"
@@ -488,7 +489,7 @@ def test_real_graph_keeps_retrieval_http_errors_before_sse(
     assert llm.complete_calls == llm.stream_calls == []
 
 
-def test_public_chat_schema_and_input_cannot_disable_retrieval() -> None:
+def test_public_chat_schema_and_input_cannot_disable_tool_selection() -> None:
     from backend.tests.test_rag import StubLLMClient, StubRetrievalService
     retrieval = StubRetrievalService([])
     service = RAGService(retrieval, StubLLMClient(), RAGSettings(_env_file=None))
@@ -497,12 +498,14 @@ def test_public_chat_schema_and_input_cannot_disable_retrieval() -> None:
         with TestClient(app) as client:
             schema = client.get("/openapi.json").json()
             assert set(schema["components"]["schemas"]["ChatRequest"]["properties"]) == {"message", "stream"}
-            response = client.post("/chat", json={"message": "question", "needs_retrieval": False})
+            response = client.post("/chat", json={"message": "question", "needs_retrieval": False,
+                                                   "needs_tool_selection": False})
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 200
     assert response.json() == {"answer": NO_RELEVANT_KNOWLEDGE, "model": "test-model", "sources": []}
     assert retrieval.questions == ["question"]
+    assert len(service._llm_client.selection_calls) == 1
 
 
 def test_asgi_disconnect_closes_prefetched_graph_and_upstream() -> None:
@@ -543,7 +546,7 @@ def test_asgi_disconnect_closes_prefetched_graph_and_upstream() -> None:
 def test_graph_llm_failure_keeps_error_contract_without_logging_state(stream: bool) -> None:
     from typing import Any
     from loguru import logger
-    class BrokenLLM:
+    class BrokenLLM(StubLLMClient):
         model = "test-model"
         def complete_messages(self, messages: Any) -> str:
             raise LLMServiceError("private-upstream")

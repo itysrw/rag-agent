@@ -1,3 +1,21 @@
+<!-- DAY15 CHECKPOINT BEGIN -->
+## Day15 当前检查点（2026-10-30）
+
+Day15 单次工具调用实现与标准回归已完成，分支 `codex/day15-agent-tools`，
+父提交为已发布Day14 `b76987934663f7d90603dbc4abb2432d52baf91f`。本交付为独立本地提交，精确hash以 `git log -1` 为准；未推送或合并。
+最终标准：**563 passed / 12 skipped，44.52s，0失败/0警告**；dotenv/服务连接尝试0，未调用付费API。
+PLAN保持原样，Day15勾选未修改，Day16未开始。
+本节为当前恢复入口；下方原Day14段落完整保留作历史快照，不覆盖本节。
+
+D-001至D-058原文完整保留，属于各自历史日范围。
+本轮新增D-059至D-064（见文末），实现用户附上的Day15规划。
+普通compatible工具选择，不使用beta strict、循环、会话或额外供应商。
+详见 [Day15验收](docs/day15-agent-tools.md)。
+
+<!-- DAY15 CHECKPOINT END -->
+
+---
+
 # 技术决策记录
 
 更新时间：2026-10-30（Asia/Shanghai）
@@ -542,3 +560,40 @@
 - 原因：保留既有实验/真实比较测试及调用者，避免改动只读质量文件或维护两套检索业务逻辑。
 - 验证：OpenAPI 精确一致、原模块级辅助函数 AST 一致；标准 453/12，真实局部 3，
   既有质量常量通过，PLAN 和 Day12 实验/核心检索文件 SHA256 不变。
+
+
+## D-059：Day15 使用单次非流式工具选择和本地严格验证
+
+- 三个普通function schema，tool_choice=required，选择阶段thinking关闭、SDK重试0；不使用beta strict。
+- 恰好一个调用，白名单、JSON对象/重复键/字段/类型/UUID/64KiB参数大小均在本地验证。
+- 原因：模型只提出建议，后端负责执行；不引入循环、并行工具或额外费用重试。
+
+## D-060：文档目录只读安全列并保持懒加载
+
+- ready列表按created_at DESC、id ASC，查询51条、返回50条和truncated；详情聚合chunk_count。
+- 不查询extracted_text或Chunk正文，不提供路径；Session仅在list/detail执行时创建。
+- 配置/连接/超时503、内部SQL500、缺失/空结果200固定拒答。
+
+## D-061：执行器固定白名单，模型不能扩大查询范围
+
+- 搜索参数必须合法，实际检索使用原始问题；详情UUID必须能在原问题中找到并规范化匹配。
+- 工具结果与文档名仅作为不可信JSON置入user message，system只保存静态规则。
+- 原因：避免悄悄改写、编造ID、动态函数调用及工具结果获得指令权限。
+
+## D-062：公共三节点图与内部零工具路径分开校验
+
+- 公共START→select_tool_node→tool_node→generate_node→END；每次恰好一个工具。
+- 内部PreparedRAG直接生成且零工具，旧prepare适配复用同一搜索工具业务代码。
+- State使用needs_tool_selection，不增加message state、会话、checkpointer或记忆。
+
+## D-063：SSE前完成选择和执行，保持既有流生命周期
+
+- 同一graph.stream依次预取选择、工具两个update，成功才建立HTTP流；只导出custom delta及既有sources/DONE。
+- 错序/缺失update安全失败；继续逐段背压、跨线程Context与锁、取消关闭和逐次禁用tracing。
+- 原因：工具错误必须保持真实HTTP状态码，不泄露参数或内部State。
+
+## D-064：目录元数据允许文件扩展名，来源仍为空
+
+- list/detail的文件名属于答案数据，清理保留扩展名并继续去除页码/来源ID；sources始终为空。
+- search与内部旧路径仍使用原完整来源清理，证据门、可信来源和受控质量断言不变。
+- 原因：不能把目录文件名当作伪造引用删掉扩展名，也不能为元数据伪造页码。

@@ -1,3 +1,26 @@
+<!-- DAY15 CHECKPOINT BEGIN -->
+## Day15 当前检查点（2026-10-30）
+
+Day15 单次工具调用实现与标准回归已完成，分支 `codex/day15-agent-tools`，
+父提交为已发布Day14 `b76987934663f7d90603dbc4abb2432d52baf91f`。本交付为独立本地提交，精确hash以 `git log -1` 为准；未推送或合并。
+最终标准：**563 passed / 12 skipped，44.52s，0失败/0警告**；dotenv/服务连接尝试0，未调用付费API。
+PLAN保持原样，Day15勾选未修改，Day16未开始。
+本节为当前恢复入口；下方原Day14段落完整保留作历史快照，不覆盖本节。
+
+- [x] 三工具定义、参数64KiB上限、本地白名单和UUID来源验证。
+- [x] 单次工具选择、无SDK重试、thinking关闭；目录50+1分页界限与只读SQL。
+- [x] 三节点图、PreparedRAG兼容、SSE预取、背压/关闭/错误码与完整回归。
+- [x] 实际Mermaid、验收MD/JSON与独立本地Day15交付；保留原六份未暂存整理。
+- [ ] 真实DeepSeek最小能力探测（另行明确授权后）。
+- [ ] 是否执行真实本地集成、推送Day15或创建PR，等待指定。
+- [ ] Day15计划勾选与Day16范围，等待用户指定；不自动推进。
+
+验收：[docs/day15-agent-tools.md](docs/day15-agent-tools.md)。
+
+<!-- DAY15 CHECKPOINT END -->
+
+---
+
 # 后续任务
 
 更新时间：2026-10-30（Asia/Shanghai）

@@ -1,3 +1,22 @@
+<!-- DAY15 CHECKPOINT BEGIN -->
+## Day15 当前检查点（2026-10-30）
+
+Day15 单次工具调用实现与标准回归已完成，分支 `codex/day15-agent-tools`，
+父提交为已发布Day14 `b76987934663f7d90603dbc4abb2432d52baf91f`。本交付为独立本地提交，精确hash以 `git log -1` 为准；未推送或合并。
+最终标准：**563 passed / 12 skipped，44.52s，0失败/0警告**；dotenv/服务连接尝试0，未调用付费API。
+PLAN保持原样，Day15勾选未修改，Day16未开始。
+本节为当前恢复入口；下方原Day14段落完整保留作历史快照，不覆盖本节。
+
+公共/chat现由模型在三个只读工具中选择并执行一个：
+“有哪些文档？”→list_documents；带UUID详情问题→get_document_detail；知识问题→search_knowledge_base。
+目录结果仅有安全元数据且sources=[]；搜索继续Hybrid20→Rerank5→原始向量证据门。
+JSON与SSE不变，无会话/记忆；模型真实选择准确率尚未测量。
+实现、测试与实际图见 [Day15验收](docs/day15-agent-tools.md)。
+
+<!-- DAY15 CHECKPOINT END -->
+
+---
+
 # 企业知识库 RAG Agent 系统
 
 企业知识库 RAG 问答系统。当前检查点：2026-10-30（Asia/Shanghai），

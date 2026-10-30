@@ -9,6 +9,8 @@ from pydantic import SecretStr
 
 from backend.app.core.config import LLMSettings
 from backend.app.services.llm import LLMClient, LLMMessage, LLMServiceError
+from backend.app.services.llm import LLMToolCallError, MAX_TOOL_ARGUMENT_BYTES
+from backend.app.agent.tools import tool_definitions
 
 
 class FakeStream:
@@ -77,6 +79,11 @@ class FakeSDKClient:
     def __init__(self, stream_error: OpenAIError | None = None) -> None:
         self.completions = FakeCompletions(stream_error=stream_error)
         self.chat = SimpleNamespace(completions=self.completions)
+        self.retry_options: list[int] = []
+
+    def with_options(self, *, max_retries: int) -> "FakeSDKClient":
+        self.retry_options.append(max_retries)
+        return self
 
 
 def make_client(
@@ -208,3 +215,98 @@ def test_llm_api_key_is_redacted_in_settings_repr() -> None:
     )
 
     assert "super-secret-key" not in repr(settings)
+
+
+def tool_response(name: str = "list_documents", arguments: Any = "{}", **changes: Any) -> Any:
+    call = SimpleNamespace(id="call-1", type="function",
+                           function=SimpleNamespace(name=name, arguments=arguments))
+    for key, value in changes.items():
+        setattr(call, key, value)
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[call]))])
+
+
+def selector_client(response: Any) -> tuple[LLMClient, FakeSDKClient]:
+    client, sdk = make_client()
+    def create(**kwargs: Any) -> Any:
+        sdk.completions.calls.append(kwargs)
+        if isinstance(response, Exception):
+            raise response
+        return response
+    sdk.completions.create = create
+    return client, sdk
+
+
+@pytest.mark.parametrize(("name", "arguments", "parsed"), [
+    ("list_documents", "{}", {}),
+    ("search_knowledge_base", '{"query":"报销流程"}', {"query": "报销流程"}),
+    ("get_document_detail", '{"doc_id":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"}',
+     {"doc_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}),
+])
+def test_selector_uses_required_nonstreaming_single_call_without_retries(
+    name: str, arguments: str, parsed: dict[str, str],
+) -> None:
+    client, sdk = selector_client(tool_response(name, arguments))
+    definitions = tool_definitions()
+    call = client.select_tool([{"role": "user", "content": "有哪些文档？"}], definitions)
+    assert call == {"call_id": "call-1", "name": name, "arguments": parsed}
+    options = sdk.completions.calls[0]
+    assert options["stream"] is False and options["tool_choice"] == "required"
+    assert options["model"] == "compatible-model" and options["tools"] == list(definitions)
+    assert options["extra_body"] == {"vendor_option": True, "thinking": {"type": "disabled"}}
+    assert sdk.retry_options == [0] and len(sdk.completions.calls) == 1
+    assert all("strict" not in tool["function"] for tool in definitions)
+
+
+@pytest.mark.parametrize("response", [
+    None, SimpleNamespace(choices=[]), SimpleNamespace(choices=[SimpleNamespace(message=None)]),
+    SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[]))]),
+    SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[1, 2]))]),
+    tool_response(type="other"), tool_response(id=""), tool_response(id="x" * 129),
+    tool_response("unknown"), tool_response(arguments="not JSON private"),
+    tool_response(arguments="[]"), tool_response(arguments='"private"'),
+    tool_response(arguments="null"), tool_response(arguments={}),
+    tool_response(arguments='{"extra":"private"}'),
+    tool_response("search_knowledge_base", '{}'),
+    tool_response("search_knowledge_base", '{"query":false}'),
+    tool_response("search_knowledge_base", '{"query":"   "}'),
+    tool_response("search_knowledge_base", '{"query":"a","query":"b"}'),
+    tool_response("search_knowledge_base", '{"query":NaN}'),
+    tool_response("get_document_detail", '{"doc_id":"private-invalid"}'),
+    tool_response("list_documents", " " * (MAX_TOOL_ARGUMENT_BYTES + 1)),
+    tool_response("list_documents", "[" * 1000 + "]" * 1000),
+])
+def test_selector_rejects_malformed_or_ambiguous_responses_without_retry(response: Any) -> None:
+    client, sdk = selector_client(response)
+    with pytest.raises(LLMToolCallError) as error:
+        client.select_tool([{"role": "user", "content": "question"}], tool_definitions())
+    assert "private" not in str(error.value)
+    assert len(sdk.completions.calls) == 1 and sdk.retry_options == [0]
+
+
+def test_selector_sdk_failure_is_safe_and_not_retried() -> None:
+    client, sdk = selector_client(OpenAIError("private upstream"))
+    with pytest.raises(LLMServiceError) as error:
+        client.select_tool([{"role": "user", "content": "question"}], tool_definitions())
+    assert "private" not in str(error.value)
+    assert len(sdk.completions.calls) == 1 and sdk.retry_options == [0]
+
+
+@pytest.mark.parametrize("character", ["中", "\U0001f642"])
+def test_selector_accepts_full_4096_character_unicode_query(character: str) -> None:
+    import json
+    query = character * 4096
+    client, _ = selector_client(tool_response("search_knowledge_base", json.dumps({"query": query})))
+    assert client.select_tool([{"role": "user", "content": query}], tool_definitions())["arguments"] == {"query": query}
+
+
+def test_selector_cannot_be_overridden_by_extra_body_and_does_not_change_generation() -> None:
+    client, sdk = selector_client(tool_response())
+    client._settings.extra_body.update(tool_choice="none", tools=[], stream=True,
+                                      thinking={"type": "enabled"})
+    client.select_tool([{"role": "user", "content": "question"}], tool_definitions())
+    options = sdk.completions.calls[0]
+    assert options["tool_choice"] == "required" and options["stream"] is False
+    assert "tools" not in options["extra_body"] and "stream" not in options["extra_body"]
+    assert options["extra_body"]["thinking"] == {"type": "disabled"}
+    assert client._settings.extra_body["thinking"] == {"type": "enabled"}
+    assert "tools" not in client._request_options(messages=[{"role": "user", "content": "q"}], stream=False)

@@ -29,7 +29,7 @@ from backend.app.main import app
 from backend.app.models.document import Document
 from backend.app.services.document_storage import build_upload_paths
 from backend.app.services.embedding import EmbeddingClient
-from backend.app.services.llm import LLMMessage
+from backend.app.services.llm import AgentToolCall, LLMMessage, LLMToolDefinition
 from backend.app.services.qdrant_store import QdrantVectorStore
 from backend.app.services.rag import NO_RELEVANT_KNOWLEDGE, RAGService
 from backend.app.services.retrieval import RetrievalService
@@ -48,6 +48,13 @@ class StubMessagesLLMClient:
 
     def __init__(self) -> None:
         self.calls: list[tuple[LLMMessage, ...]] = []
+        self.selection_calls: list[tuple[LLMMessage, ...]] = []
+
+    def select_tool(self, messages: Sequence[LLMMessage],
+                    tools: Sequence[LLMToolDefinition]) -> AgentToolCall:
+        self.selection_calls.append(tuple(messages))
+        return AgentToolCall(call_id="integration-call", name="search_knowledge_base",
+                             arguments={"query": messages[-1]["content"]})
 
     def complete_messages(self, messages: Sequence[LLMMessage]) -> str:
         self.calls.append(tuple(messages))
@@ -195,6 +202,7 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
         assert "event: error" not in stream_response.text
         assert filename in stream_response.text
         assert len(llm_client.calls) == 2
+        assert len(llm_client.selection_calls) == 3
     finally:
         app.dependency_overrides.clear()
         try:

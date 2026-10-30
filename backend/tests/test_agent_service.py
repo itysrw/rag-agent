@@ -9,9 +9,21 @@ import pytest
 from backend.app.agent.service import RAGGraphRunner
 from backend.app.core.config import RAGSettings
 from backend.app.services.llm import LLMServiceError
+from backend.app.services.llm import AgentToolCall
 from backend.app.services.rag import RAGGraphError, RAGService
 from backend.app.services.reranker import RerankerInputError
 from backend.tests.test_rag import StubLLMClient, StubRetrievalService, retrieved_chunk
+
+
+def valid_prefetch() -> Iterator[Any]:
+    from backend.tests.test_chat import relevant_prepared
+    yield {"type": "updates", "ns": (), "data": {"select_tool_node": {
+        "tool_calls": (AgentToolCall(call_id="test", name="list_documents", arguments={}),),
+        "needs_tool_selection": False,
+    }}}
+    yield {"type": "updates", "ns": (), "data": {"tool_node": {
+        "prepared": relevant_prepared("question"), "retrieved_docs": (),
+    }}}
 
 
 class TrackingLLM(StubLLMClient):
@@ -37,6 +49,7 @@ def test_prefetch_is_retrieval_only_then_deltas_are_live_and_close_upstream() ->
     run = service.start_stream("question")
     assert retrieval.questions == ["question"]
     assert llm.stream_calls == [] and llm.produced == []
+    assert len(llm.selection_calls) == 1
     stream = service.stream(run)
     assert next(stream) == "first"
     assert llm.produced == ["first"], "Do not consume the complete upstream before delivery."
@@ -101,7 +114,7 @@ def test_missing_generation_update_fails_instead_of_reporting_success() -> None:
     prepared = relevant_prepared("question")
     class BadGraph:
         def stream(self, *args: Any, **kwargs: Any) -> Iterator[Any]:
-            yield {"type": "updates", "ns": (), "data": {"retrieve_node": {"prepared": prepared}}}
+            yield from valid_prefetch()
             yield {"type": "custom", "ns": (), "data": {"type": "delta", "delta": "hello"}}
     runner = RAGGraphRunner(BadGraph(), "test-model")
     run = runner.start_stream("question")
@@ -149,10 +162,47 @@ def test_bad_event_after_prefetch_is_not_exposed(event: Any) -> None:
     from backend.tests.test_chat import relevant_prepared
     class BadGraph:
         def stream(self, *args: Any, **kwargs: Any) -> Iterator[Any]:
-            yield {"type": "updates", "ns": (), "data": {"retrieve_node": {"prepared": relevant_prepared()}}}
+            yield from valid_prefetch()
             yield event
     runner = RAGGraphRunner(BadGraph(), "test-model")
     run = runner.start_stream("question")
     with pytest.raises(RAGGraphError) as error:
         list(runner.stream(run))
     assert run.closed and "secret" not in str(error.value)
+
+
+@pytest.mark.parametrize("events", [
+    [], [next(valid_prefetch())],
+    [next(valid_prefetch()), next(valid_prefetch())],
+    [next(valid_prefetch()), {"type": "custom", "ns": (), "data": {"type": "delta", "delta": "private"}}],
+    [next(valid_prefetch()), {"type": "updates", "ns": (), "data": {"tool_node": {"prepared": None, "retrieved_docs": ()}}}],
+])
+def test_prefetch_rejects_missing_out_of_order_or_premature_generation(events: list[Any]) -> None:
+    closed: list[bool] = []
+    class BadGraph:
+        def stream(self, *args: Any, **kwargs: Any) -> Iterator[Any]:
+            try:
+                yield from events
+            finally:
+                closed.append(True)
+    with pytest.raises(RAGGraphError) as error:
+        RAGGraphRunner(BadGraph(), "test-model").start_stream("question")
+    assert "private" not in str(error.value) and closed == [True]
+
+
+@pytest.mark.parametrize("internal", [False, True])
+@pytest.mark.parametrize("count", [0, 1, 2])
+def test_final_tool_count_is_distinct_for_public_and_internal_paths(internal: bool, count: int) -> None:
+    from backend.tests.test_chat import relevant_prepared
+    prepared = relevant_prepared("question")
+    call = AgentToolCall(call_id="test", name="list_documents", arguments={})
+    class Graph:
+        def invoke(self, *args: Any, **kwargs: Any) -> Any:
+            return {"query": "question", "prepared": prepared, "answer": "answer",
+                    "tool_calls": (call,) * count, "needs_tool_selection": False}
+    runner = RAGGraphRunner(Graph(), "test-model")
+    if count == (0 if internal else 1):
+        assert runner.complete(prepared if internal else "question").answer == "answer"
+    else:
+        with pytest.raises(RAGGraphError, match="invalid final state"):
+            runner.complete(prepared if internal else "question")

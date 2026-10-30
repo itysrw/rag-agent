@@ -15,13 +15,15 @@ from backend.app.services.bm25 import BM25Error
 from backend.app.services.embedding import EmbeddingError
 from backend.app.services.hybrid import HybridError
 from backend.app.services.llm import LLMServiceError
+from backend.app.services.llm import LLMToolCallError, validate_tool_call
+from backend.app.services.document_catalog import DocumentCatalogError
 from backend.app.services.qdrant_store import QdrantStoreError
 from backend.app.services.rag import PreparedRAG, RAGAnswer, RAGGraphError
 from backend.app.services.reranker import RerankerError
 
 _KNOWN_FAILURES = (
     BM25Error, EmbeddingError, HybridError, QdrantStoreError, RerankerError,
-    LLMServiceError, RAGGraphError,
+    LLMServiceError, RAGGraphError, DocumentCatalogError,
 )
 
 
@@ -65,7 +67,7 @@ class PreparedRAGStream:
 def _initial_state(question: str | PreparedRAG) -> AgentState:
     if isinstance(question, PreparedRAG):
         state = initial_agent_state(question.question)
-        state.update(prepared=question, needs_retrieval=False)
+        state.update(prepared=question, needs_tool_selection=False)
         return state
     return initial_agent_state(question)
 
@@ -98,12 +100,21 @@ class RAGGraphRunner:
                 )
             prepared = state.get("prepared")
             answer = state.get("answer")
+            calls = state.get("tool_calls")
+            expected_calls = 1 if initial["needs_tool_selection"] else 0
             if (
                 not isinstance(prepared, PreparedRAG)
                 or not isinstance(answer, str) or not answer.strip()
-                or state.get("tool_calls") != ()
+                or not isinstance(calls, tuple) or len(calls) != expected_calls
+                or state.get("needs_tool_selection") is not False
+                or state.get("query") != initial["query"] or prepared.question != initial["query"]
             ):
                 raise RAGGraphError("The RAG graph returned an invalid final state.")
+            if calls:
+                try:
+                    validate_tool_call(calls[0])
+                except LLMToolCallError as exc:
+                    raise RAGGraphError("The RAG graph returned an invalid final state.") from exc
             return RAGAnswer(answer, self.model, prepared.sources)
         except _KNOWN_FAILURES:
             raise
@@ -130,32 +141,46 @@ class RAGGraphRunner:
             raise RAGGraphError("The RAG graph stream failed.") from exc
 
     def start_stream(self, question: str | PreparedRAG) -> PreparedRAGStream:
-        """Pause after retrieve update, before generation or StreamingResponse."""
+        """Prefetch selection and execution, before generation or StreamingResponse."""
         initial = _initial_state(question)
         control = StreamControl()
         run = PreparedRAGStream(
             self._events(initial, control),
             prepared=initial["prepared"], control=control,
         )
-        if not initial["needs_retrieval"]:
+        if not initial["needs_tool_selection"]:
             return run
         try:
             event = run.next_event()
             kind, data = _event_data(event)
-            update = data.get("retrieve_node")
+            selection = data.get("select_tool_node")
             if (
-                kind != "updates" or set(data) != {"retrieve_node"}
-                or not isinstance(update, dict)
+                kind != "updates" or set(data) != {"select_tool_node"}
+                or not isinstance(selection, dict)
+                or set(selection) != {"tool_calls", "needs_tool_selection"}
+                or selection.get("needs_tool_selection") is not False
+                or not isinstance(selection.get("tool_calls"), tuple)
+                or len(selection["tool_calls"]) != 1
             ):
-                raise RAGGraphError("The RAG graph did not finish retrieval.")
+                raise RAGGraphError("The RAG graph did not finish tool selection.")
+            try:
+                validate_tool_call(selection["tool_calls"][0])
+            except LLMToolCallError as exc:
+                raise RAGGraphError("The RAG graph returned an invalid tool selection.") from exc
+            kind, data = _event_data(run.next_event())
+            update = data.get("tool_node")
+            if (kind != "updates" or set(data) != {"tool_node"} or not isinstance(update, dict)
+                    or set(update) != {"prepared", "retrieved_docs"}
+                    or not isinstance(update.get("retrieved_docs"), tuple)):
+                raise RAGGraphError("The RAG graph did not finish tool execution.")
             prepared = update.get("prepared")
-            if not isinstance(prepared, PreparedRAG):
+            if not isinstance(prepared, PreparedRAG) or prepared.question != initial["query"]:
                 raise RAGGraphError("The RAG graph returned no prepared context.")
             run.prepared = prepared
             return run
         except StopIteration as exc:
             run.close()
-            raise RAGGraphError("The RAG graph did not finish retrieval.") from exc
+            raise RAGGraphError("The RAG graph did not finish tool execution.") from exc
         except BaseException:
             run.close()
             raise

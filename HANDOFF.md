@@ -1,3 +1,29 @@
+<!-- DAY15 CHECKPOINT BEGIN -->
+## Day15 当前检查点（2026-10-30）
+
+Day15 单次工具调用实现与标准回归已完成，分支 `codex/day15-agent-tools`，
+父提交为已发布Day14 `b76987934663f7d90603dbc4abb2432d52baf91f`。本交付为独立本地提交，精确hash以 `git log -1` 为准；未推送或合并。
+最终标准：**563 passed / 12 skipped，44.52s，0失败/0警告**；dotenv/服务连接尝试0，未调用付费API。
+PLAN保持原样，Day15勾选未修改，Day16未开始。
+本节为当前恢复入口；下方原Day14段落完整保留作历史快照，不覆盖本节。
+
+公共路径 START→select_tool_node→tool_node→generate_node→END；每个有效公共请求恰好执行一个受控工具。
+三个工具为 search_knowledge_base/get_document_detail/list_documents。搜索用原始问题和既有Hybrid20→Rerank5→向量0.46门；
+目录只读安全元数据，ready、最多50条、详情计数，不读取正文，sources=[]。
+SSE前预取选择和执行，原JSON/SSE、背压、取消、引用清理保留；内部PreparedRAG零工具。
+
+原六份Day14交接整理仍未暂存；本地提交仅收录Day15代码、测试、新报告及这些文档的Day15增量。
+初始六份文档内容已保存在本地验证快照中，未丢弃或混入提交。
+机器结果、当前架构和限制见 [Day15验收](docs/day15-agent-tools.md)、[机器记录](docs/day15-agent-tools-results.json)。
+历史真实局部为10月29的3项，全真实为10月28的413项；本轮未重跑，当前服务/缓存/代理/外部材料待确认。
+
+下一会话先阅读本节及Day15验收，再核对当前分支、HEAD、六份保留改动与空暂存区；
+之后等待用户指定唯一后续动作，不自动运行真实服务、付费探测、推送、合并或进入Day16。
+
+<!-- DAY15 CHECKPOINT END -->
+
+---
+
 # 项目完整交接包
 
 更新时间：2026-10-30（Asia/Shanghai）

@@ -1,11 +1,11 @@
 """Business state and immutable-per-run mode; service objects stay outside state."""
 
-from collections.abc import Mapping
 from typing import Literal
 
 from typing_extensions import TypedDict
 
 from backend.app.services.rag import PreparedRAG
+from backend.app.services.llm import AgentToolCall
 from backend.app.services.reranker import RerankedChunk
 
 
@@ -16,8 +16,8 @@ class AgentState(TypedDict):
     retrieved_docs: tuple[RerankedChunk, ...]
     prepared: PreparedRAG | None
     answer: str
-    tool_calls: tuple[Mapping[str, object], ...]
-    needs_retrieval: bool
+    tool_calls: tuple[AgentToolCall, ...]
+    needs_tool_selection: bool
 
 
 class AgentUpdate(TypedDict, total=False):
@@ -27,8 +27,8 @@ class AgentUpdate(TypedDict, total=False):
     retrieved_docs: tuple[RerankedChunk, ...]
     prepared: PreparedRAG | None
     answer: str
-    tool_calls: tuple[Mapping[str, object], ...]
-    needs_retrieval: bool
+    tool_calls: tuple[AgentToolCall, ...]
+    needs_tool_selection: bool
 
 
 class AgentContext(TypedDict):
@@ -38,10 +38,10 @@ class AgentContext(TypedDict):
 
 
 def initial_agent_state(query: str) -> AgentState:
-    """Normalize a public request and always require knowledge-base retrieval."""
+    """Normalize a public request and require exactly one tool selection."""
     if not isinstance(query, str) or not 1 <= len(query.strip()) <= 4096:
         raise ValueError("question must contain between 1 and 4096 characters")
     return AgentState(
         query=query.strip(), retrieved_docs=(), prepared=None, answer="",
-        tool_calls=(), needs_retrieval=True,
+        tool_calls=(), needs_tool_selection=True,
     )

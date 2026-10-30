@@ -19,6 +19,7 @@ from backend.app.services.embedding import (
     EmbeddingInputTooLongError,
 )
 from backend.app.services.bm25 import BM25Error, BM25UnavailableError
+from backend.app.services.document_catalog import DocumentCatalogError, DocumentCatalogUnavailableError
 from backend.app.services.hybrid import HybridError, HybridResultError
 from backend.app.services.reranker import (
     RerankerError,
@@ -196,6 +197,10 @@ def chat(
         raise HTTPException(503, "The retrieval service is unavailable.") from exc
     except (BM25Error, HybridError, RerankerError) as exc:
         raise HTTPException(500, "The retrieval service failed.") from exc
+    except DocumentCatalogUnavailableError as exc:
+        raise HTTPException(503, "The document catalog is unavailable.") from exc
+    except DocumentCatalogError as exc:
+        raise HTTPException(500, "The document catalog service failed.") from exc
     except RAGGraphError as exc:
         logger.error("RAG graph failed")
         raise HTTPException(500, "The RAG service failed.") from exc

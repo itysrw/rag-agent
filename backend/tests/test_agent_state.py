@@ -1,4 +1,4 @@
-"""Day14 graph input/state boundaries without services or credentials."""
+"""Day15 graph input/state boundaries without services or credentials."""
 
 from typing import get_type_hints
 
@@ -9,13 +9,13 @@ from backend.app.agent.state import AgentContext, AgentState, initial_agent_stat
 
 def test_state_contains_only_request_data_and_context_only_mode() -> None:
     assert set(get_type_hints(AgentState)) == {
-        "query", "retrieved_docs", "prepared", "answer", "tool_calls", "needs_retrieval"
+        "query", "retrieved_docs", "prepared", "answer", "tool_calls", "needs_tool_selection"
     }
     assert set(get_type_hints(AgentContext)) == {"response_mode"}
     state = initial_agent_state("  报销时间？  ")
     assert state == {
         "query": "报销时间？", "retrieved_docs": (), "prepared": None,
-        "answer": "", "tool_calls": (), "needs_retrieval": True,
+        "answer": "", "tool_calls": (), "needs_tool_selection": True,
     }
     other = initial_agent_state("another")
     state["answer"] = "changed"

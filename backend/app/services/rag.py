@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING
 
 from backend.app.core.config import RAGSettings, get_rag_settings
+from backend.app.services.document_catalog import DocumentCatalogService, get_document_catalog_service
 from backend.app.services.llm import (
     LLMClient,
     LLMMessage,
@@ -68,6 +69,12 @@ _MODEL_SOURCE_REFERENCE = re.compile(
     rf"|{_BARE_SOURCE_MARKER_PATTERN}"
     rf")",
     re.IGNORECASE,
+)
+_CATALOG_SOURCE_MARKER = re.compile(
+    _GROUP_SOURCE_MARKER_PATTERN.replace(r"\.(?:pdf|md|txt)\b", r"(?!)"), re.IGNORECASE
+)
+_CATALOG_SOURCE_REFERENCE = re.compile(
+    _MODEL_SOURCE_REFERENCE.pattern.replace(r"\.(?:pdf|md|txt)\b", r"(?!)"), re.IGNORECASE
 )
 
 
@@ -179,10 +186,13 @@ class RAGService:
         retrieval_service: RerankedRetrievalService,
         llm_client: LLMClient,
         settings: RAGSettings,
+        *,
+        catalog_factory: Callable[[], DocumentCatalogService] = get_document_catalog_service,
     ) -> None:
         self._retrieval_service = retrieval_service
         self._llm_client = llm_client
         self._settings = settings
+        self._catalog_factory = catalog_factory
 
     @property
     def model(self) -> str:
@@ -196,7 +206,8 @@ class RAGService:
 
         return RAGGraphRunner(
             build_rag_graph(
-                self._retrieval_service, self._llm_client, self._settings
+                self._retrieval_service, self._llm_client, self._settings,
+                catalog_factory=self._catalog_factory,
             ),
             self.model,
         )
@@ -232,11 +243,12 @@ class RAGService:
         yield from self._runner.stream(run)
 
 
-def _strip_model_source_references(text: str) -> str:
-    return _MODEL_SOURCE_REFERENCE.sub("", text)
+def _strip_model_source_references(text: str, *, preserve_filenames: bool = False) -> str:
+    pattern = _CATALOG_SOURCE_REFERENCE if preserve_filenames else _MODEL_SOURCE_REFERENCE
+    return pattern.sub("", text)
 
 
-def _sanitized_model_deltas(deltas: Iterable[str]) -> Iterator[str]:
+def _sanitized_model_deltas(deltas: Iterable[str], *, preserve_filenames: bool = False) -> Iterator[str]:
     buffered = ""
     previous_raw_character: str | None = None
     for delta in deltas:
@@ -245,6 +257,7 @@ def _sanitized_model_deltas(deltas: Iterable[str]) -> Iterator[str]:
             buffered,
             previous_raw_character=previous_raw_character,
             final=False,
+            preserve_filenames=preserve_filenames,
         )
         if sanitized:
             yield sanitized
@@ -253,6 +266,7 @@ def _sanitized_model_deltas(deltas: Iterable[str]) -> Iterator[str]:
         buffered,
         previous_raw_character=previous_raw_character,
         final=True,
+        preserve_filenames=preserve_filenames,
     )
     if buffered:
         raise RuntimeError("model source sanitizer left unconsumed text")
@@ -265,6 +279,7 @@ def _consume_sanitized_text(
     *,
     previous_raw_character: str | None,
     final: bool,
+    preserve_filenames: bool = False,
 ) -> tuple[str, str, str | None]:
     """Consume safe text immediately while retaining partial references."""
     remaining = text
@@ -283,7 +298,7 @@ def _consume_sanitized_text(
             remaining = remaining[candidate:]
             continue
 
-        decision = _classify_reference_candidate(remaining, final=final)
+        decision = _classify_reference_candidate(remaining, final=final, preserve_filenames=preserve_filenames)
         if decision is None:
             break
         remove, length = decision
@@ -310,11 +325,14 @@ def _classify_reference_candidate(
     text: str,
     *,
     final: bool,
+    preserve_filenames: bool = False,
 ) -> tuple[bool, int] | None:
     first = text[0]
     if first in "[(":
-        return _classify_group_candidate(text, final=final)
+        return _classify_group_candidate(text, final=final, preserve_filenames=preserve_filenames)
     if first == ".":
+        if preserve_filenames:
+            return False, 1
         return _classify_extension_candidate(text, final=final)
     if first.lower() == "p":
         return _classify_page_candidate(text, final=final)
@@ -327,13 +345,15 @@ def _classify_group_candidate(
     text: str,
     *,
     final: bool,
+    preserve_filenames: bool = False,
 ) -> tuple[bool, int] | None:
     closing_character = "]" if text[0] == "[" else ")"
     closing = text.find(closing_character, 1)
     maximum_length = _MAX_REFERENCE_GROUP_CONTENT + 2
     if 0 < closing < maximum_length:
         group = text[: closing + 1]
-        return bool(_MODEL_SOURCE_MARKER.search(group)), len(group)
+        marker = _CATALOG_SOURCE_MARKER if preserve_filenames else _MODEL_SOURCE_MARKER
+        return bool(marker.search(group)), len(group)
     if closing >= maximum_length or final or len(text) >= maximum_length:
         return False, 1
     return None

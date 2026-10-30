@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 from uuid import uuid4
 
@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.core.config import RAGSettings
-from backend.app.services.llm import LLMMessage, LLMServiceError
+from backend.app.services.llm import AgentToolCall, LLMMessage, LLMServiceError, LLMToolDefinition
 from backend.app.services.reranker import RerankedChunk, RerankOutcome
 from backend.app.services.rag import (
     NO_RELEVANT_KNOWLEDGE,
@@ -64,10 +64,22 @@ class StubLLMClient:
 
     model = "test-model"
 
-    def __init__(self, *, stream_deltas: list[str] | None = None) -> None:
+    def __init__(self, *, stream_deltas: list[str] | None = None,
+                 tool_call: AgentToolCall | None = None) -> None:
         self.complete_calls: list[tuple[LLMMessage, ...]] = []
         self.stream_calls: list[tuple[LLMMessage, ...]] = []
+        self.selection_calls: list[tuple[LLMMessage, ...]] = []
+        self.tool_call = tool_call
         self.stream_deltas = ["answer"] if stream_deltas is None else stream_deltas
+
+    def select_tool(self, messages: Sequence[LLMMessage],
+                    tools: Sequence[LLMToolDefinition]) -> AgentToolCall:
+        self.selection_calls.append(tuple(messages))
+        assert len(tools) == 3
+        return self.tool_call or AgentToolCall(
+            call_id="test-call", name="search_knowledge_base",
+            arguments={"query": messages[-1]["content"]},
+        )
 
     def complete_messages(self, messages: tuple[LLMMessage, ...]) -> str:
         self.complete_calls.append(messages)

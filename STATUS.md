@@ -1,3 +1,22 @@
+<!-- DAY15 CHECKPOINT BEGIN -->
+## Day15 当前检查点（2026-10-30）
+
+Day15 单次工具调用实现与标准回归已完成，分支 `codex/day15-agent-tools`，
+父提交为已发布Day14 `b76987934663f7d90603dbc4abb2432d52baf91f`。本交付为独立本地提交，精确hash以 `git log -1` 为准；未推送或合并。
+最终标准：**563 passed / 12 skipped，44.52s，0失败/0警告**；dotenv/服务连接尝试0，未调用付费API。
+PLAN保持原样，Day15勾选未修改，Day16未开始。
+本节为当前恢复入口；下方原Day14段落完整保留作历史快照，不覆盖本节。
+
+已实现三工具schema/校验、无重试非流式选择、只读目录、三节点图及SSE前两阶段预取。
+公共有效请求1个工具；无结果固定拒答、生成0次。目录无页码来源，搜索可信来源保持。
+OpenAPI精确一致，原底层检索、模型、schema、依赖和历史验收未变。
+原六份交接整理仍保留未暂存；本提交仅包含Day15增量。当前服务与真实选择能力尚未探测。
+详见 [Day15验收](docs/day15-agent-tools.md) 和 [机器记录](docs/day15-agent-tools-results.json)。
+
+<!-- DAY15 CHECKPOINT END -->
+
+---
+
 # 项目状态
 
 更新时间：2026-10-30（Asia/Shanghai）

@@ -7,6 +7,8 @@ import pytest
 from langgraph.runtime import Runtime
 
 from backend.app.agent.nodes import create_generate_node, create_retrieve_node
+from backend.app.agent.nodes import create_select_tool_node, create_tool_node
+from backend.app.agent.tools import AgentTools
 from backend.app.agent.state import initial_agent_state
 from backend.app.core.config import RAGSettings
 from backend.app.services.llm import LLMServiceError
@@ -27,7 +29,7 @@ def test_retrieve_preserves_top_five_but_prepares_only_vector_evidence() -> None
     assert state == before
     assert retrieval.questions == ["question"]
     assert update["retrieved_docs"] == (strong, low, bm25_only)
-    assert update["needs_retrieval"] is False
+    assert update["needs_tool_selection"] is False
     prepared = update["prepared"]
     assert prepared is not None and prepared.has_relevant_context
     assert [(s.filename, s.page) for s in prepared.sources] == [(strong.filename, 1)]
@@ -71,7 +73,7 @@ def test_generation_cleans_references_across_custom_deltas(
 def test_missing_prepared_state_never_calls_llm() -> None:
     llm = StubLLMClient()
     state = initial_agent_state("question")
-    state["needs_retrieval"] = False
+    state["needs_tool_selection"] = False
     with pytest.raises(RAGGraphError):
         create_generate_node(llm)(state, Runtime(context={"response_mode": "complete"}))
     assert llm.complete_calls == llm.stream_calls == []
@@ -102,3 +104,31 @@ def test_empty_or_only_reference_complete_is_failure(answer: str) -> None:
     )(state, Runtime(context={"response_mode": "complete"})))
     with pytest.raises(LLMServiceError, match="empty response"):
         create_generate_node(EmptyLLM())(state, Runtime(context={"response_mode": "complete"}))
+
+
+def test_selection_and_execution_return_partial_updates_without_mutating_state() -> None:
+    state = initial_agent_state("question")
+    before = dict(state)
+    llm = StubLLMClient()
+    runtime = Runtime(context={"response_mode": "complete"})
+    selection = create_select_tool_node(llm)(state, runtime)
+    assert state == before and set(selection) == {"tool_calls", "needs_tool_selection"}
+    state.update(selection)
+    before = dict(state)
+    retrieval = StubRetrievalService([retrieved_chunk(score=0.9)])
+    execution = create_tool_node(AgentTools(retrieval, RAGSettings(_env_file=None)))(state, runtime)
+    assert state == before and set(execution) == {"prepared", "retrieved_docs"}
+    assert retrieval.questions == ["question"] and len(llm.selection_calls) == 1
+
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_tool_node_rejects_missing_or_multiple_calls_before_execution(count: int) -> None:
+    from backend.app.services.llm import AgentToolCall
+    state = initial_agent_state("question")
+    state.update(needs_tool_selection=False, tool_calls=(AgentToolCall(
+        call_id="test", name="search_knowledge_base", arguments={"query": "question"},
+    ),) * count)
+    retrieval = StubRetrievalService([])
+    with pytest.raises(RAGGraphError):
+        create_tool_node(AgentTools(retrieval, RAGSettings(_env_file=None)))(state, Runtime())
+    assert retrieval.questions == []
