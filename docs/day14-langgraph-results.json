@@ -1,0 +1,288 @@
+{
+  "date_asia_shanghai": "2026-10-30",
+  "implementation_day": 14,
+  "branch": "codex/day14-langgraph",
+  "base_head": "34712772b3682d174f459da91100b09f8a2493cc",
+  "publication": {
+    "day14_staged": false,
+    "day14_committed": true,
+    "day14_pushed": false,
+    "remote_checked_at_session_start": {
+      "day12_branch": "34712772b3682d174f459da91100b09f8a2493cc",
+      "master": "b68b590c8262eb568a371c895e4f7033456d045c"
+    },
+    "day14_related_paths": 27,
+    "tracked_changed_paths": 15,
+    "new_related_paths": 12,
+    "unrelated_untracked_items_preserved": 2,
+    "snapshot_scope": "State after creation of the containing local Day14 commit; verify with git log/status.",
+    "commit_subject": "feat: complete Day 14 LangGraph RAG migration",
+    "commit_hash_source": "git log -1 --format=%H; the containing commit cannot record its own hash",
+    "remote_checked_date_asia_shanghai": "2026-10-29",
+    "remote_rechecked_for_this_commit": false
+  },
+  "python_version": "3.11.15",
+  "prerequisites": {
+    "day13_artifacts_verified": true,
+    "day13_artifacts_location": "external temporary learning pack; not copied into this repository",
+    "official_example_exact_match": true,
+    "day13_plan_marked_complete": false,
+    "day14_plan_marked_complete": true
+  },
+  "dependencies": {
+    "direct_added": "langgraph==1.2.16",
+    "pip_check": "No broken requirements found.",
+    "langgraph": "1.2.16",
+    "langgraph-checkpoint": "4.3.1",
+    "langgraph-prebuilt": "1.1.1",
+    "langgraph-sdk": "0.4.10",
+    "ormsgpack": "1.13.0",
+    "langchain-core": "1.4.9",
+    "langsmith": "0.10.5",
+    "full_langchain_installed": false
+  },
+  "tests": [
+    {
+      "date": "2026-10-29",
+      "stage": "before migration, full standard",
+      "passed": 403,
+      "skipped": 12,
+      "failed": 0,
+      "pytest_seconds": 4.11,
+      "warnings": 1,
+      "note": "Temporary runner imported the application before pytest; subsequent runner order fixed the anyio rewrite warning."
+    },
+    {
+      "date": "2026-10-29",
+      "stage": "after migration, full standard",
+      "passed": 453,
+      "skipped": 12,
+      "failed": 0,
+      "pytest_seconds": 31.1,
+      "dotenv_opens": 0,
+      "external_connects": 0
+    },
+    {
+      "date": "2026-10-29",
+      "stage": "targeted real RAG and fixed comparison; not all real backend tests",
+      "targets": [
+        "backend/tests/test_rag_integration.py",
+        "backend/tests/test_rerank_comparison_integration.py"
+      ],
+      "passed": 3,
+      "skipped": 0,
+      "failed": 0,
+      "pytest_seconds": 160.84,
+      "dotenv_read_opens": 2,
+      "dotenv_write_attempts": 0,
+      "external_connects": 0,
+      "paid_llm_attempts": 0
+    },
+    {
+      "date": "2026-10-28",
+      "stage": "historical full real Day12 suite; not rerun for Day14",
+      "passed": 413,
+      "skipped": 0,
+      "pytest_seconds": 158.94
+    },
+    {
+      "date": "2026-10-30",
+      "stage": "pre-commit full standard after user review/fix confirmation",
+      "passed": 453,
+      "skipped": 12,
+      "failed": 0,
+      "warnings": 0,
+      "pytest_seconds": 23.34,
+      "dotenv_opens": 0,
+      "external_connects": 0
+    }
+  ],
+  "verification": {
+    "openapi_exactly_unchanged": true,
+    "unchanged_rag_helper_functions": [
+      "select_relevant_chunks",
+      "build_sources",
+      "build_rag_messages",
+      "_strip_model_source_references",
+      "_sanitized_model_deltas",
+      "_consume_sanitized_text",
+      "_reference_candidate_start",
+      "_classify_reference_candidate",
+      "_classify_group_candidate",
+      "_classify_extension_candidate",
+      "_classify_page_candidate",
+      "_classify_chinese_page_candidate",
+      "_classify_source_id_candidate",
+      "_is_word_character",
+      "get_rag_service"
+    ],
+    "protected_file_count": 18,
+    "changed_protected_files": [],
+    "real_test_cleanup": {
+      "test_filename_document_count": 0,
+      "test_filename_chunk_count": 0,
+      "matching_temporary_collection_count": 0,
+      "writes": false
+    },
+    "no_new_model_download": true,
+    "no_service_start_or_restart": true,
+    "no_tools_or_memory": true,
+    "no_checkpointer": true,
+    "langsmith_tracing_disabled_per_run": true,
+    "document_local_links_checked": 72,
+    "broken_document_local_links": [],
+    "D001_through_D053_text_unchanged": true,
+    "compiled_mermaid_export_matches": true,
+    "git_diff_check_passed": true
+  },
+  "real_quality": {
+    "corpus_chunk_count": 24,
+    "positive_question_count": 12,
+    "negative_question_count": 3,
+    "hybrid": {
+      "hit_at_1": 0.917,
+      "hit_at_5": 1,
+      "mrr_at_5": 0.944
+    },
+    "rerank": {
+      "hit_at_1": 0.917,
+      "hit_at_5": 1,
+      "mrr_at_5": 0.958
+    },
+    "negative_refusal_rate": 1,
+    "acceptance_baseline_unchanged": true,
+    "scope_note": "Same controlled 24 Chunk / 12 positive / 3 negative corpus; no generalization to natural documents."
+  },
+  "protected_sha256": [
+    {
+      "path": "PLAN.md",
+      "sha256": "fda329abc06fbda6b05642832a0386372d06592598106f61270845b0577e9fa1"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "7be7cc1a8df4a0d5c4ed64bcdb395ddf76fdc978efcefb4eb2a896f8d9a2e394"
+    },
+    {
+      "path": "backend/app/main.py",
+      "sha256": "c0888dd1d9141aabe6e944676421597e1f7c1edded20e90c23159349f088e4dd"
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "sha256": "f41e05be1e5854152b491229422ca7bbe484dd60e238e43dc0770cdf290691b1"
+    },
+    {
+      "path": "backend/app/services/llm.py",
+      "sha256": "ff6cd7340f8631ebeddc51e3eff6f075c040a596a4a4ac7687d4f9ae79cc0322"
+    },
+    {
+      "path": "backend/app/services/reranker.py",
+      "sha256": "f90b512dc11da898636c1414111671eea086393d1bc96dd655ffcd77c0aa4f86"
+    },
+    {
+      "path": "backend/app/services/hybrid.py",
+      "sha256": "7f501464e2d10fd541460c60a046478167492a607c100e29b50e44adb04fc771"
+    },
+    {
+      "path": "backend/app/services/bm25.py",
+      "sha256": "d26c49be73e8ad8133ab6ab9bf0788fba1cb660c9a49fd092005f4af362180b0"
+    },
+    {
+      "path": "backend/app/services/retrieval.py",
+      "sha256": "ba104acb083903ebb5f12f28bd10a51b2f4bde54481e58a02d09bad466a23cf3"
+    },
+    {
+      "path": "backend/app/services/embedding.py",
+      "sha256": "5f4e20ccccdf970abd34a4dcad6c06937b73c660481da6be3474c14518eb7ac0"
+    },
+    {
+      "path": "backend/app/services/qdrant_store.py",
+      "sha256": "50f016d4b027c00ae485e06b0482cb3b355e1abdc256799379bcf27df55e3630"
+    },
+    {
+      "path": "backend/app/api/rerank.py",
+      "sha256": "e6155a21329a85735bbea1fc685ca827df0f1ff51f522719030d19dbd63e0cb5"
+    },
+    {
+      "path": "docs/day12-rerank-results.json",
+      "sha256": "43fc6d0ad73dca87dea7e94b3cf15ab2f9d91f9e2d786672897c9247e31c7538"
+    },
+    {
+      "path": "docs/day12-rerank-comparison.md",
+      "sha256": "a2ab837a4cbdea2a070777fbe6aea7a43865149c9164b1933ba02511de61a094"
+    },
+    {
+      "path": "backend/tests/test_rerank_comparison_integration.py",
+      "sha256": "e48b06ac09288e588d9c12a0f2f809ac3406085cf8ba088cdea02ac5247975df"
+    },
+    {
+      "path": "backend/tests/test_reranker.py",
+      "sha256": "5d95af897b0e6f614a958baa1ce9300676253e307a00b75f0e94c1f91e8202e6"
+    },
+    {
+      "path": "backend/tests/test_reranker_integration.py",
+      "sha256": "79b296d2b0ebd4bf25d18090e0adaa312f4fe031edfd5e9b63e7e5cdf468010d"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "704967b993637e56752b87ef9dfd8f38666dd0fa8bb3ee0bcf1843b10c959e68"
+    }
+  ],
+  "raw_evidence_directory": "C:\\Users\\袁伟鑫\\AppData\\Local\\Temp\\rag-agent-day14-feb71aa9c2e74566b33c1213b211cc47",
+  "migration_acceptance_date_asia_shanghai": "2026-10-29",
+  "verification_scope": "Original migration verification dated 2026-10-29; commit_checkpoint records the separately authorized PLAN status update.",
+  "protected_sha256_scope": "2026-10-29 migration evidence; PLAN changes were separately authorized on 2026-10-30. Other 17 files remain unchanged.",
+  "commit_checkpoint": {
+    "date_asia_shanghai": "2026-10-30",
+    "user_confirmed_review_testing_and_fixes_passed": true,
+    "new_production_test_or_dependency_changes": false,
+    "reviewed_source_test_requirement_files_unchanged": 16,
+    "unchanged_protected_files_excluding_authorized_plan": 17,
+    "plan_change_scope": "Day14 five task checkboxes, completion confirmation and development-log row only",
+    "day13_plan_content_unchanged": true,
+    "day15_and_later_plan_content_unchanged": true,
+    "plan_sha256_before": "fda329abc06fbda6b05642832a0386372d06592598106f61270845b0577e9fa1",
+    "plan_sha256_after": "c1a6dbb5c081c15ea285a2826548d13806b147f2541569eb81017d188fb31099",
+    "all_real_tests_rerun": false,
+    "targeted_real_tests_rerun": false,
+    "service_operations": false,
+    "model_downloads": false,
+    "paid_api_calls": 0,
+    "raw_test_log_label": "commit-20261030-8f24b715",
+    "standard_test": {
+      "date": "2026-10-30",
+      "passed": 453,
+      "skipped": 12,
+      "failed": 0,
+      "pytest_seconds": 23.34,
+      "label": "commit-20261030-8f24b715",
+      "exit_code": 0,
+      "elapsed_seconds": 23.982,
+      "arguments": [
+        "backend/tests",
+        "-v",
+        "--basetemp=C:\\Users\\袁伟鑫\\AppData\\Local\\Temp\\rag-agent-day14-feb71aa9c2e74566b33c1213b211cc47\\commit-20261030-8f24b715-2ffa77d8b42b43daac6be75c698efa3c",
+        "-p",
+        "no:cacheprovider",
+        "-p",
+        "no:langsmith_plugin"
+      ],
+      "dotenv_opens": 0,
+      "external_connects": 0
+    },
+    "final_static_checks": {
+      "protected_files_excluding_plan": 17,
+      "reviewed_source_test_requirement_files_unchanged": 16,
+      "plan_changes_only_day14": true,
+      "day14_completed_checkboxes": 5,
+      "local_links_checked": 71,
+      "broken_local_links": [],
+      "brief_characters": 248,
+      "related_paths": 27,
+      "index_empty": true,
+      "git_diff_check": "passed",
+      "openapi_exactly_unchanged": true,
+      "technical_decisions_D001_through_D058_unchanged": true,
+      "pip_check": "No broken requirements found."
+    }
+  }
+}

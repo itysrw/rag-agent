@@ -1,22 +1,27 @@
 # 企业知识库 RAG Agent 系统
 
-企业知识库RAG问答系统。当前检查点：2026-10-29（Asia/Shanghai），**Day1–12任务已完成，继续暂停功能开发**。
-Day1–11已有发布检查点；Day11于2026-10-28独立推送b68b590并实时核验。
-当前本地分支`codex/day12-rerank`，本提交包含Day12完整实现、测试、实验和状态文档共26个文件；
-精确提交哈希以`git log -1 --format=%H`为准。本地origin/master tracking ref仍为Day11的b68b590，Day12尚未推送。
-`PLAN.md`的Day12四项及开发日志已于2026-10-29按用户授权标记完成；Day13及以后未开始。
-当前实时远端与服务现状待确认，推送或合并等待用户另行指定。
+企业知识库 RAG 问答系统。当前检查点：2026-10-30（Asia/Shanghai），
+**Day14 已由用户确认审查、测试与修复通过，PLAN 五项任务及开发日志已标记完成**。
+本提交在 `codex/day14-langgraph` 收录 Day14 完整代码、测试和文档；
+精确 HEAD 提交后用 `git log -1 --format=%H` 核验，父提交为 Day12 的 3471277。
+未推送或合并，Day15 未开始；Day13 的计划标记保留原样。
+2026-10-29 曾实时确认 Day12 远端分支为 3471277、master 为 b68b590，本次未复查远端。
 
-当前问答链路：向量/BM25各20 → RRF Hybrid20 → 固定CPU BGE Rerank5 →
-原始向量分数0.46证据门 → LLM答案及后端来源。JSON/SSE格式保持不变，无相关证据固定
-拒答且不调用LLM。向量、BM25、Hybrid、Rerank均有独立调试接口。
+当前问答由 LangGraph 的 retrieve_node → generate_node 编排，
+保留向量/BM25 各20 → RRF Hybrid20 → 固定 CPU BGE Rerank5 →
+原始向量分数0.46证据门 → LLM答案及后端来源。
+公共请求固定检索，JSON/SSE不变，无相关证据固定拒答且不调用LLM。
+流式先完成检索再建立响应，随后消费同一图迭代器。
 
-2026-10-29本地提交前重新运行标准测试：**403 passed/12 skipped，15.93s**，覆盖ReadError重试和严格质量退化普通回归。
-最近全部真实集成仍为2026-10-28的**413 passed**；本次未重跑真实集成，保留PLAN已勾选状态。
-10月28受控评测Rerank Hit@1/Hit@5/MRR@5为0.917/1.000/0.958；保留实验原日期，不推算新全真实通过数。
-历史方法、失败案例与性能边界见[Day12报告](docs/day12-rerank-comparison.md)。
-LangGraph、记忆、前端和完整一键部署仍是后续目标。
-恢复先阅读[完整交接包](HANDOFF.md)，只读核对并复述，等待用户指定唯一动作；不自动测试、发布或开始Day13。
+2026-10-30 提交前完整标准：**453 passed / 12 skipped，23.34s**，无付费调用。
+2026-10-29 真实局部 **3 passed，160.84s**，使用本地检索与 LLM 替身；
+同 24 Chunk/12 正样本/3 负样本的 Rerank 指标为 0.917/1.000/0.958。
+最新全部真实仍为 2026-10-28 的 413 passed，本次未重跑真实集成。
+实现、图与证据见 [Day14 迁移报告](docs/day14-langgraph-migration.md)。
+
+工具调用、记忆、前端和完整一键部署仍是后续目标。
+恢复先阅读 [完整交接包](HANDOFF.md)，只读核对提交与工作区，等待唯一动作；
+不自动推送、修改其他日计划或开始 Day15。
 
 ## 项目状态文档
 
@@ -30,6 +35,7 @@ LangGraph、记忆、前端和完整一键部署仍是后续目标。
 - [Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)
 - [Day 11 三路 Hybrid 对比](docs/day11-hybrid-comparison.md)
 - [Day 12 本地 Rerank 对比](docs/day12-rerank-comparison.md)
+- [Day 14 LangGraph 迁移与验收](docs/day14-langgraph-migration.md)
 - [本机 Docker Desktop 恢复记录](docs/docker-desktop-recovery.md)
 
 ## 技术栈
@@ -37,7 +43,7 @@ LangGraph、记忆、前端和完整一键部署仍是后续目标。
 | 层级 | 技术 |
 |------|------|
 | 后端框架 | Python 3.11 · FastAPI · Uvicorn |
-| Agent 编排 | LangGraph |
+| Agent 编排 | LangGraph 1.2.16 · retrieve/generate 双节点 |
 | 向量数据库 | Qdrant |
 | 关系数据库 | PostgreSQL · SQLAlchemy 2.x · psycopg 3 |
 | 文本向量 | SentenceTransformers · BAAI/bge-small-zh-v1.5 · CPU |
@@ -367,7 +373,7 @@ JSONL 事件由 `backend/app/core/logging.py` 的 `JSONL_LOG_MARKER` 标记。�
 - [x] BM25 关键词检索（独立 API · PostgreSQL 指纹刷新 · 真实向量对比）
 - [x] Hybrid Search（标准 RRF · 两路各 20 · 独立 API · 三路真实对比）
 - [x] Rerank（固定本地CrossEncoder · Hybrid20→Rerank5 · Chat证据门与真实对比）
-- [ ] LangGraph Agent 编排
+- [x] LangGraph RAG 编排（双节点 · 条件边 · invoke/stream · 预取与关闭）
 - [ ] Agent 工具调用（search / detail / list）
 - [ ] 多轮对话记忆
 - [ ] 评测数据集（50 条 QA）

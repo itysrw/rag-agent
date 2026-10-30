@@ -1,19 +1,17 @@
 # 技术决策记录
 
-更新时间：2026-10-29（Asia/Shanghai）
+更新时间：2026-10-30（Asia/Shanghai）
 
-> Day 11 按用户提供的每日规划新增 D-047 至 D-049；D-001 至 D-046 保留原有适用范围。
+> D-001 至 D-053 为前序决策；D-054 至 D-058 为 Day14 迁移决策，正文及原适用范围保留。
+> 本次只按用户确认同步 Day14 完成状态并本地提交，不新增或推翻技术决策。
+> 当前分支 codex/day14-langgraph；本提交收录 Day14，精确 HEAD 用 git log -1 核验，父提交 3471277。
+> 2026-10-30 用户确认审查、测试与修复通过，PLAN Day14 五项和日志已勾选；Day13 标记不改。
+> 提交前标准 453/12（23.34s）；真实局部 3 是 10月29记录，全部真实 413 是 10月28记录，本次均未重跑。
+> Day14 未推送；Day12 分支/master 的远端核验日期为 10月29，本次未查询实时远端。
 
-> D-001至D-049为前序决策，D-050至D-053为Day12实施决策。本次按用户要求收录Day12本地提交，不新增或推翻技术决策。
-> 2026-10-29用户确认Day12已完成，PLAN四项和开发日志已勾选；Day12纳入本地提交但未推送，Day13未开始。
-> 最近标准为2026-10-29本地提交前重跑的403 passed/12 skipped（15.93s）；最近全真实仍为2026-10-28的413，本次未重跑真实集成。
-
-交接只读观察：ensure_reranker_snapshot当前将httpx.ReadError纳入有限重试；
-test_reranker.py包含test_download_retries_read_errors_with_exponential_backoff；
-test_rerank_comparison_integration.py包含_assert_quality_acceptance及
-test_quality_acceptance_rejects_all_correct_results_falling_to_fifth。
-当前质量基线严格检查聚合指标、逐题首次命中、每题20候选/0截断，防止Hit@5掩盖质量回退。
-这些实现细节不构成本轮新增决策；后续普通回归已随2026-10-29标准403/12通过，作者/独立审查记录未补查，详见[交接包](HANDOFF.md)。
+下方决策中的测试、PLAN 未改和保护哈希描述属于 2026-10-29 迁移验收时点。
+本次 PLAN 完成标记按新授权更新，其余 17 项保护文件和已审查源码/测试保持原样。
+完整历史及当前提交记录见 [Day14 迁移报告](docs/day14-langgraph-migration.md)。
 
 ## D-001：以 25 天计划控制范围
 
@@ -496,3 +494,51 @@ test_quality_acceptance_rejects_all_correct_results_falling_to_fifth。
   不把这组历史结果当作10月29后续变更的重测证据。
 - Day11先独立推送b68b590；Day12实现阶段按原附件保留PLAN。2026-10-29用户确认Day12完成，
   单独授权勾选四项任务和更新日志，2026-10-29标准403/12通过；之后按用户要求收录Day12本地提交，提交前重跑403/12（15.93s），未推送，Day13未开始。
+
+## D-054：固定版本的双节点图只负责 RAG 编排
+
+- 固定直接依赖 langgraph==1.2.16，不安装完整 langchain；依赖闭包注入节点。
+- AgentState 为六字段 TypedDict，AgentContext 仅 response_mode；串行节点返回局部更新，
+  不原地改 State、不增加 reducer、不放入服务对象。
+- START 根据严格布尔 needs_retrieval 路由到 retrieve_node 或 generate_node，
+  retrieve→generate→END。公共 /chat 初始化固定 True；tool_calls 始终为空。
+- 不引入 LLM 路由、工具、checkpointer 或记忆。图在首次请求懒编译并缓存，health 零依赖。
+- 原因：限定 Day14 范围，保留现有检索和安全业务服务，避免编排迁移夹带算法或接口变化。
+
+## D-055：invoke 与同一 stream 预取消费保留 HTTP 契约
+
+- complete 使用 graph.invoke；stream 使用 v2 updates + custom，自有 LLMClient 由 writer
+  发出且只允许 type/delta 两字段，内部 State update 不进入 SSE。
+- start_stream 在创建 StreamingResponse 前消费到 retrieve_node update；后续继续同一 iterator。
+  既有检索异常原样传播，保留 422/500/502/503；生成异常继续保持 JSON 502 或 SSE error。
+- Prompt、0.46 原始向量证据门、sources 和跨 delta sanitizer 复用原函数。
+- 否决：直接把未执行检索的 graph.stream 放入 HTTP 流、预先生成完整答案、再次检索或将
+  updates 原样透传；这些方案分别破坏错误码、实时流式、单次执行或数据边界。
+
+## D-056：单次流控制负责背压、跨线程与取消清理
+
+- Runtime RunControl 子类提供逐 delta 确认与取消，不放入业务 State/Context。
+  生产者发出一段后等待消费者，避免同步图工作线程把上游完整读入队列。
+- PreparedRAGStream 为同一迭代器保存独立 Context 与锁，支持 FastAPI 不同线程预取/消费。
+  close 先取消再关闭，幂等释放 graph/sanitizer/LLM iterator；ASGI finally 使用取消保护。
+- 原因：同步 graph 内含后台节点，单靠外层 generator.close 无法可靠唤醒等待的生产者；
+  contextvars 也不能在不同线程的默认 Context 中随意退出。
+- 边界：同步上游 I/O 已阻塞时仍受既有 60s 默认 timeout 约束；未增加异步客户端或强制打断。
+
+## D-057：逐次关闭 tracing 并使用安全编排异常
+
+- invoke/stream 显式 tracing_context(enabled=False)、callbacks=[]，不依赖环境默认值；
+  即便环境开启 LangSmith，也不能导出 query、Prompt、Chunk 或 State。
+- 保留既有服务异常类型；未知图错误包装成固定安全 RAGGraphError。
+  API 日志只记固定文本或类型，不打印图异常原文和调用栈中的局部 State。
+- 原因：迁移不等于授权上传业务数据；保持已有安全日志规则，不建立后续 trace 系统。
+
+## D-058：旧内部 PreparedRAG 调用复用节点，公共请求始终完整运行图
+
+- RAGService 名称和旧 prepare/complete(PreparedRAG)/stream(PreparedRAG) 内部用法保留，
+  prepare 直接复用 retrieve_node，已准备状态走 False 条件边，不再次检索。
+- 公共 /chat 只传问题字符串，经 True 分支完整执行；不新增 HTTP 跳过检索参数。
+  False 若没有合法 PreparedRAG 则安全失败。
+- 原因：保留既有实验/真实比较测试及调用者，避免改动只读质量文件或维护两套检索业务逻辑。
+- 验证：OpenAPI 精确一致、原模块级辅助函数 AST 一致；标准 453/12，真实局部 3，
+  既有质量常量通过，PLAN 和 Day12 实验/核心检索文件 SHA256 不变。

@@ -29,3 +29,14 @@ def test_routes_do_not_register_duplicate_operations() -> None:
     with warnings.catch_warnings(record=True) as recorded:
         create_app().openapi()
     assert not any("Duplicate Operation ID" in str(item.message) for item in recorded)
+
+
+def test_health_does_not_construct_or_compile_graph(monkeypatch: pytest.MonkeyPatch) -> None:
+    from typing import Any
+    def forbidden(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("health must not construct graph dependencies")
+    monkeypatch.setattr("backend.app.agent.graph.build_rag_graph", forbidden)
+    monkeypatch.setattr("backend.app.services.rag.get_reranked_retrieval_service", forbidden)
+    monkeypatch.setattr("backend.app.services.rag.get_llm_client", forbidden)
+    with TestClient(create_app()) as client:
+        assert client.get("/health").json() == {"status": "ok"}

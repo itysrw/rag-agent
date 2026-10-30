@@ -1,28 +1,27 @@
 # 架构说明
 
-更新时间：2026-10-29（Asia/Shanghai）
+更新时间：2026-10-30（Asia/Shanghai）
 
-本文严格区分：
+当前实现为 Day14 的 LangGraph RAG 编排，复用 Day1–12 的既有业务服务。
+2026-10-30 用户确认审查、测试与修复通过并授权同步状态、本地提交。
+本提交在 codex/day14-langgraph 收录完整 Day14，精确 HEAD 由 git log -1 核验，
+父提交为 Day12 的 3471277；未推送，未开始 Day15。
+Day12 分支 3471277/master b68b590 是 2026-10-29 远端实时核验结果，本次未复查。
 
-- 已实现、验收并发布的 Day 1 至 Day 9；Day 9 实现提交为 `4cccbe2`，状态文档提交为
-  `f3ca9ec`，计划状态提交为 `5928fa0`；
-- 已实现、真实验收并推送的 Day 10 独立 BM25；实现提交为 `a614a36`，计划状态
-  提交为 `98ff9d3`。两提交已核对远端；
-- Day11独立Hybrid/RRF已完成并发布为b68b590，2026-10-28实时核验；
-- Day12本地Rerank与Chat三阶段链路已完成，2026-10-29用户确认并授权勾选PLAN四项和开发日志；
-  10月29提交前标准403/12通过（15.93s），最近全真实为10月28的413；本提交位于codex/day12-rerank，尚未推送；
-- 尚未实现的Day13及以后目标，任务及复选框保持未开始。
+PLAN Day14 五项和开发日志已按本次要求标记完成；Day1–12 原标记保留，
+Day13 及 Day15 以后的内容不变。Day13 仓库外学习证据此前已核验，本轮不重做。
+工具调用、会话和记忆仍未实现。
 
-恢复入口为[完整交接包](../HANDOFF.md)。功能开发暂停，先只读恢复并复述，等待用户指定唯一动作。
-Day12已按用户要求纳入本地提交，后续不自动推送、运行测试或开始Day13。PG/Qdrant正常是10月28历史记录；
-10月29运行时、实时远端与缓存现状待确认，独立后端常驻状态也未确认。
+2026-10-30 提交前完整标准 453 passed / 12 skipped（23.34s），
+dotenv/外部服务连接均 0，无付费调用。
+2026-10-29 真实局部 3 passed（160.84s），最新全部真实仍为 2026-10-28 的
+413 passed；本次未重跑真实集成。原 OpenAPI/业务辅助函数一致证据保留日期，
+17 个保护文件及已审查代码/测试未变，PLAN 仅更新 Day14 状态。
 
-当前源码包含10月29的后续变更线索：模型下载有限重试包括httpx.ReadError；
-test_reranker.py新增对应退避回归；test_rerank_comparison_integration.py的
-_assert_quality_acceptance严格核对聚合指标、逐题排名、20候选与0截断，普通退化回归
-test_quality_acceptance_rejects_all_correct_results_falling_to_fifth不随真实集成跳过。
-这两项后续普通回归已随2026-10-29标准403/12通过；作者/独立审查记录未补查。
-本地提交前已重跑标准403/12（15.93s），未重跑真实集成；413按10月28记录引用。PLAN完成标记保持不变，仅同步Git状态说明。
+本地服务/离线模型可用性与临时数据清理均为 10月29验收记录，本次未操作服务或下载模型。
+Docker 默认 socket 历史问题仍使用仓库外 D 盘规避。
+恢复入口为 [完整交接包](../HANDOFF.md)；具体图、生命周期与验收见
+[Day14 迁移报告](day14-langgraph-migration.md)。
 
 ## 当前实现架构
 
@@ -45,8 +44,9 @@ flowchart LR
     hybrid --> rrf["chunk_id 聚合 + payload 一致性<br/>等权 RRF k=60 · 稳定排序 · 最终 top_k"]
     rrf --> hybrid_api
 
-    chat --> rag["RAGService.prepare()<br/>检索在 SSE 建立前完成"]
-    rag --> reranked
+    chat --> rag["RAGService.complete / start_stream"]
+    rag --> graph["LangGraph<br/>START 条件边 / retrieve_node / generate_node"]
+    graph --> reranked
     rrf --> reranker["本地BGE CrossEncoder<br/>CPU / safetensors / Identity logit<br/>完整query / passage-only截断 / Top5"]
     reranker --> gate["生成层证据门<br/>原始vector_score≥0.46"]
     gate -->|"无 Context"| refusal["固定拒答<br/>不调用 LLM"]
@@ -218,7 +218,7 @@ Day 11 Hybrid 是下文所述独立链路；score threshold 请求参数尚未�
 ## Day 8 基础 RAG 历史流程
 
 下述为Day8基础行为；Day12已将检索替换为Hybrid20→Rerank5并仅保留原始向量证据门，
-当前链路见Day12章节。Prompt、来源、拒答和JSON/SSE规则保留。
+当前检索规则见Day12章节，编排见Day14章节。Prompt、来源、拒答和JSON/SSE规则保留。
 
 1. `/chat` 校验并规范化 message。
 2. `RAGService.prepare()` 调用 Day 7 `RetrievalService.search()`，固定取得最多 5 个结果。
@@ -303,6 +303,42 @@ Day 11 Hybrid 是下文所述独立链路；score threshold 请求参数尚未�
 小样本和无关候选升位的局限见[实验报告](day12-rerank-comparison.md)。
 原Day11技术决策保留，Day12决策为D-050至D-053。
 
+## Day14 LangGraph RAG 编排
+
+~~~mermaid
+flowchart LR
+    START --> route{needs_retrieval}
+    route -->|True| retrieve_node
+    route -->|False：内部已准备| generate_node
+    retrieve_node --> generate_node
+    generate_node --> END
+~~~
+
+实际编译图导出见 [day14-agent-graph.mmd](day14-agent-graph.mmd)。
+State 只有 query、retrieved_docs、prepared、answer、tool_calls、needs_retrieval。
+Context 只有 response_mode；依赖在工厂闭包中，不进入 State，不使用 reducer。
+公共请求固定 True；False 仅支持内部合法 PreparedRAG，缺失则安全失败。
+
+- retrieve_node：既有 Hybrid20→Rerank5，保留原始 Top5 到 retrieved_docs；
+  复用原始 vector_score>=0.46 门控、Prompt 与来源函数，写入 prepared 和 needs_retrieval=False。
+- generate_node：无 Context 固定拒答且零 LLM；有 Context 复用原 LLMClient、
+  完整/跨 delta 引用清理，生成 answer。tool_calls 始终为空。
+- 非流式：RAGService.complete(question) → graph.invoke → RAGAnswer → 原 ChatResponse。
+- 流式：start_stream 预消费 v2 updates 到 retrieve_node 成功后才创建响应；
+  随后继续同一 graph.stream，通过 custom writer 发出 type/delta。
+  sources 从 PreparedRAG 取得，成功顺序仍为 delta→sources→[DONE]，失败发送原 error。
+- StreamControl 经 Runtime 控制逐 delta 背压与取消；PreparedRAGStream 使用 Context 和锁
+  支持不同工作线程预取/消费，结束/异常/断连显式关闭图与上游；没有完整答案预缓冲。
+  同步上游正在阻塞时仍受既有 LLM timeout（默认 60s）约束。
+- RAGService 的 runner 首次调用才编译并缓存；旧内部 prepare/PreparedRAG 适配复用同一节点，
+  不维护第二套检索逻辑。启动/health 不构图或访问外部依赖。
+- 每次 invoke/stream 显式禁用 tracing、callbacks=[]；
+  内部 updates 不进入 HTTP，错误日志不打印 State 或上游异常正文。
+  新内部图错误使用安全 RAGGraphError，既有服务异常与 HTTP 映射保留。
+
+LangGraph 仅替代原顺序式编排；上述 Day8/Day12 的 Prompt、拒答、来源与检索规则继续适用。
+没有新增 HTTP 字段、工具、会话或 checkpointer。
+
 ## 异常与安全边界
 
 backend/app/services/embedding.py 定义的安全异常：
@@ -341,6 +377,7 @@ backend/app/commands/embed_document.py 额外定义：
 - sentence-transformers==5.3.0 为 Day 6 新依赖。
 - qdrant-client==1.18.0 为 Day 7 固定依赖。
 - rank-bm25==0.2.2 为 Day 10 固定依赖。
+- langgraph==1.2.16 为 Day14 固定依赖；没有安装完整 langchain。
 - 当前环境已解析到 torch 2.13.0、transformers 5.14.0、huggingface-hub 1.23.0。
 
 所有相对上传和模型缓存路径均从仓库根目录解析，不依赖当前工作目录。
@@ -353,7 +390,7 @@ backend/app/commands/embed_document.py 额外定义：
 - 自动索引、删除同步、后台队列或 outbox；
 - score threshold 请求参数、多 doc_id 列表过滤、Qdrant payload index；
 - 加权RRF或故障降级（本地Rerank与Hybrid接入/chat已于Day12完成）；
-- LangGraph、Agent 工具和记忆；
+- Agent 工具选择、ToolNode、会话和记忆；
 - 评测、trace、Streamlit 和完整 Docker Compose。
 
 ## 最终目标架构
@@ -385,6 +422,6 @@ flowchart TB
 - services/ 封装外部服务与业务能力。
 - core/ 负责配置、日志和横切能力。
 - models/ 放置数据库模型。
-- agent/ 留给 Day 13 至 Day 16。
+- agent/ 自 Day14 起负责双节点图、State 和执行生命周期，业务能力继续复用 services/。
 - 不得为未来 Day 提前引入未验证抽象。
 - PLAN.md 未经用户明确授权不得修改。

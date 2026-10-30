@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from backend.app.agent.service import PreparedRAGStream
 
 from backend.app.api import chat as chat_module
 from backend.app.api.chat import require_rag_service
@@ -95,14 +96,20 @@ class StubRAGService:
             raise self.prepare_failure
         return self.prepared
 
-    def complete(self, prepared: PreparedRAG) -> RAGAnswer:
+    def complete(self, question: str) -> RAGAnswer:
+        prepared = self.prepare(question)
         if self.complete_failure is not None:
             raise self.complete_failure
         if not prepared.has_relevant_context:
             return RAGAnswer(NO_RELEVANT_KNOWLEDGE, self.model, ())
         return RAGAnswer("reply:hello", self.model, prepared.sources)
 
-    def stream(self, prepared: PreparedRAG) -> Iterator[str]:
+    def start_stream(self, question: str) -> PreparedRAGStream:
+        return PreparedRAGStream(iter(()), prepared=self.prepare(question))
+
+    def stream(self, run: PreparedRAGStream) -> Iterator[str]:
+        prepared = run.prepared
+        assert prepared is not None
         if not prepared.has_relevant_context:
             yield NO_RELEVANT_KNOWLEDGE
             return
@@ -451,3 +458,114 @@ def test_health_does_not_resolve_rag_dependency() -> None:
 
     assert response.status_code == 200
     assert resolved is False
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize(("failure", "status"), [
+    (RerankerInputError("private-retrieval"), 422),
+    (BM25IndexError("private-retrieval"), 500),
+    (HybridResultError("private-retrieval"), 502),
+    (RerankerUnavailableError("private-retrieval"), 503),
+])
+def test_real_graph_keeps_retrieval_http_errors_before_sse(
+    stream: bool, failure: BaseException, status: int,
+) -> None:
+    from backend.tests.test_rag import StubLLMClient
+    class BrokenRetrieval:
+        def search(self, question: str) -> RerankOutcome:
+            raise failure
+    llm = StubLLMClient()
+    service = RAGService(BrokenRetrieval(), llm, RAGSettings(_env_file=None))
+    app.dependency_overrides[require_rag_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            response = client.post("/chat", json={"message": "private-query", "stream": stream})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == status
+    assert response.headers["content-type"].startswith("application/json")
+    assert "event:" not in response.text and "private-" not in response.text
+    assert llm.complete_calls == llm.stream_calls == []
+
+
+def test_public_chat_schema_and_input_cannot_disable_retrieval() -> None:
+    from backend.tests.test_rag import StubLLMClient, StubRetrievalService
+    retrieval = StubRetrievalService([])
+    service = RAGService(retrieval, StubLLMClient(), RAGSettings(_env_file=None))
+    app.dependency_overrides[require_rag_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            schema = client.get("/openapi.json").json()
+            assert set(schema["components"]["schemas"]["ChatRequest"]["properties"]) == {"message", "stream"}
+            response = client.post("/chat", json={"message": "question", "needs_retrieval": False})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json() == {"answer": NO_RELEVANT_KNOWLEDGE, "model": "test-model", "sources": []}
+    assert retrieval.questions == ["question"]
+
+
+def test_asgi_disconnect_closes_prefetched_graph_and_upstream() -> None:
+    import anyio
+    from typing import Any
+    from backend.tests.test_agent_service import TrackingLLM
+    from backend.tests.test_rag import StubRetrievalService, retrieved_chunk
+    llm = TrackingLLM()
+    service = RAGService(
+        StubRetrievalService([retrieved_chunk(score=0.9)]), llm, RAGSettings(_env_file=None)
+    )
+    response = chat_module.chat(chat_module.ChatRequest(message="question", stream=True), service)
+    bodies: list[bytes] = []
+    async def invoke() -> None:
+        sent = anyio.Event()
+        async def receive() -> dict[str, str]:
+            await sent.wait()
+            return {"type": "http.disconnect"}
+        async def send(message: Any) -> None:
+            if message["type"] == "http.response.body" and message.get("body"):
+                bodies.append(message["body"])
+                sent.set()
+                await anyio.sleep(0)
+        await response({
+            "type": "http", "method": "POST", "path": "/chat",
+            "asgi": {"version": "3.0", "spec_version": "2.0"},
+            "headers": [],
+        }, receive, send)
+    anyio.run(invoke, backend="asyncio")
+    assert bodies and b"delta" in bodies[0]
+    assert b"event: sources" not in b"".join(bodies)
+    assert b"[DONE]" not in b"".join(bodies)
+    assert response._run.closed
+    assert llm.closed == 1
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_graph_llm_failure_keeps_error_contract_without_logging_state(stream: bool) -> None:
+    from typing import Any
+    from loguru import logger
+    class BrokenLLM:
+        model = "test-model"
+        def complete_messages(self, messages: Any) -> str:
+            raise LLMServiceError("private-upstream")
+        def stream_messages(self, messages: Any) -> Iterator[str]:
+            yield "visible"
+            raise LLMServiceError("private-upstream")
+    service = RAGService(FixedRetrievalService(), BrokenLLM(), RAGSettings(_env_file=None))
+    app.dependency_overrides[require_rag_service] = lambda: service
+    logs: list[str] = []
+    handler = logger.add(lambda message: logs.append(str(message)))
+    try:
+        with TestClient(app) as client:
+            response = client.post("/chat", json={"message": "private-question", "stream": stream})
+    finally:
+        app.dependency_overrides.clear()
+        logger.remove(handler)
+    if stream:
+        assert response.status_code == 200 and "event: error" in response.text
+        assert "event: sources" not in response.text and "[DONE]" not in response.text
+    else:
+        assert response.status_code == 502
+        assert response.json() == {"detail": "The language model request failed."}
+    for forbidden in ("private-question", "private-upstream", "trusted context", "system rules"):
+        assert forbidden not in response.text
+        assert forbidden not in "".join(logs)

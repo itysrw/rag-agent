@@ -7,7 +7,8 @@ import math
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
+from typing import TYPE_CHECKING
 
 from backend.app.core.config import RAGSettings, get_rag_settings
 from backend.app.services.llm import (
@@ -22,6 +23,9 @@ from backend.app.services.reranker import (
     RerankedRetrievalService,
     get_reranked_retrieval_service,
 )
+
+if TYPE_CHECKING:
+    from backend.app.agent.service import PreparedRAGStream, RAGGraphRunner
 
 NO_RELEVANT_KNOWLEDGE = "知识库中没有相关信息"
 RAG_SYSTEM_PROMPT = """你是企业知识库问答助手。
@@ -94,6 +98,10 @@ class RAGAnswer:
     sources: tuple[RAGSource, ...]
 
 
+class RAGGraphError(RuntimeError):
+    """A safe orchestration failure that contains no internal State."""
+
+
 def select_relevant_chunks(
     chunks: Sequence[RerankedChunk],
     *,
@@ -164,7 +172,7 @@ def build_rag_messages(
 
 
 class RAGService:
-    """Retrieve, gate, prepare, and generate one knowledge-base answer."""
+    """Keep the RAG API stable while lazily compiling one stateless graph."""
 
     def __init__(
         self,
@@ -181,65 +189,47 @@ class RAGService:
         """Return the configured generation model identifier."""
         return self._llm_client.model
 
+    @cached_property
+    def _runner(self) -> RAGGraphRunner:
+        from backend.app.agent.graph import build_rag_graph
+        from backend.app.agent.service import RAGGraphRunner
+
+        return RAGGraphRunner(
+            build_rag_graph(
+                self._retrieval_service, self._llm_client, self._settings
+            ),
+            self.model,
+        )
+
     def prepare(self, question: str) -> PreparedRAG:
-        """Retrieve and build safe messages before any SSE response starts."""
-        normalized_question = question.strip()
-        if not normalized_question:
-            raise ValueError("question must not be blank")
+        """Retain the internal experiment adapter by reusing the retrieve node."""
+        from langgraph.runtime import Runtime
 
-        retrieved = self._retrieval_service.search(normalized_question).results
-        relevant = select_relevant_chunks(
-            retrieved,
-            min_score=self._settings.min_relevance_score,
+        from backend.app.agent.nodes import create_retrieve_node
+        from backend.app.agent.state import initial_agent_state
+
+        state = initial_agent_state(question)
+        update = create_retrieve_node(self._retrieval_service, self._settings)(
+            state, Runtime(context={"response_mode": "complete"})
         )
-        if not relevant:
-            return PreparedRAG(
-                question=normalized_question,
-                messages=(),
-                sources=(),
-                has_relevant_context=False,
-            )
+        prepared = update.get("prepared")
+        if not isinstance(prepared, PreparedRAG):
+            raise RAGGraphError("The RAG graph returned no prepared context.")
+        return prepared
 
-        return PreparedRAG(
-            question=normalized_question,
-            messages=build_rag_messages(normalized_question, relevant),
-            sources=build_sources(relevant),
-            has_relevant_context=True,
-        )
+    def complete(self, question: str | PreparedRAG) -> RAGAnswer:
+        """Public chat invokes the whole graph; internal prepared callers skip retrieval."""
+        return self._runner.complete(question)
 
-    def complete(self, prepared: PreparedRAG) -> RAGAnswer:
-        """Return a fixed refusal or one complete model-generated answer."""
-        if not prepared.has_relevant_context:
-            return RAGAnswer(
-                answer=NO_RELEVANT_KNOWLEDGE,
-                model=self.model,
-                sources=(),
-            )
+    def start_stream(self, question: str) -> PreparedRAGStream:
+        """Prefetch graph retrieval before the HTTP response is established."""
+        return self._runner.start_stream(question)
 
-        answer = _strip_model_source_references(
-            self._llm_client.complete_messages(prepared.messages)
-        )
-        if not answer.strip():
-            raise LLMServiceError("The language model returned an empty response")
-        return RAGAnswer(
-            answer=answer,
-            model=self.model,
-            sources=prepared.sources,
-        )
-
-    def stream(self, prepared: PreparedRAG) -> Iterator[str]:
-        """Yield a fixed refusal or model deltas for a prepared request."""
-        if not prepared.has_relevant_context:
-            yield NO_RELEVANT_KNOWLEDGE
-            return
-
-        emitted_text = False
-        deltas = self._llm_client.stream_messages(prepared.messages)
-        for delta in _sanitized_model_deltas(deltas):
-            emitted_text = emitted_text or bool(delta.strip())
-            yield delta
-        if not emitted_text:
-            raise LLMServiceError("The language model returned an empty stream")
+    def stream(self, run: PreparedRAGStream | PreparedRAG) -> Iterator[str]:
+        """Continue the same graph iterator, retaining old experiment callers."""
+        if isinstance(run, PreparedRAG):
+            run = self._runner.start_stream(run)
+        yield from self._runner.stream(run)
 
 
 def _strip_model_source_references(text: str) -> str:

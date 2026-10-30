@@ -1,61 +1,74 @@
 # 项目状态
 
-更新时间：2026-10-29（Asia/Shanghai）
-**Day1–12每日任务已完成。** 用户于2026-10-29确认Day12完成并授权同步计划与相关状态；
-完成标记更新后继续暂停功能开发，等待用户指定下一动作。
+更新时间：2026-10-30（Asia/Shanghai）
 
-## 当前实现、计划与Git
+**Day14 已由用户确认审查、测试与修复通过，并授权同步完成状态及本地提交。**
+本提交收录 Day14 完整源码、测试、图和相关文档。提交前重新运行完整标准：
+**453 passed / 12 skipped，23.34s**。未推送、未合并，Day15 未开始。
 
-- Day11发布检查点为b68b590c8262eb568a371c895e4f7033456d045c，2026-10-28独立提交、推送并实时核验。
-- 当前分支codex/day12-rerank；本提交收录Day12，精确HEAD用git log -1 --format=%H核验。本地origin/master tracking ref仍为Day11的b68b590；当前实时远端未查询。
-- Day12四项任务及PLAN.md开发日志已勾选/标记已完成。Day13及以后未开始、未勾选。
-- Day12本地提交包含26个相关文件：提交前17个tracked修改、9个相关新增。提交完成后相关改动应为0、暂存区应为空；Day12尚未推送。
-- 排除.agents/、就业推荐表_完整填充版.pdf、.env、凭据、模型/测试缓存。推送或合并等待用户另行指定。
+## 实现、计划与 Git
 
-## Day12已完成内容
+- 当前分支 `codex/day14-langgraph`；本提交为 Day14 检查点，
+  精确 HEAD 用 `git log -1 --format=%H` 核验；父提交为
+  `34712772b3682d174f459da91100b09f8a2493cc`（Day12）。
+- 本提交共 27 个相关路径：提交前 15 个 tracked 变更（含删除 .gitkeep）、12 个新增。
+  提交完成后相关改动应为 0、暂存区应为空；无关 .agents/ 与 PDF 保留且未读取。
+- 2026-10-29 实时核验 Day12 远端分支为 3471277、master 为 b68b590。
+  本次未查询实时远端；不把本地 tracking ref 当成当前发布证明。Day14 尚未推送。
+- 按本次用户要求，将 PLAN Day14 五项任务和开发日志标记完成；
+  Day1–12 原标记保留，Day13 保持未勾选，Day15 及以后未改。
+- Day13 仓库外学习笔记、图和官方示例运行证据此前已核验；本次不重做或复制入仓库，
+  不代替用户确认理解自检。该学习包是否永久归档仍待指定。
 
-- 固定本地CPU BAAI/bge-reranker-base，revision 2cfc18c9415c912f9d8155881c133215df768a70；
-  safetensors、禁止remote code、512 token、默认batch4、缓存优先与惰性加载。
-- Hybrid20→CrossEncoder原始logit→Rerank5，稳定排序、完整候选movement、安全日志，
-  保护完整query、只显式截断passage并记计数。
-- 独立POST /retrieval/rerank/search仅query/doc_id；Hybrid保留原始分数但不用于RRF或公开响应。
-- Chat完整新链路，Rerank Top5后使用原始vector_score默认0.46证据门，BM25-only不作为生成依据；
-  固定拒答不调用LLM，JSON/SSE、后端sources和引用清理保留。
+## Day14 已完成内容
+
+- 固定 LangGraph 1.2.16；六字段 State、独立 response_mode Context、retrieve/generate 双节点。
+- START 按 needs_retrieval 条件路由；公共 /chat 固定 True，tool_calls=()。
+  False 仅支持内部合法 PreparedRAG，缺失上下文安全失败。
+- complete 走 graph.invoke，stream 走同一 graph.stream 的 v2 updates + custom；
+  retrieve update 预取成功后才创建 HTTP 流，保留检索错误码。
+- 保留 Hybrid20→固定 CPU BGE Rerank5→原始 vector_score 0.46 门、
+  Prompt、固定拒答零 LLM、后端 sources、引用清理和 JSON/SSE。
+- 图惰性编译并缓存，启动/health 不访问服务或模型；
+  逐 delta 背压、跨线程上下文、迭代器与 ASGI 断连清理均有回归覆盖。
+- tracing 逐次关闭，内部 State 不进入 HTTP 或错误日志；无工具、会话、checkpointer 或记忆。
+
+设计与完整证据见 [迁移报告](docs/day14-langgraph-migration.md)、
+[机器记录](docs/day14-langgraph-results.json)、[实际图](docs/day14-agent-graph.mmd)、
+[架构](docs/architecture.md)。D-001 至 D-058 保持原适用范围。
 
 ## 实际测试与证据边界
 
 | 日期/阶段 | 实际结果 | 范围 |
 |---|---|---|
-| 2026-10-29本地提交前标准回归 | **403 passed / 12 skipped，15.93s** | 真实集成关闭、模型离线、假LLM，无付费调用 |
-| 2026-10-29完成状态收口标准回归 | **403 passed / 12 skipped，45.66s** | 真实集成关闭，假模型/假LLM，无付费调用 |
-| 2026-10-28 Day12标准 | 401 passed / 12 skipped，17.93s | 历史版本记录 |
-| 2026-10-28 Day12全部真实 | 413 passed，158.94s，无跳过 | PostgreSQL/Qdrant/BGE/Reranker真实，LLM替身 |
-| 2026-10-28 Day11发布前 | 335 passed / 10 skipped，1333.56s | 随后独立发布b68b590 |
+| 2026-10-30 Day14 提交前标准 | **453 passed / 12 skipped，23.34s** | 完整 backend/tests；无警告，dotenv/外部服务连接均 0 |
+| 2026-10-29 Day14 迁移后标准 | 453 passed / 12 skipped，31.10s | 迁移验收记录，新增 50 项回归 |
+| 2026-10-29 Day14 真实局部 | 3 passed，160.84s | 两模块的 2 项真实测试和 1 项普通回归；真实本地检索、LLM 替身 |
+| 2026-10-29 Day14 迁移前标准 | 403 passed / 12 skipped，4.11s | 迁移前完整标准基线 |
+| 2026-10-29 Day12 提交前标准 | 403 passed / 12 skipped，15.93s | Day12 历史标准 |
+| 2026-10-28 Day12 全部真实 | 413 passed，158.94s | 最新历史全部真实；本次未重跑真实集成 |
 
-最近一次标准套件覆盖后续新增的ReadError指数退避和质量退化普通回归，当前标准失败数0。
-本次本地提交前重新运行标准403/12；未重跑全部真实集成，最新全真实证据仍为2026-10-28的413，不能写成今天重新通过。
-后续修复作者与独立审查记录未补查；本次提交整理未修改既有源码或测试。
+本次仅重跑标准测试，不操作服务、不下载模型或调用付费 API；
+用户关于审查/修复通过的确认与本次实际标准测试分别记录。
+本轮未改生产源码、测试或依赖；16 个已审查实现/测试/依赖文件起止哈希一致。
+17 个其余保护文件未变；PLAN 是本次明确授权的状态修改。
+迁移阶段 OpenAPI、15 个 RAG 辅助函数 AST 与 18 个保护文件一致的证据仍保留原日期。
 
-## 历史真实效果与运行边界
+## 历史质量与运行边界
 
-2026-10-28同24 Chunk/12正样本：Hybrid 0.917/1.000/0.944，Rerank 0.917/1.000/0.958
-（Hit@1/Hit@5/MRR@5）；3负样本固定拒答，LLM调用0。Hit@1没有提升，无关候选升位也有记录。
-原实验见[Day12报告](docs/day12-rerank-comparison.md)与[JSON](docs/day12-rerank-results.json)。
+2026-10-29 同一 24 Chunk/12 正样本/3 负样本：
+Hybrid Hit@1/Hit@5/MRR@5=0.917/1.000/0.944，
+Rerank=0.917/1.000/0.958；逐题常量和 20 候选/0 截断通过，
+3 负样本固定拒答、LLM 调用 0，临时 Document/Chunk/collection 清理核验均 0。
+本次没有重测这些质量数据；不能外推自然长文、表格或多跳问答。
 
-模型新实例加载2.832s、首次predict6.562s、热predict6.291s，来自已缓存权重的同进程测量，
-不是系统物理冷启动。受控语料不能外推自然长文/表格/多跳，CPU、BM25全扫描/多worker快照、
-跨库无outbox/同步与BM25-only保守门的限制仍在。
+服务与模型可用性仅在 2026-10-29 验收时确认，当前常驻服务状态未复查。
+CPU、BM25 全扫描/多 worker、跨库同步与 BM25-only 保守门限制仍在；
+同步上游阻塞时取消退出受原 LLM timeout（默认 60s）约束。
+Docker 默认 socket 历史问题未根治，仓库外 D 盘脚本及备份保留。
 
-2026-10-28最后确认PG running/healthy、Qdrant running，独立核验临时资源均0；
-本次未探测或操作服务。当前运行时/远端/模型缓存可用性待确认。
-Docker默认socket未根治，仓库外D盘脚本和备份的历史规避保留。
+## 下一步
 
-## 本次本地提交与唯一下一步
-
-2026-10-29用户明确要求提交Day12。本提交收录完整实现、测试、PLAN完成标记、实验记录及同步后的状态文档，共26个相关文件；未开始Day13。
-
-提交前标准回归首次因新临时目录写入权限报错（322 passed/12 skipped/81 errors，47.57s）；取得本次测试所需权限后使用新的独占目录重跑，403 passed/12 skipped，15.93s，无代码修改。未操作服务、下载模型或查询实时远端。
-
-源码/测试、依赖、Compose及原实验JSON保持原样；只同步八份计划/状态/说明文档中的提交状态与测试记录。无关.agents/与PDF保持在提交外。
-
-唯一下一步：新会话先按[HANDOFF.md](HANDOFF.md)只读恢复，确认Day12已本地提交且未推送、PLAN已勾选、标准403/12与历史全真实413的日期边界，再等待用户指定唯一后续动作。
+Day14 本地提交完成后，按 [HANDOFF.md](HANDOFF.md) 只读恢复，
+核对提交、空暂存区与无相关残留改动，再等待用户指定推送/合并或下一独立任务。
+不自动推送、修改其他日计划或开始 Day15。

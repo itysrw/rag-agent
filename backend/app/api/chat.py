@@ -1,13 +1,18 @@
 """Knowledge-base RAG chat endpoint with complete and SSE responses."""
 
+from __future__ import annotations
+
 import json
 from collections.abc import Iterator
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 from pydantic import BaseModel, StringConstraints, ValidationError
 from starlette.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
+from starlette.types import Receive, Scope, Send
 
 from backend.app.services.embedding import (
     EmbeddingError,
@@ -32,11 +37,14 @@ from backend.app.services.qdrant_store import (
     QdrantUnavailableError,
 )
 from backend.app.services.rag import (
-    PreparedRAG,
+    RAGGraphError,
     RAGService,
     RAGSource,
     get_rag_service,
 )
+
+if TYPE_CHECKING:
+    from backend.app.agent.service import PreparedRAGStream
 
 router = APIRouter()
 
@@ -82,25 +90,62 @@ def require_rag_service() -> RAGService:
         ) from exc
 
 
-def stream_sse(service: RAGService, prepared: PreparedRAG) -> Iterator[str]:
+def stream_sse(service: RAGService, run: PreparedRAGStream) -> Iterator[str]:
     """Encode RAG deltas and backend-derived sources as SSE events."""
+    deltas = service.stream(run)
     try:
-        for delta in service.stream(prepared):
+        for delta in deltas:
             payload = json.dumps({"delta": delta}, ensure_ascii=False)
             yield f"data: {payload}\n\n"
+        if run.prepared is None:
+            raise RAGGraphError("The RAG graph returned no prepared context.")
         sources_payload = json.dumps(
-            {"sources": [_source_dict(source) for source in prepared.sources]},
+            {"sources": [_source_dict(source) for source in run.prepared.sources]},
             ensure_ascii=False,
         )
         yield f"event: sources\ndata: {sources_payload}\n\n"
         yield "data: [DONE]\n\n"
-    except LLMServiceError:
-        logger.exception("RAG language model stream failed")
+    except LLMServiceError as exc:
+        logger.error("RAG language model stream failed: {}", type(exc).__name__)
         payload = json.dumps(
             {"detail": "The language model stream failed."},
             ensure_ascii=False,
         )
         yield f"event: error\ndata: {payload}\n\n"
+    except RAGGraphError:
+        logger.error("RAG graph stream failed")
+        payload = json.dumps({"detail": "The RAG stream failed."}, ensure_ascii=False)
+        yield f"event: error\ndata: {payload}\n\n"
+    finally:
+        close = getattr(deltas, "close", None)
+        if callable(close):
+            close()
+        run.close()
+
+
+class _RAGStreamingResponse(StreamingResponse):
+    """Close the prefetched graph even when ASGI delivery is cancelled."""
+
+    def __init__(self, service: RAGService, run: PreparedRAGStream) -> None:
+        self._run = run
+        super().__init__(
+            stream_sse(service, run),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._run.cancel()
+            with anyio.CancelScope(shield=True):
+                try:
+                    await run_in_threadpool(self._run.close)
+                except RAGGraphError:
+                    logger.error("RAG graph stream cleanup failed")
 
 
 @router.post("/chat", response_model=None)
@@ -110,7 +155,10 @@ def chat(
 ) -> ChatResponse | StreamingResponse:
     """Retrieve before returning either a complete answer or SSE stream."""
     try:
-        prepared = service.prepare(request.message)
+        if request.stream:
+            run = service.start_stream(request.message)
+        else:
+            answer = service.complete(request.message)
     except EmbeddingInputTooLongError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -148,25 +196,18 @@ def chat(
         raise HTTPException(503, "The retrieval service is unavailable.") from exc
     except (BM25Error, HybridError, RerankerError) as exc:
         raise HTTPException(500, "The retrieval service failed.") from exc
-
-    if request.stream:
-        return StreamingResponse(
-            stream_sse(service, prepared),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
-        )
-
-    try:
-        answer = service.complete(prepared)
+    except RAGGraphError as exc:
+        logger.error("RAG graph failed")
+        raise HTTPException(500, "The RAG service failed.") from exc
     except LLMServiceError as exc:
-        logger.exception("RAG language model request failed")
+        logger.error("RAG language model request failed: {}", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The language model request failed.",
         ) from exc
+
+    if request.stream:
+        return _RAGStreamingResponse(service, run)
 
     return ChatResponse(
         answer=answer.answer,

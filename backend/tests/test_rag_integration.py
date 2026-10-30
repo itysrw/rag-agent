@@ -55,7 +55,8 @@ class StubMessagesLLMClient:
 
     def stream_messages(self, messages: Sequence[LLMMessage]) -> Iterator[str]:
         self.calls.append(tuple(messages))
-        yield "unused"
+        yield "报销票据应在每月二十五日前提交。[day"
+        yield "8-e2e.pdf，第1页]"
 
 
 @pytest.mark.skipif(
@@ -182,6 +183,18 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
             "sources": [],
         }
         assert len(llm_client.calls) == 1
+        with TestClient(app) as client:
+            stream_response = client.post(
+                "/chat", json={
+                    "message": "报销票据必须在每月二十五日前提交给财务组吗？",
+                    "stream": True,
+                },
+            )
+        assert stream_response.status_code == 200
+        assert stream_response.text.index("event: sources") < stream_response.text.index("data: [DONE]")
+        assert "event: error" not in stream_response.text
+        assert filename in stream_response.text
+        assert len(llm_client.calls) == 2
     finally:
         app.dependency_overrides.clear()
         try:

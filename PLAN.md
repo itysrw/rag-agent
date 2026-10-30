@@ -214,13 +214,15 @@ rag-agent/
 
 ### Day 14 — 把 RAG 链路迁移进 LangGraph
 
-- [ ] 建 `AgentState`（包含 query、retrieved_docs、answer、tool_calls）
-- [ ] 实现节点：`retrieve_node` · `generate_node`
-- [ ] 加条件边：判断是否需要检索
-- [ ] 用 LangGraph 替换原来的顺序调用链路
-- [ ] 测试原有功能不回退
+- [x] 建 `AgentState`（包含 query、retrieved_docs、answer、tool_calls）
+- [x] 实现节点：`retrieve_node` · `generate_node`
+- [x] 加条件边：判断是否需要检索
+- [x] 用 LangGraph 替换原来的顺序调用链路
+- [x] 测试原有功能不回退
 
 **产出**：RAG 问答走 LangGraph graph，功能和之前一致
+
+**完成确认**：2026-10-30，用户确认 Day14 已通过审查、测试与修复，授权同步完成状态并本地提交。五项任务已完成；提交前标准回归 453 passed、12 skipped（23.34s），无付费 API 调用。本提交收录源码、测试与相关文档，未推送，Day15 未开始。
 
 ---
 
@@ -393,7 +395,7 @@ rag-agent/
 | Day 11 | 已完成 | 2026-10-28 确认审查、测试与修复通过；独立 Hybrid API、标准等权 RRF（k=60、两路各召回 20）、chunk_id 去重与 payload 一致性、安全日志已完成；三路真实对比中 Hybrid Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.944；本轮标准测试 335 passed、10 skipped，2026-10-27 全部真实集成记录 343 passed；README 与实验文档已更新 |
 | Day 12 | 已完成 | 2026-10-29 用户确认完成并授权更新状态；固定本地 CPU BGE Reranker、Hybrid Top20→Rerank Top5、独立重排 API、Chat 原始向量 0.46 证据门及完整排名日志已实现；历史真实对比 Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.958；本次标准回归 403 passed、12 skipped，覆盖 ReadError 重试及质量退化回归；2026-10-28 全真实记录 413 passed；本地提交纳入本检查点，尚未推送，Day13未开始 |
 | Day 13 | | |
-| Day 14 | | |
+| Day 14 | 已完成 | 2026-10-30 用户确认审查、测试与修复通过，授权同步状态并本地提交；双节点 StateGraph、条件边、invoke/custom stream、SSE 前检索预取与取消关闭已完成，JSON/SSE/来源/拒答/0.46 证据门保留；提交前标准 453 passed、12 skipped（23.34s）；2026-10-29 真实局部 3 passed、历史全真实仍为 2026-10-28 的 413 passed，本次未重跑真实集成，未推送，未开始 Day15 |
 | Day 15 | | |
 | Day 16 | | |
 | Day 17 | | |

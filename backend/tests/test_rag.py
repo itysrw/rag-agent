@@ -288,3 +288,15 @@ def test_default_rag_factory_uses_reranked_retrieval(monkeypatch: pytest.MonkeyP
         assert module.get_rag_service()._retrieval_service is pipeline
     finally:
         module.get_rag_service.cache_clear()
+
+
+def test_public_complete_uses_graph_and_retains_sources_and_gate() -> None:
+    high = retrieved_chunk(score=0.8, filename="approved.pdf", page=2)
+    low = retrieved_chunk(score=0.2, filename="unapproved.pdf", page=3)
+    service, retrieval, llm = build_service([high, low])
+    answer = service.complete("  question  ")
+    assert retrieval.questions == ["question"]
+    assert answer.answer == "应在二十五日前提交。"
+    assert [(s.filename, s.page) for s in answer.sources] == [("approved.pdf", 2)]
+    assert len(llm.complete_calls) == 1
+    assert "unapproved.pdf" not in llm.complete_calls[0][1]["content"]

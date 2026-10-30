@@ -1,14 +1,202 @@
 # 项目完整交接包
 
-更新时间：2026-10-29（Asia/Shanghai）
+更新时间：2026-10-30（Asia/Shanghai）
 仓库：D:\2019\rag-agent
-当前模式：**Day1–12任务已完成，Day12四项及开发日志已勾选。功能开发暂停，本提交收录Day12完整检查点（未推送）；新会话先只读恢复，再等待用户指定唯一动作。**
 
-本文件A/B/C可独立恢复，取代旧Day11/Day12启动提示。状态必须分为“功能实现”“计划勾选”“测试证据”“Git发布”四项。本文中的“待确认”不是默认成功，也不是执行授权。历史日志和实验保留原日期。
+**当前为 Day14 本地提交检查点：用户已确认审查、测试与修复通过，PLAN 五项及日志已勾选，本提交收录完整 Day14，未推送。**
+本包 A/B/C 是当前恢复基线；Day12 详细交接全文放在历史附录中，保留原日期和当时状态。
+区分功能实现、PLAN 标记、测试范围和 Git 发布，不因其中一项推断其他项。
+恢复后等待用户指定唯一动作，不自动修改 PLAN、发布或开始 Day15。
 
-阶段边界：此前完整交接仅整理六份文档；之后用户明确要求提交Day12。本提交收录26个相关文件，提交前标准pytest重新通过403/12（15.93s）。本次不推送、不查询实时远端、不操作服务或重跑真实集成，不开始Day13；只同步文档的Git状态和测试记录，源码/测试及原实验JSON不改。
+## A. 当前详细交接文档
 
-## A. 详细交接文档
+### 1. 本阶段交付与当前提交
+
+将原顺序式 RAG 迁移为双节点 StateGraph，复用现有业务服务与外部协议。
+用户本次确认审查与修复通过；本提交不再改源码、测试或依赖。
+交付包括 agent/state、nodes、graph、service，RAGService/API 接入，新增 50 项回归，
+完整标准和真实局部验收、实际编译图和文档。
+入口：[Day14 迁移报告](docs/day14-langgraph-migration.md)、
+[机器记录](docs/day14-langgraph-results.json)、
+[图](docs/day14-agent-graph.mmd)、[架构](docs/architecture.md)。
+
+未实现 Day15 工具或 Day16 记忆；没有 ToolNode、会话、checkpointer、LangSmith 导出。
+未改变 Hybrid/Rerank/0.46 规则、Prompt、来源或上传/索引业务。
+后续自然评测、前端与完整部署仍未完成。
+
+### 2. Git、计划与历史矛盾的处理
+
+| 项目 | 2026-10-30 本地提交检查点 |
+|---|---|
+| 当前分支 | codex/day14-langgraph |
+| 本地 HEAD | 本 Day14 提交；精确哈希提交后用 git log -1 --format=%H 核验，父提交 34712772b3682d174f459da91100b09f8a2493cc |
+| Day14 提交范围 | 27 个相关路径：提交前 15 个 tracked 变更（含删除 .gitkeep）、12 个新增；提交后相关改动应为 0、暂存区应为空，未推送 |
+| 2026-10-29 实时远端（本次未复查） | GitHub codex/day12-rerank = 3471277；master = b68b590c8262eb568a371c895e4f7033456d045c |
+| Day12 发布 | 已发布到远端分支、未合并 master；旧文“未推送”保留为历史 |
+| PLAN | 用户本次确认并授权同步 Day14 五项/日志；Day1–12 原标记保留，Day13 与 Day15 以后不改 |
+| Day13 | 仓库外学习笔记、图、官方示例和自测证据已核验；未在本轮补做或复制入仓库 |
+| 无关文件 | .agents/、就业推荐表_完整填充版.pdf 保留且未读取，不进入交付 |
+
+Day13 学习效果由用户自行确认；文件/运行证据不能代替理解自检。
+2026-10-30 用户明确确认 Day14 审查、测试与修复通过并要求提交和修改状态；
+本次据此更新 Day14 五项和日志，不补勾 Day13，不扩展到 Day15。
+远端只代表本轮查询时点；不能用本地 tracking ref 推断下一会话实时状态。
+
+### 3. 测试日期与范围
+
+| 日期/阶段 | 实际结果 | 边界 |
+|---|---|---|
+| 2026-10-30 Day14 提交前 | **453 passed / 12 skipped，23.34s** | 完整标准重新通过；dotenv/外部服务连接均 0，无警告或付费调用 |
+| 2026-10-29 Day14 迁移前 | 403 passed / 12 skipped，4.11s | 完整标准基线，1 条检查器导入警告 |
+| 2026-10-29 Day14 迁移后 | **453 passed / 12 skipped，31.10s** | 完整 backend/tests，最终无警告；dotenv/外部服务连接 0 |
+| 2026-10-29 Day14 真实局部 | **3 passed，160.84s** | test_rag_integration + test_rerank_comparison_integration；2 项真实测试和 1 项普通回归 |
+| 2026-10-29 Day12 提交前 | 403 passed / 12 skipped，15.93s | 历史标准，含 ReadError 与质量退化普通回归 |
+| 2026-10-28 Day12 全部真实 | **413 passed，158.94s** | 最新历史全部真实；本轮没有重跑全部真实 |
+
+真实局部使用 PostgreSQL/Qdrant/本地 BGE/Reranker，LLM 为替身；
+真实 LLMClient 有禁止调用守卫，付费尝试和外部连接 0。
+本次提交未启动/重启服务、未下载模型；真实局部是 10月29记录。
+配置文件在当时局部验收内部只读打开 2 次，
+写入 0，凭据没有输出或进入交付。
+
+相同 24 Chunk / 12 正样本 / 3 负样本重新通过严格原基线：
+Hybrid Hit@1/Hit@5/MRR@5 为 0.917/1.000/0.944，
+Rerank 为 0.917/1.000/0.958；逐题排名、20 候选/0 截断通过。
+3 负样本拒答且 LLM 调用 0，没有覆盖 Day12 历史实验 MD/JSON。
+不能据此宣称自然长文/表格/多跳的效果或推算新全部真实计数。
+临时数据 finally 清理后，独立只读核验 Document/Chunk/临时 collection 均 0。
+
+### 4. 代码位置与精确职责
+
+| 文件/函数 | 当前职责 |
+|---|---|
+| [state.py](backend/app/agent/state.py)：AgentState、AgentUpdate、AgentContext、initial_agent_state | 六字段 State、局部更新、模式 Context，公共初始状态 True |
+| [nodes.py](backend/app/agent/nodes.py)：create_retrieve_node | 单次检索、保留完整 Top5、复用证据门/Prompt/sources、写 PreparedRAG |
+| nodes.py：create_generate_node | 固定拒答或 complete/custom stream，复用来源清理、校验非空 |
+| nodes.py：StreamControl | Runtime 单次控制，逐 delta 确认/取消，不在 State/Context 中 |
+| [graph.py](backend/app/agent/graph.py)：route_retrieval、build_rag_graph | 严格 bool 路由，START→retrieve/generate→END，compile 不调用依赖 |
+| [service.py](backend/app/agent/service.py)：RAGGraphRunner.complete/start_stream/stream | invoke、v2 stream 预取、严格事件白名单、安全异常和最终结果映射 |
+| service.py：PreparedRAGStream.next_event/cancel/close | 同一 iterator 的 Context/锁、取消和幂等关闭 |
+| [rag.py](backend/app/services/rag.py)：RAGService._runner | cached_property 懒编译图；get_rag_service 原 lru_cache 保留 |
+| rag.py：prepare/complete/start_stream/stream | 公共问题执行图；旧内部 PreparedRAG 调用复用 retrieve_node/False 分支 |
+| [chat.py](backend/app/api/chat.py)：chat、stream_sse、_RAGStreamingResponse | 原 JSON/SSE/错误码、预取后才响应、ASGI 断连清理 |
+| [requirements](backend/requirements.txt) | 唯一新增直接依赖 langgraph==1.2.16 |
+
+新增测试：[State](backend/tests/test_agent_state.py)、[节点](backend/tests/test_agent_nodes.py)、
+[实际图](backend/tests/test_agent_graph.py)、[执行与关闭](backend/tests/test_agent_service.py)。
+既有 [Chat](backend/tests/test_chat.py)、[RAG](backend/tests/test_rag.py)、
+[健康检查](backend/tests/test_main.py) 与 [真实 RAG](backend/tests/test_rag_integration.py) 扩展回归；
+原有断言保留，真实质量比较测试文件和基线不改。
+
+### 5. 必须保持的契约
+
+State 为 query、retrieved_docs、prepared、answer、tool_calls、needs_retrieval。
+Context 仅 response_mode=complete/stream；依赖用工厂闭包，串行局部更新，没有 reducer。
+START 按 needs_retrieval 路由：True→retrieve_node→generate_node→END；
+False→generate_node→END。公共 /chat 始终 True，HTTP 没有跳过检索参数。
+False 无合法 PreparedRAG 则安全失败；tool_calls 始终 ()。
+
+retrieve_node：向量/BM25 各 20 → 等权 RRF60 取20 → 固定 CPU BGE Rerank5 →
+原始 vector_score>=0.46 生成证据门。RRF/logit 不作 0.46 门，BM25-only 仍不生成。
+无证据精确回复“知识库中没有相关信息”，LLM 零调用。
+Prompt 和来源构建复用原函数，sources 只信任后端 metadata，模型伪造引用继续清理。
+
+非流式 graph.invoke 后返回 answer/model/sources。
+流式使用 graph.stream(updates+custom, v2)，同一迭代器先预取消费到 retrieve update，
+再创建 HTTP 响应；后续只暴露合法 custom delta，内部 updates 不进入 SSE。
+成功顺序 delta→sources→[DONE]；LLM 失败仍为原 SSE error 后停止，不发 sources/DONE。
+超限 422、内部检索错误 500、非法结果 502、不可用 503 在 SSE 建立前返回；
+非流式 LLM 失败 502。未知内部图错误包装固定安全文本，日志不公开 State。
+
+### 6. 流式、惰性与安全决策
+
+D-054：固定版本双节点图，显式条件边与六字段 State/独立 Context，保持 Day14 范围。
+D-055：invoke/custom stream，SSE 前预取同一 iterator；否决未检索就响应、完整答案预缓冲、
+重复检索和透传内部 update。
+D-056：StreamControl 逐 delta 背压与取消，PreparedRAGStream 独立 Context/锁解决跨工作线程，
+finally 与 ASGI 取消保护关闭 graph/sanitizer/上游。同步 I/O 阻塞仍受原 60s 默认 timeout 约束。
+D-057：每次运行 tracing_context(False)、callbacks=[]；安全异常和日志，不因环境开启导出 State。
+D-058：旧内部 prepare/PreparedRAG 复用节点和 False 分支，公共请求始终从 True 运行。
+
+D-001 至 D-053 保留原日范围，不据历史“Day11 不改 Chat”否决后来已授权的 Day12 接入；
+全部理由和历史否决见 [DECISIONS](DECISIONS.md)。
+get_rag_service 只缓存服务，首次请求才构图；启动和 /health 不构图、不连接服务或加载模型。
+没有新增全局运行上下文、持久状态、工具和付费 API 调用。
+
+### 7. 保护文件、依赖与证据位置
+
+2026-10-29 迁移验收：OpenAPI 全 JSON 精确相等，15 个旧模块级 RAG 函数 AST 一致，18 个保护文件起止 SHA256 一致。
+2026-10-30 提交整理：PLAN 按用户要求更新，其余 17 项保护文件、16 个已审查实现/测试/依赖文件起止哈希一致。
+保护清单和具体哈希见 [机器记录](docs/day14-langgraph-results.json)，包括 PLAN、AGENTS、
+main/config、LLM、检索/Embedding/Reranker、独立 rerank API、原 Day12 实验 MD/JSON、
+严格质量回归文件和 Compose。
+当前 PLAN SHA256 = C1A6DBB5C081C15EA285A2826548D13806B147F2541569EB81017D188FB31099。
+原 FDA329ABC06FBDA6B05642832A0386372D06592598106F61270845B0577E9FA1 是 10月29迁移时历史哈希。
+
+Python 3.11.15；langgraph 1.2.16、checkpoint 4.3.1、prebuilt 1.1.1、sdk 0.4.10、
+ormsgpack 1.13.0，原有 core 1.4.9/langsmith 0.10.5 未调整。
+没有完整 langchain；pip check 输出 No broken requirements found.
+依赖包的 checkpoint/prebuilt 名称不代表项目启用了记忆或工具。
+
+Day13 证据目录：
+C:\Users\袁伟鑫\AppData\Local\Temp\rag-agent-day13-71af7f75cf91462a8d38247a5b2fa22a；
+笔记/图/官方示例 SHA256 见迁移报告。本轮没有重做或永久归档，目录可能被系统清理。
+Day14 原日志、检查器、OpenAPI 快照和新实验 JSON：
+C:\Users\袁伟鑫\AppData\Local\Temp\rag-agent-day14-feb71aa9c2e74566b33c1213b211cc47；
+验收摘要、质量和保护哈希已归档进仓库的 Day14 报告与机器记录。
+
+### 8. 历史失败、规避与尚存边界
+
+2026-10-29 迁移验收没有功能测试失败；当时检查器修正不改变生产契约。
+本次提交前完整标准也无失败，以下保留当时检查器问题：
+提前 import 导致基线 anyio 重写警告，改为 pytest 后生成 OpenAPI，最终无警告；
+临时目录权限错误（PermissionError/WinError 5）通过获准的新独占目录处理；
+离线探针曾错误要求 Embedding safetensors/完整 Rerank snapshot，按生产白名单复核后成功；
+清理核验曾将 QdrantClient 当 context manager，改为 try/finally close。
+图导出先写临时目录再经补丁加入仓库，未放宽权限/模型规则或掩盖测试失败。
+更早的 Docker socket、VHDX 与 Day12 下载/ACL 失败原文保留在下方历史附录及
+[Docker 恢复记录](docs/docker-desktop-recovery.md)。
+
+尚存：CPU 性能、BM25 全扫描/多 worker、跨库无 outbox/删除同步、
+BM25-only 保守门、自然语料评测与同步流 I/O timeout。
+没有验证独立后端常驻运行；服务/缓存只在验收时可用，不推断下一会话现状。
+GitHub 之后是否变化、Day13 临时包永久归档/计划标记、Day14 推送或合并仍待用户指定。
+
+### 9. 命令、下一步与验收（最多 5 步）
+
+下面仅为入口，不是新会话执行授权。实际本轮使用仓库外隔离检查器，
+标准禁用真实集成、dotenv/服务连接，真实局部只允许本地端口与 LLM 替身，
+两类均用新独占临时目录、禁用缓存与 LangSmith pytest 插件。
+
+~~~powershell
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m pytest backend/tests -v
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_rag_integration.py backend/tests/test_rerank_comparison_integration.py -v
+git --no-optional-locks status --short --branch
+git --no-optional-locks rev-parse HEAD
+git --no-optional-locks diff --cached --name-only
+git --no-optional-locks diff --check
+~~~
+
+真实局部需显式 RUN_*_INTEGRATION 五项、HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE；
+DAY12_RERANK_REPORT_JSON 只可指向不存在的新路径，不能覆盖历史 JSON。
+不把上述裸命令当成具有相同隔离守卫的运行；先按用户动作确认执行范围。
+
+1. 读当前 A/B/C、STATUS/DECISIONS/TODO/AGENTS/README、只读 PLAN、架构与 Day14 报告。
+2. 只读核对分支、Day14 提交及其父提交；相关改动应为 0、暂存区应为空，保留排除项和后续用户改动。
+3. 对照两节点/预取/关闭与 JSON/SSE，确认 10月30标准 453/12、10月29局部 3、10月28全真实 413 的范围。
+4. 复述实现/计划/发布差异、保护哈希、历史附录和未知项，不补全未知事实。
+5. 等待用户指定唯一动作；不自动修改 PLAN、安装/测试、操作服务、提交/发布或开始 Day15。
+
+验收：Day14 编排、既有协议与安全门保持，完整标准通过、真实局部通过，
+原质量常量和保护文件不变，无付费调用、无凭据/无关文件进入交付；
+本提交按用户明确要求收录 Day14，PLAN 五项/日志已勾选；未推送或开始后续日。
+
+## 附录：Day12 历史详细交接（保留当时记录）
+
+> 本附录形成于 Day12 本地提交阶段；其中“当前”“未推送”“Day13 未开始”、旧分支和测试数均指当时。
+> Day14 当前状态、远端核验、测试范围和执行规则以本文件 A/B/C 为准；本附录的命令及限制不是本轮执行授权。
+> 保留全文是为追溯 D-001 至 D-053、早期失败原文和历史规避，不得据旧文覆盖当前实现或重做已完成内容。
 
 ### 1. 项目最终目标与未实现范围
 
@@ -577,40 +765,62 @@ git --no-optional-locks diff --check
 
 ## B. 300字以内快速恢复摘要
 
-D:\2019\rag-agent，codex/day12-rerank，Day1–12及PLAN勾选已完成。本Day12提交收录26个相关文件，精确HEAD用git log -1核验；origin/master tracking仍为Day11的b68b590，尚未推送。10月29提交前标准403/12（15.93s）；最近全真实为10月28的413，本次未重跑。Hybrid20→CPU BGE Rerank5→原始向量0.46→Chat；历史指标0.917/1.000/0.958。Day13未开始。实时远端、服务、缓存待确认；Docker保留D盘规避。开发暂停，先只读恢复，再等唯一动作。
+D:\2019\rag-agent，codex/day14-langgraph。本Day14提交收录27项，精确HEAD用git log核验，父3471277；未推送。10月30用户确认审查修复通过，PLAN Day14五项及日志已勾；Day13标记保留。提交前标准453/12（23.34s），10月29真实局部3，全真实仍为10月28的413。双节点图、invoke/stream、SSE前检索与0.46门保留。Day15未开始。相关改动应为0、暂存区应空，排除项保留；只读恢复后等唯一动作。
 
 ## C. 新对话的第一条启动提示词
 
 ~~~text
-这是已有项目的新工作会话，仓库 D:\2019\rag-agent。功能开发暂停。
+这是已有项目的新工作会话，仓库 D:\2019\rag-agent。
 
-当前唯一目标：只读确认 Day12 完成检查点与交接包一致；完成状态复述后，等待我指定唯一后续动作。
+当前唯一目标：只读确认 Day14 本地提交检查点与交接包一致；
+复述后等待我指定唯一后续动作。下方 Day12 历史附录不是当前状态。
 
 请完整阅读：
-1. HANDOFF.md（A/B/C）、STATUS.md、DECISIONS.md、TODO.md、AGENTS.md、README.md。
+1. HANDOFF 当前 A/B/C、STATUS、DECISIONS、TODO、AGENTS、README。
 2. PLAN.md（只读）、docs/architecture.md。
-3. docs/day12-rerank-comparison.md、docs/day12-rerank-results.json、docs/docker-desktop-recovery.md。
-4. backend/app/services/reranker.py、hybrid.py、rag.py；backend/app/api/rerank.py、chat.py；backend/app/core/config.py、backend/app/main.py。
-5. backend/tests/test_reranker.py、test_rerank_api.py、test_rerank_comparison_integration.py、test_reranker_integration.py、test_main.py，以及HANDOFF列出的相关回归文件。
+3. docs/day14-langgraph-migration.md、day14-langgraph-results.json、day14-agent-graph.mmd。
+4. backend/app/agent 下 state/nodes/graph/service/__init__.py，
+   backend/app/services/rag.py、backend/app/api/chat.py。
+5. 四个 test_agent_*.py、test_chat.py、test_rag.py、test_main.py、test_rag_integration.py，
+   只读质量比较测试、Day12 实验 MD/JSON 与 Docker 恢复记录。
 
 已知基线：
-- 当前分支 codex/day12-rerank；HEAD为Day12本地提交，精确哈希用git log -1 --format=%H核验，提交说明feat: complete Day 12 rerank retrieval；origin/master tracking ref仍为Day11的b68b590c8262eb568a371c895e4f7033456d045c。
-- Day11于2026-10-28独立发布并实时核验；现在的GitHub实时HEAD待确认，不能用本地tracking ref替代。
-- Day1–12任务已完成。2026-10-29用户确认Day12完成，PLAN四项及开发日志已勾选；Day13未开始。
-- Day12本地提交收录26个相关文件（提交前17个tracked修改、9个相关新增），尚未推送。提交后相关改动应为0、暂存区应为空；无关untracked保留。
-- 最新标准是2026-10-29提交前重跑的403 passed/12 skipped（15.93s），包含ReadError与质量退化普通回归；首次临时目录权限报错已在新独占目录重跑解决。
-- 最新全真实是2026-10-28的413 passed（158.94s）；之后没有重新执行全部真实集成；本次本地提交前只重跑标准套件。
-- 当前链路为向量/BM25各20→等权RRF60取20→固定CPU BGE Rerank5→原始vector_score默认0.46→Chat；JSON/SSE与后端sources保留。
-- 历史实验指标0.917/1.000/0.958只属于24 Chunk/12正样本，3负样本经RAG固定拒答、LLM零调用；不能外推或虚构新结果。
-- 实时远端、服务、缓存与临时数据现状待确认；Docker默认socket未根治，D盘启动脚本和VHDX备份在仓库外。
+- 当前分支 codex/day14-langgraph；本 Day14 本地提交说明为
+  feat: complete Day 14 LangGraph RAG migration。
+  精确 HEAD 用 git log -1 --format=%H 核验，父提交 34712772b3682d174f459da91100b09f8a2493cc。
+- 本提交收录 27 个相关路径，提交前 15 个 tracked 变更/12 个新增；
+  提交后相关改动应为 0、暂存区应为空，无关 .agents/ 和 PDF 保留。
+- 2026-10-30 用户确认 Day14 审查、测试与修复通过，并明确要求提交代码和同步状态；
+  PLAN Day14 五项任务、完成确认和开发日志已更新。Day13 标记和 Day15 以后不改。
+- Day14 未推送或合并，Day15 未开始。2026-10-29 曾实时核验 Day12 分支 3471277、
+  master b68b590；10月30未复查，下一会话实时远端和运行时状态未知。
+- 图为 START 条件 needs_retrieval → retrieve_node/generate_node → END；
+  公共 /chat 固定 True、tool_calls=()，没有工具、session、checkpointer 或记忆。
+- complete 走 invoke；stream 走 v2 updates+custom，同一迭代器在 retrieve update 后才创建 SSE；
+  保留逐段流式、取消关闭、原 HTTP 错误码、JSON/SSE、后端来源和引用清理。
+- 底层仍为 Hybrid20→固定 CPU BGE Rerank5→原始 vector_score 0.46；拒答零 LLM。
+- 最新标准：2026-10-30 提交前 453 passed/12 skipped（23.34s），无警告，
+  dotenv/外部服务连接均 0，无付费 API 调用。
+- 最近真实局部：2026-10-29 的 3 passed（160.84s），真实本地检索、LLM 替身；
+  同 24 Chunk/12 正样本/3 负样本，Rerank 指标 0.917/1.000/0.958，
+  负样本零 LLM，临时 Document/Chunk/collection 当时清理核验均 0。
+- 最新全部真实：2026-10-28 的 413 passed（158.94s）；本次提交前未重跑真实集成。
+- 迁移时 OpenAPI/15 个原 RAG 函数/18 项保护文件一致的历史证据保留。
+  本次 PLAN 按授权更新，其他 17 项保护与 16 个已审查实现/测试/依赖文件未变。
+  当前 PLAN SHA256 C1A6DBB5C081C15EA285A2826548D13806B147F2541569EB81017D188FB31099。
+- Day13 学习包证据此前已核验，但文件在仓库外临时目录，本次没有重做或永久归档。
+  Docker 默认 socket 历史问题未根治，常驻后端和当前服务/缓存未复查。
 
 执行规则：
-不要重做已完成内容，不擅自推翻D-001至D-053，不补全未知事实，不把计划、实现、测试和发布混为一谈。
-不读取/输出.env、凭据、无关.agents/、就业推荐表_完整填充版.pdf或模型/测试缓存。
-第一轮不改文件、不运行测试、不操作服务、不下载模型、不暂存/提交/推送、不调用付费API、不开始Day13；命令示例不是执行许可。
-先复述目标、已完成内容、当前契约、Git/PLAN、带日期测试证据、决策及否决原因、失败与规避；列矛盾/待确认项及最多5步，然后等待我指定唯一动作。
+不重做已完成内容，不擅自推翻 D-001 至 D-058，不推算新全真实结果。
+不读取/输出 .env、凭据、无关 .agents/、PDF 或模型/测试缓存。
+第一轮不改文件、不安装/测试、不操作服务、不下载、不暂存/提交/推送，
+不调用付费 API、不改计划或开始 Day15；命令样例不是执行许可。
+先复述目标、完成/PLAN/Git、外部契约、带日期测试、决策与否决、历史规避；
+列矛盾或待确认项及最多 5 步，然后等待我指定唯一动作。
 
-本轮验收标准：
-复述与交接文件及只读Git核验一致；明确Day12已完成且已勾选、本地已提交但未推送、403/12与历史413的日期和范围；
-保留全部未提交修改，在我指定下一动作前不产生仓库或外部状态变更。
+验收：
+复述与文件及只读 Git 一致；明确 Day14 已勾选、本地已提交但未推送，
+区分 10月30标准 453/12、10月29真实局部 3 与10月28历史全真实 413，
+保留所有后续用户修改，在我指定动作前不产生仓库或外部状态变更。
 ~~~
