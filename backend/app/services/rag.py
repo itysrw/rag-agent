@@ -73,9 +73,7 @@ _MODEL_SOURCE_REFERENCE = re.compile(
 _CATALOG_SOURCE_MARKER = re.compile(
     _GROUP_SOURCE_MARKER_PATTERN.replace(r"\.(?:pdf|md|txt)\b", r"(?!)"), re.IGNORECASE
 )
-_CATALOG_SOURCE_REFERENCE = re.compile(
-    _MODEL_SOURCE_REFERENCE.pattern.replace(r"\.(?:pdf|md|txt)\b", r"(?!)"), re.IGNORECASE
-)
+_FILENAME_EXTENSIONS = (".pdf", ".md", ".txt")
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,8 +242,9 @@ class RAGService:
 
 
 def _strip_model_source_references(text: str, *, preserve_filenames: bool = False) -> str:
-    pattern = _CATALOG_SOURCE_REFERENCE if preserve_filenames else _MODEL_SOURCE_REFERENCE
-    return pattern.sub("", text)
+    if preserve_filenames:
+        return "".join(_sanitized_model_deltas((text,), preserve_filenames=True))
+    return _MODEL_SOURCE_REFERENCE.sub("", text)
 
 
 def _sanitized_model_deltas(deltas: Iterable[str], *, preserve_filenames: bool = False) -> Iterator[str]:
@@ -335,10 +334,16 @@ def _classify_reference_candidate(
             return False, 1
         return _classify_extension_candidate(text, final=final)
     if first.lower() == "p":
-        return _classify_page_candidate(text, final=final)
+        return _classify_page_candidate(
+            text, final=final, preserve_filenames=preserve_filenames
+        )
     if first == "第":
-        return _classify_chinese_page_candidate(text, final=final)
-    return _classify_source_id_candidate(text, final=final)
+        return _classify_chinese_page_candidate(
+            text, final=final, preserve_filenames=preserve_filenames
+        )
+    return _classify_source_id_candidate(
+        text, final=final, preserve_filenames=preserve_filenames
+    )
 
 
 def _classify_group_candidate(
@@ -352,6 +357,8 @@ def _classify_group_candidate(
     maximum_length = _MAX_REFERENCE_GROUP_CONTENT + 2
     if 0 < closing < maximum_length:
         group = text[: closing + 1]
+        if preserve_filenames and group[1:-1].lower().endswith(_FILENAME_EXTENSIONS):
+            return False, len(group)
         marker = _CATALOG_SOURCE_MARKER if preserve_filenames else _MODEL_SOURCE_MARKER
         return bool(marker.search(group)), len(group)
     if closing >= maximum_length or final or len(text) >= maximum_length:
@@ -383,6 +390,7 @@ def _classify_page_candidate(
     text: str,
     *,
     final: bool,
+    preserve_filenames: bool = False,
 ) -> tuple[bool, int] | None:
     literal = "page"
     lowered = text.lower()
@@ -411,6 +419,11 @@ def _classify_page_candidate(
         return False, 1
     if index == len(text):
         return (True, index) if final else None
+    extension = _following_filename_extension(text, index, final=final)
+    if preserve_filenames and extension is None:
+        return None
+    if preserve_filenames and extension:
+        return False, index
     if _is_word_character(text[index]):
         return False, 1
     return True, index
@@ -420,6 +433,7 @@ def _classify_chinese_page_candidate(
     text: str,
     *,
     final: bool,
+    preserve_filenames: bool = False,
 ) -> tuple[bool, int] | None:
     index = 1
     spaces = 0
@@ -445,7 +459,15 @@ def _classify_chinese_page_candidate(
     if index == len(text):
         return (False, 1) if final else None
     if text[index] == "页":
-        return True, index + 1
+        marker_end = index + 1
+        if preserve_filenames and marker_end == len(text) and not final:
+            return None
+        extension = _following_filename_extension(text, marker_end, final=final)
+        if preserve_filenames and extension is None:
+            return None
+        if preserve_filenames and extension:
+            return False, marker_end
+        return True, marker_end
     return False, 1
 
 
@@ -453,6 +475,7 @@ def _classify_source_id_candidate(
     text: str,
     *,
     final: bool,
+    preserve_filenames: bool = False,
 ) -> tuple[bool, int] | None:
     if len(text) == 1:
         return (False, 1) if final else None
@@ -469,9 +492,34 @@ def _classify_source_id_candidate(
         if not final:
             return None
         return (digit_count >= 2), index if digit_count >= 2 else 1
+    extension = _following_filename_extension(text, index, final=final)
+    if preserve_filenames and extension is None:
+        return None
+    if preserve_filenames and extension:
+        return False, index
     if _is_word_character(text[index]):
         return False, 1
     return (digit_count >= 2), index if digit_count >= 2 else 1
+
+
+def _following_filename_extension(
+    text: str,
+    index: int,
+    *,
+    final: bool,
+) -> bool | None:
+    """Classify a complete, partial, or absent safe filename extension."""
+    suffix = text[index:].lower()
+    for extension in _FILENAME_EXTENSIONS:
+        if extension.startswith(suffix):
+            if len(suffix) == len(extension):
+                return True if final else None
+            return False if final else None
+        if suffix.startswith(extension):
+            if len(suffix) == len(extension):
+                return True if final else None
+            return not _is_word_character(suffix[len(extension)])
+    return False
 
 
 def _is_word_character(character: str | None) -> bool:
