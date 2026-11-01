@@ -9,13 +9,15 @@ from backend.app.agent.state import AgentContext, AgentState, initial_agent_stat
 
 def test_state_contains_only_request_data_and_context_only_mode() -> None:
     assert set(get_type_hints(AgentState)) == {
-        "query", "retrieved_docs", "prepared", "answer", "tool_calls", "needs_tool_selection"
+        "query", "retrieved_docs", "prepared", "answer", "tool_calls", "needs_tool_selection",
+        "standalone_query", "history", "needs_query_rewrite",
     }
     assert set(get_type_hints(AgentContext)) == {"response_mode"}
     state = initial_agent_state("  报销时间？  ")
     assert state == {
         "query": "报销时间？", "retrieved_docs": (), "prepared": None,
         "answer": "", "tool_calls": (), "needs_tool_selection": True,
+        "standalone_query": "报销时间？", "history": (), "needs_query_rewrite": False,
     }
     other = initial_agent_state("another")
     state["answer"] = "changed"

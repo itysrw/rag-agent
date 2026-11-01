@@ -1,3 +1,16 @@
+## Day16 当前状态（2026-11-01 Asia/Shanghai）
+
+本节为本轮新增状态，下文Day15交接正文逐字节保留为历史快照，不代表当前功能范围。
+Day16多轮记忆已实现并通过完整标准：644 passed / 14 skipped（18.83s），0失败/0警告；.env读取/真实连接/付费调用均0。
+分支codex/day16-conversation-memory，父检查点a006139；本轮形成独立本地提交，不推送/合并。
+已实现PostgreSQL业务消息表、最近5轮/默认2000 token、先改写再单工具、JSON session_id/SSE X-Session-ID、原子保存、进程内409互斥和提交前取消回滚。
+PLAN保持只读，Day16勾选等待用户确认；Day17未开始。真实PG与DeepSeek改写未运行，服务健康待确认。
+原六份文档既有修改仍保留未暂存，只收录本轮新增说明。
+
+当前实现与恢复见[Day16说明](docs/day16-conversation-memory.md)和[机器验收](docs/day16-conversation-results.json)。
+
+---
+
 <!-- DAY15 CHECKPOINT BEGIN -->
 ## Day15 完成检查点（2026-10-31）
 
@@ -601,3 +614,33 @@ D-059至D-064已由Day15实现提交收录；本轮不新增或推翻技术决�
 - list/detail的文件名属于答案数据，清理保留扩展名并继续去除页码/来源ID；sources始终为空。
 - search与内部旧路径仍使用原完整来源清理，证据门、可信来源和受控质量断言不变。
 - 原因：不能把目录文件名当作伪造引用删掉扩展名，也不能为元数据伪造页码。
+
+## D-065：Day16采用业务会话表
+
+- conversations/messages保存业务消息；显式init_db新增表，不引入checkpointer/PostgresSaver、迁移框架或依赖。
+- 原因：按用户规划提供可查询的短期记忆；内部PreparedRAG不读写会话。
+
+## D-066：五个完整轮次与JSON Token预算
+
+- 一轮user+assistant，最多10条；存储完整，Prompt默认o200k_base/2000 token，保留最新完整轮。
+- 最新一轮超限才裁内容，保持Unicode；来源过长则删完整条目，不造文件名。
+- 原因：字符数不能约束Token，旧轮不能拆半轮，历史不成为当前证据。
+
+## D-067：严格JSON改写先于单工具选择
+
+- 无历史跳过；有历史rewrite->select->tool->generate；query只读，standalone_query用于选择/搜索。
+- JSON Output/thinking关闭/max_tokens256/SDK retry0，严格单choice/stop/唯一字段/重复键/Unicode/长度校验，失败不降级。
+- 详情UUID来自原问题或截断历史；user JSON包含历史、原问题、独立问题及当前结果，当前sources不混入旧来源。
+- 按本轮明确授权演进D-061/D-062的Day15原日范围，保留单工具与原向量门。
+
+## D-068：整轮事务与进程内会话独占
+
+- 成功后原始user、完整assistant及updated_at同事务；metadata仅当前安全来源。
+- 读完历史即关闭Session；同session跨服务实例共享独占，冲突409，事务结束再释放。
+- 原因：避免孤立消息及同历史分叉；不宣称多worker分布式串行化。
+
+## D-069：流式保存先于终态事件并响应取消
+
+- 同迭代器在HTTP前完成必要改写、选择与执行；背压保留，完整成功后保存再发sources/DONE。
+- 失败/断流不保存部分答案；保存时仍持锁，flush后提交前观察取消则整轮回滚。
+- 边界：提交完整轮次后网络故障不能撤回事务，不把数据库提交与DONE传输宣称为原子操作。

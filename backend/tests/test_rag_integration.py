@@ -24,9 +24,12 @@ from backend.app.core.config import (
     get_chunking_settings,
     get_document_settings,
 )
-from backend.app.core.database import get_session_factory
+from backend.app.core.database import Base, get_engine, get_session_factory
 from backend.app.main import app
 from backend.app.models.document import Document
+from backend.app.models.conversation import Conversation
+from backend.app.models.message import ConversationMessage
+from backend.app.services.conversation_memory import ConversationMemoryService, ConversationSnapshot
 from backend.app.services.document_storage import build_upload_paths
 from backend.app.services.embedding import EmbeddingClient
 from backend.app.services.llm import AgentToolCall, LLMMessage, LLMToolDefinition
@@ -117,6 +120,15 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
         )
     )
     llm_client = StubMessagesLLMClient()
+    Base.metadata.create_all(get_engine(), tables=[Conversation.__table__, ConversationMessage.__table__])
+    created_sessions: set[UUID] = set()
+
+    class IntegrationMemory(ConversationMemoryService):
+        def open_session(self, session_id: UUID | None) -> ConversationSnapshot:
+            snapshot = super().open_session(session_id)
+            if session_id is None:
+                created_sessions.add(snapshot.session_id)
+            return snapshot
     rag_service = RAGService(
         RerankedRetrievalService(
             HybridRetrievalService(
@@ -128,6 +140,7 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
         ),
         llm_client,  # type: ignore[arg-type]
         RAGSettings(_env_file=None, min_relevance_score=0.46),
+        memory_service=IntegrationMemory(get_session_factory()),
     )
     pdf = build_text_pdf(
         [
@@ -188,6 +201,7 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
             "answer": NO_RELEVANT_KNOWLEDGE,
             "model": "stub-rag-model",
             "sources": [],
+            "session_id": str(UUID(negative_response.json()["session_id"])),
         }
         assert len(llm_client.calls) == 1
         with TestClient(app) as client:
@@ -213,6 +227,10 @@ def test_upload_index_and_chat_returns_answer_source_and_safe_refusal(
         if document_id is not None:
             try:
                 with get_session_factory()() as session:
+                    for identity in created_sessions:
+                        conversation = session.get(Conversation, identity)
+                        if conversation is not None:
+                            session.delete(conversation)
                     document = session.get(Document, document_id)
                     if document is not None:
                         session.delete(document)

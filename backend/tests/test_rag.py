@@ -69,6 +69,8 @@ class StubLLMClient:
         self.complete_calls: list[tuple[LLMMessage, ...]] = []
         self.stream_calls: list[tuple[LLMMessage, ...]] = []
         self.selection_calls: list[tuple[LLMMessage, ...]] = []
+        self.rewrite_calls: list[tuple[LLMMessage, ...]] = []
+        self.rewritten_query: str | None = None
         self.tool_call = tool_call
         self.stream_deltas = ["answer"] if stream_deltas is None else stream_deltas
 
@@ -80,6 +82,10 @@ class StubLLMClient:
             call_id="test-call", name="search_knowledge_base",
             arguments={"query": messages[-1]["content"]},
         )
+
+    def rewrite_query(self, messages: Sequence[LLMMessage]) -> str:
+        self.rewrite_calls.append(tuple(messages))
+        return self.rewritten_query or json.loads(messages[-1]["content"])["current_query"]
 
     def complete_messages(self, messages: tuple[LLMMessage, ...]) -> str:
         self.complete_calls.append(messages)

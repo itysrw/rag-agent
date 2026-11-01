@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator, Sequence
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -97,16 +97,16 @@ class StubRAGService:
             raise self.prepare_failure
         return self.prepared
 
-    def complete(self, question: str) -> RAGAnswer:
+    def complete(self, question: str, *, session_id: UUID | None = None) -> RAGAnswer:
         prepared = self.prepare(question)
         if self.complete_failure is not None:
             raise self.complete_failure
         if not prepared.has_relevant_context:
-            return RAGAnswer(NO_RELEVANT_KNOWLEDGE, self.model, ())
-        return RAGAnswer("reply:hello", self.model, prepared.sources)
+            return RAGAnswer(NO_RELEVANT_KNOWLEDGE, self.model, (), session_id or uuid4())
+        return RAGAnswer("reply:hello", self.model, prepared.sources, session_id or uuid4())
 
-    def start_stream(self, question: str) -> PreparedRAGStream:
-        return PreparedRAGStream(iter(()), prepared=self.prepare(question))
+    def start_stream(self, question: str, *, session_id: UUID | None = None) -> PreparedRAGStream:
+        return PreparedRAGStream(iter(()), prepared=self.prepare(question), session_id=session_id or uuid4())
 
     def stream(self, run: PreparedRAGStream) -> Iterator[str]:
         prepared = run.prepared
@@ -200,6 +200,7 @@ def test_chat_returns_complete_rag_response(
         "answer": "reply:hello",
         "model": "test-model",
         "sources": [{"filename": "policy.pdf", "page": 1}],
+        "session_id": str(UUID(response.json()["session_id"])),
     }
 
 
@@ -291,6 +292,7 @@ def test_chat_refuses_without_context_and_returns_no_sources(stream: bool) -> No
             "answer": NO_RELEVANT_KNOWLEDGE,
             "model": "test-model",
             "sources": [],
+            "session_id": str(UUID(response.json()["session_id"])),
         }
     else:
         assert response.text.split("\n\n") == [
@@ -497,13 +499,14 @@ def test_public_chat_schema_and_input_cannot_disable_tool_selection() -> None:
     try:
         with TestClient(app) as client:
             schema = client.get("/openapi.json").json()
-            assert set(schema["components"]["schemas"]["ChatRequest"]["properties"]) == {"message", "stream"}
+            assert set(schema["components"]["schemas"]["ChatRequest"]["properties"]) == {"message", "stream", "session_id"}
             response = client.post("/chat", json={"message": "question", "needs_retrieval": False,
                                                    "needs_tool_selection": False})
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert response.json() == {"answer": NO_RELEVANT_KNOWLEDGE, "model": "test-model", "sources": []}
+    assert response.json() == {"answer": NO_RELEVANT_KNOWLEDGE, "model": "test-model", "sources": [],
+                               "session_id": str(UUID(response.json()["session_id"]))}
     assert retrieval.questions == ["question"]
     assert len(service._llm_client.selection_calls) == 1
 

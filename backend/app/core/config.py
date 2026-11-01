@@ -241,6 +241,25 @@ class RerankerSettings(BaseSettings):
         return value
 
 
+class ConversationMemorySettings(BaseSettings):
+    """Bound prompt history without truncating persisted business messages."""
+
+    max_turns: Literal[5] = 5
+    max_tokens: int = Field(default=2000, ge=128, le=16000)
+    encoding_name: Literal["o200k_base"] = "o200k_base"
+
+    @field_validator("max_turns", mode="before")
+    @classmethod
+    def parse_fixed_turn_limit(cls, value: Any) -> Any:
+        """Environment values are strings; keep the business limit fixed at five."""
+        return 5 if value == "5" else value
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8",
+        env_prefix="MEMORY_", extra="ignore",
+    )
+
+
 class RAGSettings(BaseSettings):
     """Generation-layer relevance gate for the Day 8 RAG flow."""
 
@@ -310,3 +329,9 @@ def get_rag_settings() -> RAGSettings:
 def get_reranker_settings() -> RerankerSettings:
     """Return cached local reranker settings without loading its model."""
     return RerankerSettings()
+
+
+@lru_cache
+def get_conversation_memory_settings() -> ConversationMemorySettings:
+    """Resolve prompt limits lazily, independently of health/startup."""
+    return ConversationMemorySettings()

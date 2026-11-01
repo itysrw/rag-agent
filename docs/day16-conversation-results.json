@@ -1,0 +1,218 @@
+{
+  "date_asia_shanghai": "2026-11-01",
+  "implementation_day": 16,
+  "branch": "codex/day16-conversation-memory",
+  "parent_day15_head": "a006139f4ae1406c5f20144730c76fe122d0c2bc",
+  "commit_scope": "Independent local Day16 commit; resolve SHA using git log -1. No push/merge.",
+  "baseline": {
+    "label": "baseline-offline",
+    "exit_code": 0,
+    "python": "3.11.15",
+    "seconds": 17.39,
+    "counts": {
+      "dotenv_attempts": 0,
+      "external_connect_attempts": 0
+    },
+    "stats": {
+      "": 1155,
+      "passed": 571,
+      "skipped": 13
+    },
+    "arguments": [
+      "backend/tests",
+      "-v",
+      "--basetemp=C:\\Users\\袁伟鑫\\.codex\\visualizations\\2026\\11\\01\\01a196e1-5365-73c0-9067-5ee389a7cdd4\\day16-validation\\baseline-offline-4fc2c2c89907453389d6bb5e09188dee",
+      "-p",
+      "no:cacheprovider",
+      "-p",
+      "no:langsmith_plugin"
+    ]
+  },
+  "standard_test": {
+    "label": "delivery-standard",
+    "exit_code": 0,
+    "python": "3.11.15",
+    "seconds": 19.74,
+    "counts": {
+      "dotenv_attempts": 0,
+      "external_connect_attempts": 0
+    },
+    "stats": {
+      "": 1302,
+      "passed": 644,
+      "skipped": 14
+    },
+    "arguments": [
+      "backend/tests",
+      "-v",
+      "--tb=short",
+      "--basetemp=C:\\Users\\袁伟鑫\\.codex\\visualizations\\2026\\11\\01\\01a196e1-5365-73c0-9067-5ee389a7cdd4\\day16-validation\\delivery-standard-261b6c782bae4c7299ddd8141de0a922",
+      "-p",
+      "no:cacheprovider",
+      "-p",
+      "no:langsmith_plugin"
+    ],
+    "pytest_seconds": 18.83,
+    "failed": 0,
+    "warnings": 0
+  },
+  "cancellation_regression": {
+    "label": "cancellation-regression",
+    "exit_code": 0,
+    "python": "3.11.15",
+    "seconds": 18.88,
+    "counts": {
+      "dotenv_attempts": 0,
+      "external_connect_attempts": 0
+    },
+    "stats": {
+      "": 180,
+      "passed": 90
+    },
+    "arguments": [
+      "backend/tests/test_conversation_chat.py",
+      "backend/tests/test_conversation_memory.py",
+      "backend/tests/test_agent_nodes.py",
+      "backend/tests/test_agent_service.py",
+      "-v",
+      "--tb=short",
+      "--basetemp=C:\\Users\\袁伟鑫\\.codex\\visualizations\\2026\\11\\01\\01a196e1-5365-73c0-9067-5ee389a7cdd4\\day16-validation\\cancellation-regression-ff0642e3c2d84e8c89a2a4fba5f7e162",
+      "-p",
+      "no:cacheprovider",
+      "-p",
+      "no:langsmith_plugin"
+    ]
+  },
+  "contracts": {
+    "new_tables": [
+      "conversations",
+      "messages"
+    ],
+    "max_history_turns": 5,
+    "max_history_messages": 10,
+    "default_history_tokens": 2000,
+    "history_encoding": "o200k_base",
+    "raw_messages_persisted_without_truncation": true,
+    "json_session_id": true,
+    "sse_session_header": "X-Session-ID",
+    "rewrite_before_tool_selection": true,
+    "rewrite_first_turn_calls": 0,
+    "rewrite_followup_calls": 1,
+    "rewrite_sdk_retries": 0,
+    "rewrite_max_tokens": 256,
+    "rewrite_response_format": {
+      "type": "json_object"
+    },
+    "original_query_immutable": true,
+    "uuid_provenance": "original query or bounded history",
+    "current_sources_only": true,
+    "atomic_user_assistant_insert": true,
+    "stream_save_before_sources_done": true,
+    "cancel_before_commit_rolls_back_turn": true,
+    "lease_held_through_commit_or_rollback": true,
+    "concurrency_scope": "one process, shared across service instances",
+    "no_database_transaction_during_model_work": true,
+    "checkpointer_enabled": false,
+    "new_http_routes": [],
+    "new_production_dependencies": [],
+    "search_pipeline_unchanged": "Hybrid20 -> CPU BGE Rerank5 -> original vector_score >= default 0.46",
+    "openapi_change_only": "ChatRequest.session_id optional UUID"
+  },
+  "verification": {
+    "plan_unchanged": true,
+    "plan_sha256": "1c352666dbec4230c77cb21801aae8271369fde7ef114390a48c40b3c10ea673",
+    "requirements_unchanged": true,
+    "original_six_document_bodies_preserved": true,
+    "original_six_document_diff_saved": true,
+    "technical_decisions_D001_D064_preserved": true,
+    "tested_source_and_test_sha256": {
+      ".env.example": "1a16476035ec0f2974afcd8bc214af00c1aab135e14d4b51b1c905f10cc7f8c2",
+      "backend/app/agent/graph.py": "4260533960b3f88a09d7383306a96211551cbf6a7120faee3d4379ea7b89017c",
+      "backend/app/agent/nodes.py": "a4dbdaa9e09db339c157eb4a43026642326a640b61c9283a17be463188ca520f",
+      "backend/app/agent/service.py": "9ee6cb5c3632416e83f0013517a42803f5621017b07428b26f63fb263ad77618",
+      "backend/app/agent/state.py": "869f3117e29972c5ec789f53c823b84a960018379a4fcce5ae69198096d7e00b",
+      "backend/app/agent/tools.py": "babfc8f4c4e21bd43010f46ba63326265d8f66586a3441c9ee36d93675de3889",
+      "backend/app/api/chat.py": "dcdb893597232ed7e81c1805adc713d8d1aa29aeaaa8c2b09bdb5d5a66ab686f",
+      "backend/app/core/config.py": "477cdc34f848186e693bcdb683077a259c4b53b4f9c279be7a56bbc59bbbfa01",
+      "backend/app/models/conversation.py": "faa4ddeb3395f59387d80019a111074695278d9351f86a0c98f795be7a6f0b08",
+      "backend/app/models/init_db.py": "c84f93c93d66f3d20f98f564a301729dcabd6b5953b6d5650c9e1e465220241f",
+      "backend/app/models/message.py": "81224ca07779c6c70963c5e895c60c53c692fd2cc5f8c1417b17a2a62d6cc2e6",
+      "backend/app/services/conversation_memory.py": "89b0cbdab3a18677e35aa1f79e449bf48efa0e476d6c03e54ee71b71ffc4cd2c",
+      "backend/app/services/llm.py": "75751723bfb03e0fecf707c2aec581d857c0d1b67db0f8b7cf52cbffa5bf452e",
+      "backend/app/services/rag.py": "b0bf79f8302372caf3894c429badd0f3103503ac3c029b8415416f087c9fb671",
+      "backend/tests/conftest.py": "2bbe7ad2c59be7feda6f61286d868e97cdd46d3e2b66d8277ca960ff64a7cae7",
+      "backend/tests/test_agent_graph.py": "b6aab6e7b9ed6f0a761bdbdf4b2de6727c35eeb5f628fa884e20f30fa603b68a",
+      "backend/tests/test_agent_service.py": "9bd1f5122cc1f58a2c18018f595671fe16950f59c5dae41e485d85c94a85308b",
+      "backend/tests/test_agent_state.py": "3850919830f161a1d688f61294878a4fcbd87d70d98f398652e21779c39eca23",
+      "backend/tests/test_agent_tools.py": "e1425f37c7d108c320b668202d70830ab2f33e40c135bd78272d52907c2042f5",
+      "backend/tests/test_chat.py": "93b23a3e4ed808f4cf3bffdd0da98fff42b4682da3580811f760f21ef7e79889",
+      "backend/tests/test_conversation_chat.py": "2a211d0f93a3bcf246a91356958ae25c136460b0a8645451aebdd57d1f636346",
+      "backend/tests/test_conversation_memory.py": "3179cb9b7ffa33ecc9e82641a898f706c408acbcafab26a6d2639c0f2b15e1ea",
+      "backend/tests/test_conversation_models.py": "80998d76f2044508827e83dd6e7e2b800baf6a5aeaf875df0babf4f0113e7f93",
+      "backend/tests/test_conversation_postgres.py": "4171a43b59c999f1baebd5d4610faf770f3849bb685e875048869802fab6b172",
+      "backend/tests/test_llm.py": "ea36ea6c11136f8873da67d599359a912d18cb7c4ed500662dd49714fccd5a51",
+      "backend/tests/test_rag.py": "6df3d6c398c2d103a49b8da459e2e83344ec30987ac6b4f370c8520ed632de6e",
+      "backend/tests/test_rag_integration.py": "567954d3cfaeef7f57601b064034cd14a533dacc253ec22f9a7ee7fc306b8533"
+    },
+    "real_postgres_entry_added": true,
+    "real_postgres_entry_executed": false,
+    "real_deepseek_rewrite_executed": false,
+    "real_day15_selector_executed": false,
+    "paid_api_calls": 0,
+    "model_downloads": false,
+    "service_operations": false,
+    "public_tokenizer_vocabulary_prepared": true,
+    "tokenizer_sha256": "446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d",
+    "push_performed": false,
+    "merge_performed": false,
+    "final_static_checks": {
+      "tested_source_hashes_match": true,
+      "unchanged_protected_files": 74,
+      "local_links_checked": 65,
+      "broken_local_links": [],
+      "original_document_bodies_match_backup": true,
+      "plan_and_requirements_unchanged": true,
+      "expected_commit_paths": 36,
+      "no_env_agents_or_pdf_in_staging_scope": true
+    }
+  },
+  "earlier_attempts": [
+    {
+      "stage": "first restricted baseline",
+      "accepted": false,
+      "reason": "Windows exclusive pytest temp-directory permission"
+    },
+    {
+      "stage": "baseline before vocabulary setup",
+      "passed": 558,
+      "failed": 13,
+      "skipped": 13,
+      "reason": "Missing o200k_base vocabulary; offline guard blocked 14 attempted connections"
+    },
+    {
+      "stage": "memory-core",
+      "passed": 74,
+      "errors": 2,
+      "reason": "Long Emoji parametrized test ID exceeded Windows environment-variable limit; short IDs fixed it"
+    },
+    {
+      "stage": "first targeted",
+      "passed": 241,
+      "failed": 6,
+      "reason": "Day15 exact JSON/schema assertions needed the authorized session_id extension"
+    },
+    {
+      "stage": "environment boundary",
+      "passed": 47,
+      "failed": 1,
+      "reason": "Fixed literal-five environment parsing and safe configuration-error mapping"
+    }
+  ],
+  "evidence_directory": "C:\\Users\\袁伟鑫\\.codex\\visualizations\\2026\\11\\01\\01a196e1-5365-73c0-9067-5ee389a7cdd4\\day16-validation",
+  "limitations": [
+    "Real PostgreSQL schema creation and real DeepSeek rewriting not run.",
+    "Process-local mutual exclusion is not a distributed multi-worker lock.",
+    "A committed complete turn cannot be withdrawn after a later transport failure.",
+    "Day16 PLAN boxes remain unchanged; PLAN is read-only for implementation."
+  ]
+}

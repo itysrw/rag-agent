@@ -1,10 +1,11 @@
 """Translate the compiled graph into the unchanged RAG answer/delta contract."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextvars import Context, copy_context
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any
+from uuid import UUID
 
 from langsmith import tracing_context
 
@@ -20,10 +21,11 @@ from backend.app.services.document_catalog import DocumentCatalogError
 from backend.app.services.qdrant_store import QdrantStoreError
 from backend.app.services.rag import PreparedRAG, RAGAnswer, RAGGraphError
 from backend.app.services.reranker import RerankerError
+from backend.app.services.conversation_memory import ConversationHistoryMessage, ConversationMemoryError
 
 _KNOWN_FAILURES = (
     BM25Error, EmbeddingError, HybridError, QdrantStoreError, RerankerError,
-    LLMServiceError, RAGGraphError, DocumentCatalogError,
+    LLMServiceError, RAGGraphError, DocumentCatalogError, ConversationMemoryError,
 )
 
 
@@ -35,6 +37,10 @@ class PreparedRAGStream:
     prepared: PreparedRAG | None = None
     control: StreamControl = field(default_factory=StreamControl)
     closed: bool = False
+    session_id: UUID | None = None
+    answer: str = ""
+    on_success: Callable[[str], None] | None = field(default=None, repr=False)
+    on_close: Callable[[], None] | None = field(default=None, repr=False)
     _context: Context = field(default_factory=copy_context, repr=False)
     _lock: RLock = field(default_factory=RLock, repr=False)
 
@@ -49,6 +55,14 @@ class PreparedRAGStream:
         """Signal before waiting on an in-flight graph iterator."""
         self.control.cancel()
 
+    def finish(self) -> None:
+        """Keep ownership through persistence; cancel can signal while close waits."""
+        with self._lock:
+            if self.closed or self.control.drain_requested:
+                raise RAGGraphError("The RAG graph stream was cancelled.")
+            if self.on_success is not None:
+                self.on_success(self.answer)
+
     def close(self) -> None:
         """Idempotently stop the producer and close the same graph iterator."""
         self.cancel()
@@ -57,19 +71,24 @@ class PreparedRAGStream:
                 return
             self.closed = True
             close = getattr(self.events, "close", None)
-            if callable(close):
-                try:
+            try:
+                if callable(close):
                     self._context.run(close)
-                except Exception as exc:
-                    raise RAGGraphError("The RAG graph stream could not be closed.") from exc
+            except Exception as exc:
+                raise RAGGraphError("The RAG graph stream could not be closed.") from exc
+            finally:
+                if self.on_close is not None:
+                    self.on_close()
 
 
-def _initial_state(question: str | PreparedRAG) -> AgentState:
+def _initial_state(
+    question: str | PreparedRAG, history: tuple[ConversationHistoryMessage, ...] = (),
+) -> AgentState:
     if isinstance(question, PreparedRAG):
         state = initial_agent_state(question.question)
         state.update(prepared=question, needs_tool_selection=False)
         return state
-    return initial_agent_state(question)
+    return initial_agent_state(question, history=history)
 
 
 def _event_data(event: Any) -> tuple[str, dict[str, Any]]:
@@ -89,9 +108,11 @@ class RAGGraphRunner:
         self.graph = graph
         self.model = model
 
-    def complete(self, question: str | PreparedRAG) -> RAGAnswer:
+    def complete(
+        self, question: str | PreparedRAG, *, history: tuple[ConversationHistoryMessage, ...] = (),
+    ) -> RAGAnswer:
         """Run the complete graph once, preserving all known service exceptions."""
-        initial = _initial_state(question)
+        initial = _initial_state(question, history)
         try:
             with tracing_context(enabled=False):
                 state = self.graph.invoke(
@@ -108,6 +129,12 @@ class RAGGraphRunner:
                 or not isinstance(calls, tuple) or len(calls) != expected_calls
                 or state.get("needs_tool_selection") is not False
                 or state.get("query") != initial["query"] or prepared.question != initial["query"]
+                or state.get("needs_query_rewrite") is not False
+                or state.get("history") != initial["history"]
+                or not isinstance(state.get("standalone_query"), str)
+                or not 1 <= len(state["standalone_query"]) <= 4096
+                or (not initial["needs_query_rewrite"]
+                    and state["standalone_query"] != initial["standalone_query"])
             ):
                 raise RAGGraphError("The RAG graph returned an invalid final state.")
             if calls:
@@ -140,9 +167,11 @@ class RAGGraphRunner:
         except Exception as exc:
             raise RAGGraphError("The RAG graph stream failed.") from exc
 
-    def start_stream(self, question: str | PreparedRAG) -> PreparedRAGStream:
+    def start_stream(
+        self, question: str | PreparedRAG, *, history: tuple[ConversationHistoryMessage, ...] = (),
+    ) -> PreparedRAGStream:
         """Prefetch selection and execution, before generation or StreamingResponse."""
-        initial = _initial_state(question)
+        initial = _initial_state(question, history)
         control = StreamControl()
         run = PreparedRAGStream(
             self._events(initial, control),
@@ -151,6 +180,16 @@ class RAGGraphRunner:
         if not initial["needs_tool_selection"]:
             return run
         try:
+            if initial["needs_query_rewrite"]:
+                kind, data = _event_data(run.next_event())
+                rewritten = data.get("rewrite_query_node")
+                if (kind != "updates" or set(data) != {"rewrite_query_node"}
+                        or not isinstance(rewritten, dict)
+                        or set(rewritten) != {"standalone_query", "needs_query_rewrite"}
+                        or rewritten.get("needs_query_rewrite") is not False
+                        or not isinstance(rewritten.get("standalone_query"), str)
+                        or not 1 <= len(rewritten["standalone_query"].strip()) <= 4096):
+                    raise RAGGraphError("The RAG graph did not finish query rewriting.")
             event = run.next_event()
             kind, data = _event_data(event)
             selection = data.get("select_tool_node")
@@ -188,6 +227,7 @@ class RAGGraphRunner:
     def stream(self, run: PreparedRAGStream) -> Iterator[str]:
         """Expose sanitized custom deltas only, requiring a final generate update."""
         finished = False
+        parts: list[str] = []
         try:
             while True:
                 try:
@@ -202,6 +242,7 @@ class RAGGraphRunner:
                         or not isinstance(data.get("delta"), str) or not data["delta"]
                     ):
                         raise RAGGraphError("The RAG graph returned an invalid delta.")
+                    parts.append(data["delta"])
                     yield data["delta"]
                     run.control.acknowledge()
                 else:
@@ -214,7 +255,11 @@ class RAGGraphRunner:
                     ):
                         raise RAGGraphError("The RAG graph returned an invalid generation update.")
                     finished = True
+                    run.answer = update["answer"]
             if not finished or run.prepared is None:
                 raise RAGGraphError("The RAG graph did not finish generation.")
+            if run.answer != "".join(parts) or run.control.drain_requested:
+                raise RAGGraphError("The RAG graph stream did not complete successfully.")
+            run.finish()
         finally:
             run.close()

@@ -199,7 +199,8 @@ def test_final_tool_count_is_distinct_for_public_and_internal_paths(internal: bo
     class Graph:
         def invoke(self, *args: Any, **kwargs: Any) -> Any:
             return {"query": "question", "prepared": prepared, "answer": "answer",
-                    "tool_calls": (call,) * count, "needs_tool_selection": False}
+                    "tool_calls": (call,) * count, "needs_tool_selection": False,
+                    "standalone_query": "question", "history": (), "needs_query_rewrite": False}
     runner = RAGGraphRunner(Graph(), "test-model")
     if count == (0 if internal else 1):
         assert runner.complete(prepared if internal else "question").answer == "answer"

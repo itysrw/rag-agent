@@ -1,3 +1,16 @@
+## Day16 当前状态（2026-11-01 Asia/Shanghai）
+
+本节为本轮新增状态，下文Day15交接正文逐字节保留为历史快照，不代表当前功能范围。
+Day16多轮记忆已实现并通过完整标准：644 passed / 14 skipped（18.83s），0失败/0警告；.env读取/真实连接/付费调用均0。
+分支codex/day16-conversation-memory，父检查点a006139；本轮形成独立本地提交，不推送/合并。
+已实现PostgreSQL业务消息表、最近5轮/默认2000 token、先改写再单工具、JSON session_id/SSE X-Session-ID、原子保存、进程内409互斥和提交前取消回滚。
+PLAN保持只读，Day16勾选等待用户确认；Day17未开始。真实PG与DeepSeek改写未运行，服务健康待确认。
+原六份文档既有修改仍保留未暂存，只收录本轮新增说明。
+
+当前架构与验收见[Day16说明](day16-conversation-memory.md)。
+
+---
+
 <!-- DAY15 CHECKPOINT BEGIN -->
 ## Day15 完成检查点（2026-10-31）
 

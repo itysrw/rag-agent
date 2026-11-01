@@ -10,6 +10,7 @@ from pydantic import SecretStr
 from backend.app.core.config import LLMSettings
 from backend.app.services.llm import LLMClient, LLMMessage, LLMServiceError
 from backend.app.services.llm import LLMToolCallError, MAX_TOOL_ARGUMENT_BYTES
+from backend.app.services.llm import QueryRewriteError
 from backend.app.agent.tools import tool_definitions
 
 
@@ -99,6 +100,70 @@ def make_client(
         extra_body={"vendor_option": True},
     )
     return LLMClient(settings, client=sdk), sdk
+
+
+def rewrite_response(content: Any = '{"standalone_query":"完整问题？"}', finish: str = "stop") -> Any:
+    """One controlled JSON-output response with an explicit completion status."""
+    return SimpleNamespace(choices=[SimpleNamespace(
+        finish_reason=finish, message=SimpleNamespace(content=content),
+    )])
+
+
+def test_rewrite_uses_bounded_json_output_without_tools_or_retries() -> None:
+    client, sdk = make_client()
+    client._settings.extra_body.update({"tools": ["unsafe"], "stream": True,
+                                        "response_format": {}, "max_tokens": 999999})
+    calls = []
+    def create(**options: Any) -> Any:
+        calls.append(options)
+        return rewrite_response()
+    sdk.completions.create = create
+    assert client.rewrite_query([{"role": "user", "content": "json question"}]) == "完整问题？"
+    assert sdk.retry_options == [0] and len(calls) == 1
+    options = calls[0]
+    assert options["stream"] is False and options["max_tokens"] == 256
+    assert options["response_format"] == {"type": "json_object"}
+    assert "tools" not in options and "tool_choice" not in options
+    assert options["extra_body"] == {"vendor_option": True, "thinking": {"type": "disabled"}}
+
+
+@pytest.mark.parametrize("content, finish", [
+    (" ", "stop"), (None, "stop"), ("not json", "stop"), ("[]", "stop"),
+    ("null", "stop"), ("{}", "stop"), ('{"standalone_query":2}', "stop"),
+    ('{"standalone_query":" "}', "stop"),
+    ('{"standalone_query":"q","extra":true}', "stop"),
+    ('{"standalone_query":"q","standalone_query":"r"}', "stop"),
+    ('{"standalone_query":"q"}', "length"), ('{"standalone_query":"q"}', "tool_calls"),
+    ('{"standalone_query":"' + "q" * 4097 + '"}', "stop"),
+    ('{"standalone_query":"\\ud800"}', "stop"),
+])
+def test_invalid_rewrite_never_retries_or_exposes_content(content: Any, finish: str) -> None:
+    client, sdk = make_client()
+    sdk.completions.create = lambda **_: rewrite_response(content, finish)
+    with pytest.raises(QueryRewriteError, match="^The query rewrite request failed\\.$"):
+        client.rewrite_query([{"role": "user", "content": "json question"}])
+    assert sdk.retry_options == [0]
+
+
+def test_rewrite_rejects_multiple_choices_and_upstream_failure() -> None:
+    client, sdk = make_client()
+    sdk.completions.create = lambda **_: SimpleNamespace(choices=[rewrite_response().choices[0]] * 2)
+    with pytest.raises(QueryRewriteError):
+        client.rewrite_query([{"role": "user", "content": "json question"}])
+    def broken(**_: Any) -> Any:
+        raise OpenAIError("private prompt or provider response")
+    sdk.completions.create = broken
+    with pytest.raises(QueryRewriteError) as error:
+        client.rewrite_query([{"role": "user", "content": "json question"}])
+    assert "private" not in str(error.value)
+
+
+@pytest.mark.parametrize("length", [1, 4096])
+def test_rewrite_accepts_question_length_boundaries(length: int) -> None:
+    import json
+    client, sdk = make_client()
+    sdk.completions.create = lambda **_: rewrite_response(json.dumps({"standalone_query": "q" * length}))
+    assert client.rewrite_query([{"role": "user", "content": "json question"}]) == "q" * length
 
 
 def test_complete_uses_compatible_request_shape() -> None:

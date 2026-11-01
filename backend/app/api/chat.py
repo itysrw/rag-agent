@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Annotated
+from uuid import UUID
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -47,6 +48,11 @@ from backend.app.services.rag import (
 if TYPE_CHECKING:
     from backend.app.agent.service import PreparedRAGStream
 
+from backend.app.services.conversation_memory import (
+    ConversationBusyError, ConversationMemoryError, ConversationMemoryUnavailableError,
+    ConversationNotFoundError,
+)
+
 router = APIRouter()
 
 
@@ -58,6 +64,7 @@ class ChatRequest(BaseModel):
         StringConstraints(strip_whitespace=True, min_length=1, max_length=4096),
     ]
     stream: bool = False
+    session_id: UUID | None = None
 
 
 class ChatSourceResponse(BaseModel):
@@ -73,6 +80,7 @@ class ChatResponse(BaseModel):
     answer: str
     model: str
     sources: list[ChatSourceResponse]
+    session_id: UUID
 
 
 def require_rag_service() -> RAGService:
@@ -117,6 +125,10 @@ def stream_sse(service: RAGService, run: PreparedRAGStream) -> Iterator[str]:
         logger.error("RAG graph stream failed")
         payload = json.dumps({"detail": "The RAG stream failed."}, ensure_ascii=False)
         yield f"event: error\ndata: {payload}\n\n"
+    except ConversationMemoryError:
+        logger.error("Conversation memory stream save failed")
+        payload = json.dumps({"detail": "The conversation could not be saved."})
+        yield f"event: error\ndata: {payload}\n\n"
     finally:
         close = getattr(deltas, "close", None)
         if callable(close):
@@ -132,7 +144,8 @@ class _RAGStreamingResponse(StreamingResponse):
         super().__init__(
             stream_sse(service, run),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                     "X-Session-ID": str(run.session_id)},
         )
 
     async def __call__(
@@ -157,9 +170,17 @@ def chat(
     """Retrieve before returning either a complete answer or SSE stream."""
     try:
         if request.stream:
-            run = service.start_stream(request.message)
+            run = service.start_stream(request.message, session_id=request.session_id)
         else:
-            answer = service.complete(request.message)
+            answer = service.complete(request.message, session_id=request.session_id)
+    except ConversationNotFoundError as exc:
+        raise HTTPException(404, "The conversation does not exist.") from exc
+    except ConversationBusyError as exc:
+        raise HTTPException(409, "The conversation already has a request in progress.") from exc
+    except ConversationMemoryUnavailableError as exc:
+        raise HTTPException(503, "The conversation memory is unavailable.") from exc
+    except ConversationMemoryError as exc:
+        raise HTTPException(500, "The conversation memory request failed.") from exc
     except EmbeddingInputTooLongError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -217,6 +238,7 @@ def chat(
     return ChatResponse(
         answer=answer.answer,
         model=answer.model,
+        session_id=answer.session_id,
         sources=[
             ChatSourceResponse(filename=source.filename, page=source.page)
             for source in answer.sources

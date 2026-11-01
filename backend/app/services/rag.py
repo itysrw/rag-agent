@@ -6,11 +6,18 @@ import json
 import math
 import re
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING
+from uuid import UUID
+from pydantic import ValidationError
 
-from backend.app.core.config import RAGSettings, get_rag_settings
+from backend.app.core.config import ConversationMemorySettings, RAGSettings, get_rag_settings, get_conversation_memory_settings
+from backend.app.services.conversation_memory import (
+    ConversationLease, ConversationMemoryService, ConversationMemoryUnavailableError,
+    ConversationSnapshot, acquire_conversation,
+    get_conversation_memory_service, truncate_history,
+)
 from backend.app.services.document_catalog import DocumentCatalogService, get_document_catalog_service
 from backend.app.services.llm import (
     LLMClient,
@@ -101,6 +108,7 @@ class RAGAnswer:
     answer: str
     model: str
     sources: tuple[RAGSource, ...]
+    session_id: UUID | None = None
 
 
 class RAGGraphError(RuntimeError):
@@ -186,11 +194,40 @@ class RAGService:
         settings: RAGSettings,
         *,
         catalog_factory: Callable[[], DocumentCatalogService] = get_document_catalog_service,
+        memory_service: ConversationMemoryService | None = None,
+        memory_settings: ConversationMemorySettings | None = None,
     ) -> None:
         self._retrieval_service = retrieval_service
         self._llm_client = llm_client
         self._settings = settings
         self._catalog_factory = catalog_factory
+        self._memory_service = memory_service
+        self._memory_settings = memory_settings
+
+    @cached_property
+    def _memory(self) -> ConversationMemoryService:
+        return self._memory_service or get_conversation_memory_service()
+
+    @cached_property
+    def _history_settings(self) -> ConversationMemorySettings:
+        try:
+            return self._memory_settings or get_conversation_memory_settings()
+        except ValidationError as exc:
+            raise ConversationMemoryUnavailableError("The conversation memory is unavailable.") from exc
+
+    def _open_turn(self, session_id: UUID | None) -> tuple[ConversationSnapshot, ConversationLease]:
+        lease = acquire_conversation(session_id) if session_id is not None else None
+        try:
+            settings = self._history_settings
+            snapshot = self._memory.open_session(session_id)
+            lease = lease or acquire_conversation(snapshot.session_id)
+            history = truncate_history(snapshot.history, max_turns=settings.max_turns,
+                                       max_tokens=settings.max_tokens, encoding_name=settings.encoding_name)
+            return replace(snapshot, history=history), lease
+        except BaseException:
+            if lease is not None:
+                lease.close()
+            raise
 
     @property
     def model(self) -> str:
@@ -206,6 +243,7 @@ class RAGService:
             build_rag_graph(
                 self._retrieval_service, self._llm_client, self._settings,
                 catalog_factory=self._catalog_factory,
+                memory_settings=self._history_settings,
             ),
             self.model,
         )
@@ -226,13 +264,42 @@ class RAGService:
             raise RAGGraphError("The RAG graph returned no prepared context.")
         return prepared
 
-    def complete(self, question: str | PreparedRAG) -> RAGAnswer:
+    def complete(self, question: str | PreparedRAG, *, session_id: UUID | None = None) -> RAGAnswer:
         """Public chat invokes the whole graph; internal prepared callers skip retrieval."""
-        return self._runner.complete(question)
+        if isinstance(question, PreparedRAG):
+            return self._runner.complete(question)
+        from backend.app.agent.state import initial_agent_state
+        original = initial_agent_state(question)["query"]
+        snapshot, lease = self._open_turn(session_id)
+        try:
+            result = self._runner.complete(original, history=snapshot.history)
+            self._memory.append_turn(session_id=snapshot.session_id, user_message=original,
+                                     assistant_message=result.answer, sources=result.sources)
+            return replace(result, session_id=snapshot.session_id)
+        finally:
+            lease.close()
 
-    def start_stream(self, question: str) -> PreparedRAGStream:
+    def start_stream(self, question: str, *, session_id: UUID | None = None) -> PreparedRAGStream:
         """Prefetch graph retrieval before the HTTP response is established."""
-        return self._runner.start_stream(question)
+        from backend.app.agent.state import initial_agent_state
+        original = initial_agent_state(question)["query"]
+        snapshot, lease = self._open_turn(session_id)
+        try:
+            run = self._runner.start_stream(original, history=snapshot.history)
+            run.session_id = snapshot.session_id
+            run.on_close = lease.close
+
+            def save(answer: str) -> None:
+                assert run.prepared is not None
+                self._memory.append_turn(session_id=snapshot.session_id, user_message=original,
+                                         assistant_message=answer, sources=run.prepared.sources,
+                                         is_cancelled=lambda: run.control.drain_requested)
+
+            run.on_success = save
+            return run
+        except BaseException:
+            lease.close()
+            raise
 
     def stream(self, run: PreparedRAGStream | PreparedRAG) -> Iterator[str]:
         """Continue the same graph iterator, retaining old experiment callers."""

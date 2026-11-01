@@ -32,6 +32,10 @@ class LLMToolCallError(LLMServiceError):
     """The selector returned an unsafe or invalid function call."""
 
 
+class QueryRewriteError(LLMServiceError):
+    """A rewrite request or its bounded JSON output failed validation."""
+
+
 ToolName = Literal["search_knowledge_base", "get_document_detail", "list_documents"]
 TOOL_NAMES = frozenset({"search_knowledge_base", "get_document_detail", "list_documents"})
 MAX_TOOL_ARGUMENT_BYTES = 65536
@@ -185,6 +189,39 @@ class LLMClient:
             return parsed
         except (ValueError, TypeError, UnicodeError, RecursionError) as exc:
             raise LLMToolCallError("The language model returned an invalid tool call.") from exc
+
+    def rewrite_query(self, messages: Sequence[LLMMessage]) -> str:
+        """Resolve references once through bounded JSON output, without tools/retries."""
+        options = self._request_options(messages=_validated_messages(messages), stream=False)
+        extra = deepcopy(options.get("extra_body", {}))
+        for key in ("tools", "tool_choice", "parallel_tool_calls", "stream", "messages",
+                    "model", "response_format", "max_tokens", "max_completion_tokens"):
+            extra.pop(key, None)
+        extra["thinking"] = {"type": "disabled"}
+        options.update(extra_body=extra, response_format={"type": "json_object"}, max_tokens=256)
+        try:
+            response = self._client.with_options(max_retries=0).chat.completions.create(**options)
+            choices = getattr(response, "choices", None)
+            if not isinstance(choices, (list, tuple)) or len(choices) != 1:
+                raise ValueError("invalid choices")
+            choice = choices[0]
+            message = getattr(choice, "message", None)
+            content = getattr(message, "content", None)
+            if (getattr(choice, "finish_reason", None) != "stop"
+                    or getattr(message, "tool_calls", None)
+                    or not isinstance(content, str) or not content.strip()
+                    or len(content.encode("utf-8")) > 65536):
+                raise ValueError("invalid rewrite response")
+            parsed = json.loads(content, object_pairs_hook=_unique_json_object)
+            if not isinstance(parsed, dict) or set(parsed) != {"standalone_query"}:
+                raise ValueError("invalid rewrite object")
+            query = parsed["standalone_query"]
+            if not isinstance(query, str) or not 1 <= len(query.strip()) <= 4096:
+                raise ValueError("invalid rewrite question")
+            query.encode("utf-8")
+            return query.strip()
+        except (OpenAIError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
+            raise QueryRewriteError("The query rewrite request failed.") from exc
 
     def complete_messages(self, messages: Sequence[LLMMessage]) -> str:
         """Return one complete assistant response for structured messages."""

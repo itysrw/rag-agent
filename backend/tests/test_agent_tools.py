@@ -165,7 +165,7 @@ def test_public_api_runs_exactly_one_selected_tool_and_keeps_json_sse_contract(n
         sources = json.loads(frames[-2].split("data: ", 1)[1])["sources"]
         assert "tool_call" not in response.text and "select_tool_node" not in response.text
     else:
-        assert set(response.json()) == {"answer", "model", "sources"}
+        assert set(response.json()) == {"answer", "model", "sources", "session_id"}
         sources = response.json()["sources"]
     assert sources == ([{"filename": "policy.pdf", "page": 1}] if name == "search_knowledge_base" else [])
 

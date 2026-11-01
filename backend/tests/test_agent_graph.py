@@ -15,11 +15,12 @@ def test_compiled_graph_selects_and_executes_exactly_one_tool() -> None:
     graph = build_rag_graph(retrieval, llm, RAGSettings(_env_file=None))
     assert graph.checkpointer is None
     drawing = graph.get_graph()
-    assert set(drawing.nodes) == {"__start__", "select_tool_node", "tool_node", "generate_node", "__end__"}
+    assert set(drawing.nodes) == {"__start__", "rewrite_query_node", "select_tool_node", "tool_node", "generate_node", "__end__"}
     conditional = {(e.source, e.target) for e in drawing.edges if e.conditional}
-    assert conditional == {("__start__", "select_tool_node"), ("__start__", "generate_node")}
+    assert conditional == {("__start__", "rewrite_query_node"), ("__start__", "select_tool_node"), ("__start__", "generate_node")}
     assert {(e.source, e.target) for e in drawing.edges if not e.conditional} == {
-        ("select_tool_node", "tool_node"), ("tool_node", "generate_node"), ("generate_node", "__end__")
+        ("rewrite_query_node", "select_tool_node"), ("select_tool_node", "tool_node"),
+        ("tool_node", "generate_node"), ("generate_node", "__end__")
     }
     initial = initial_agent_state(" question ")
     result = graph.invoke(initial, context={"response_mode": "complete"})
