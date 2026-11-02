@@ -1,3 +1,23 @@
+## 2026-11-02 完成确认与提交前验收
+
+用户确认Day16审查、测试与修复通过，并授权勾选PLAN五项、完成确认、开发日志及本地提交。
+分支codex/day16-conversation-memory，Day16实现提交74949214e8f163fbdfa2e035993a640ab866026e为本轮父检查点。
+本提交收录已审查修复、回归和完成状态，不推送或合并；本轮没有再改已审查源码或测试。
+
+- 长问题修复：rewrite_query的固定输出预算为4096 token，standalone_query仍为1..4096字符；非流式JSON、thinking关闭、SDK retry0和严格校验保留。
+- 首轮失败补偿：选择、生成或保存异常时尝试清理本次新建且仍为空的会话；不删除已有会话、成功轮次或已有消息的会话。流异常在锁释放前执行一次失败回调，补偿失败不覆盖主要错误。
+- 提交前完整标准：**652 passed / 14 skipped（45.43s），0失败/0警告**，Python3.11.15，退出码0；dotenv/真实连接尝试0，付费0。
+- 92个已审查源码/测试/规范/配置/依赖文件本轮起止SHA256相同；OpenAPI与Day16实现快照精确一致，图导出未变。
+- PLAN差异仅Day16五项、完成确认和日志；Day13、Day17以后、requirements与历史实验报告不改。
+- 原六份交接文档正文和原有diff保留未暂存，只收录本轮完成状态增量；D-001至D-069原文保留，D-070记录修复理由。
+
+本轮未执行真实PostgreSQL/DeepSeek集成、下载模型或操作服务；14项跳过不是全真实组合通过。
+最新机器证据看completion_checkpoint.standard_test；下文及JSON原standard_test=644/14均为2026-11-01历史。
+下文“PLAN保持只读/等待确认”和“max_tokens256”只描述原实现阶段；当前PLAN已按授权完成，改写预算以本节4096 token为准。
+Day17未开始。完成提交SHA以git log -1核对，远端状态未在本轮重新核查。
+
+---
+
 # Day16：PostgreSQL 多轮记忆
 
 日期：2026-11-01（Asia/Shanghai）。分支 codex/day16-conversation-memory。

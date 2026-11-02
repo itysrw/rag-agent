@@ -1,8 +1,10 @@
 """Multi-turn graph/HTTP behavior with SQLite transactions and controlled models."""
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 import json
 from threading import Event
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -12,10 +14,12 @@ import pytest
 from backend.app.api.chat import require_rag_service
 from backend.app.core.config import ConversationMemorySettings, RAGSettings
 from backend.app.main import app
+from backend.app.models.conversation import Conversation
 from backend.app.models.message import ConversationMessage
 from backend.app.services.conversation_memory import (
     ConversationBusyError, ConversationHistoryMessage, ConversationMemoryError,
-    ConversationMemoryUnavailableError, ConversationSource, history_token_count,
+    ConversationMemoryUnavailableError, ConversationNotFoundError, ConversationSource,
+    history_token_count,
 )
 from backend.app.services.llm import AgentToolCall, LLMServiceError, LLMToolCallError, QueryRewriteError
 from backend.app.services.rag import NO_RELEVANT_KNOWLEDGE, RAGService
@@ -220,9 +224,152 @@ def test_stream_errors_emit_no_sources_or_done_and_no_partial_turn(memory_store,
     assert response.status_code == 200 and "event: error" in response.text
     assert "event: sources" not in response.text and "[DONE]" not in response.text and "private" not in response.text
     identity = UUID(response.headers["X-Session-ID"])
-    assert memory.open_session(identity).history == ()
+    with pytest.raises(ConversationNotFoundError):
+        memory.open_session(identity)
     from backend.app.services.conversation_memory import acquire_conversation
     acquire_conversation(identity).close()
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["json", "sse"])
+@pytest.mark.parametrize("stage", ["selection", "generation", "save"])
+def test_first_failed_request_leaves_no_conversation_or_messages(
+    memory_store,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+    stream: bool,
+) -> None:
+    """A failed request cannot strand a new session unknown to the client."""
+    memory, factory = memory_store
+    service = make_service(memory)
+
+    if stage == "selection":
+        def fail_selection(*args: Any, **kwargs: Any) -> AgentToolCall:
+            raise LLMServiceError("private selection failure")
+
+        monkeypatch.setattr(service._llm_client, "select_tool", fail_selection)
+    elif stage == "generation" and stream:
+        def fail_stream(messages: Any) -> Iterator[str]:
+            del messages
+            yield "partial"
+            raise LLMServiceError("private generation failure")
+
+        monkeypatch.setattr(service._llm_client, "stream_messages", fail_stream)
+    elif stage == "generation":
+        def fail_complete(messages: Any) -> str:
+            raise LLMServiceError("private generation failure")
+
+        monkeypatch.setattr(service._llm_client, "complete_messages", fail_complete)
+    else:
+        def fail_save(**kwargs: Any) -> None:
+            raise ConversationMemoryError("private save failure")
+
+        monkeypatch.setattr(memory, "append_turn", fail_save)
+
+    app.dependency_overrides[require_rag_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            response = client.post("/chat", json={"message": "first question", "stream": stream})
+    finally:
+        app.dependency_overrides.clear()
+
+    if stream and stage in {"generation", "save"}:
+        assert response.status_code == 200
+        assert "event: error" in response.text
+    else:
+        assert response.status_code == (500 if stage == "save" else 502)
+    assert "private" not in response.text
+    with factory() as session:
+        row_counts = (
+            session.query(Conversation).count(),
+            session.query(ConversationMessage).count(),
+        )
+    assert row_counts == (0, 0)
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["json", "sse"])
+def test_long_independent_followup_reaches_tool_and_generation(
+    memory_store,
+    monkeypatch: pytest.MonkeyPatch,
+    stream: bool,
+) -> None:
+    """A supported long follow-up is not rejected by a 256-token rewrite cap."""
+    from backend.tests.test_llm import FakeStream, make_client, rewrite_response, tool_response
+
+    class CharacterEncoding:
+        def encode(
+            self,
+            text: str,
+            *,
+            disallowed_special: tuple[str, ...] = (),
+        ) -> list[int]:
+            del disallowed_special
+            return list(range(len(text)))
+
+    monkeypatch.setattr(
+        "backend.app.services.conversation_memory.tiktoken.get_encoding",
+        lambda _: CharacterEncoding(),
+    )
+    memory, _ = memory_store
+    identity = memory.open_session(None).session_id
+    memory.append_turn(
+        session_id=identity,
+        user_message="第一轮问题",
+        assistant_message="第一轮回答",
+        sources=[],
+    )
+    long_query = "独立问题内容" * 300
+    client, sdk = make_client()
+    calls: list[dict[str, Any]] = []
+
+    def create(**options: Any) -> Any:
+        calls.append(options)
+        if options.get("response_format") == {"type": "json_object"}:
+            if options.get("max_tokens", 0) < 300:
+                return rewrite_response('{"standalone_query":"truncated', "length")
+            return rewrite_response(json.dumps({"standalone_query": long_query}, ensure_ascii=False))
+        if "tools" in options:
+            selected_query = options["messages"][-1]["content"]
+            return tool_response(
+                "search_knowledge_base",
+                json.dumps({"query": selected_query}, ensure_ascii=False),
+            )
+        if options["stream"]:
+            return FakeStream([
+                SimpleNamespace(
+                    choices=[SimpleNamespace(delta=SimpleNamespace(content="完整回答"))]
+                )
+            ])
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="完整回答"))]
+        )
+
+    sdk.completions.create = create
+    service = make_service(memory, llm=client)
+    app.dependency_overrides[require_rag_service] = lambda: service
+    try:
+        with TestClient(app) as test_client:
+            response = test_client.post(
+                "/chat",
+                json={"message": long_query, "stream": stream, "session_id": str(identity)},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    if stream:
+        assert 'data: {"delta": "完整回答"}' in response.text
+        assert "data: [DONE]" in response.text
+    else:
+        assert response.json()["answer"] == "完整回答"
+    assert service._retrieval_service.questions[-1] == long_query
+    assert any("tools" in call for call in calls)
+    assert any(
+        "tools" not in call and "response_format" not in call
+        for call in calls
+    )
+    saved = memory.open_session(identity).history
+    assert saved[-2].content == long_query
+    assert saved[-1].content == "完整回答"
 
 
 def test_process_lock_spans_generation_across_service_instances_but_other_sessions_run(memory_store) -> None:
@@ -416,5 +563,6 @@ def test_cancellation_during_save_rolls_back_both_messages_before_releasing_leas
     finally:
         event.remove(factory.class_, "before_flush", block_flush)
         run.close()
-    assert memory.open_session(run.session_id).history == ()
+    with pytest.raises(ConversationNotFoundError):
+        memory.open_session(run.session_id)
     acquire_conversation(run.session_id).close()

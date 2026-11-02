@@ -40,6 +40,7 @@ class PreparedRAGStream:
     session_id: UUID | None = None
     answer: str = ""
     on_success: Callable[[str], None] | None = field(default=None, repr=False)
+    on_failure: Callable[[], None] | None = field(default=None, repr=False)
     on_close: Callable[[], None] | None = field(default=None, repr=False)
     _context: Context = field(default_factory=copy_context, repr=False)
     _lock: RLock = field(default_factory=RLock, repr=False)
@@ -62,6 +63,13 @@ class PreparedRAGStream:
                 raise RAGGraphError("The RAG graph stream was cancelled.")
             if self.on_success is not None:
                 self.on_success(self.answer)
+
+    def fail(self) -> None:
+        """Run request-failure compensation before releasing stream ownership."""
+        with self._lock:
+            if self.on_failure is not None:
+                callback, self.on_failure = self.on_failure, None
+                callback()
 
     def close(self) -> None:
         """Idempotently stop the producer and close the same graph iterator."""
@@ -261,5 +269,8 @@ class RAGGraphRunner:
             if run.answer != "".join(parts) or run.control.drain_requested:
                 raise RAGGraphError("The RAG graph stream did not complete successfully.")
             run.finish()
+        except Exception:
+            run.fail()
+            raise
         finally:
             run.close()

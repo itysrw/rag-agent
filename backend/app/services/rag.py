@@ -14,8 +14,8 @@ from pydantic import ValidationError
 
 from backend.app.core.config import ConversationMemorySettings, RAGSettings, get_rag_settings, get_conversation_memory_settings
 from backend.app.services.conversation_memory import (
-    ConversationLease, ConversationMemoryService, ConversationMemoryUnavailableError,
-    ConversationSnapshot, acquire_conversation,
+    ConversationLease, ConversationMemoryError, ConversationMemoryService,
+    ConversationMemoryUnavailableError, ConversationSnapshot, acquire_conversation,
     get_conversation_memory_service, truncate_history,
 )
 from backend.app.services.document_catalog import DocumentCatalogService, get_document_catalog_service
@@ -215,16 +215,31 @@ class RAGService:
         except ValidationError as exc:
             raise ConversationMemoryUnavailableError("The conversation memory is unavailable.") from exc
 
-    def _open_turn(self, session_id: UUID | None) -> tuple[ConversationSnapshot, ConversationLease]:
+    def _discard_created_empty_session(self, session_id: UUID, *, created: bool) -> None:
+        if not created:
+            return
+        try:
+            self._memory.delete_empty_session(session_id)
+        except ConversationMemoryError:
+            # Cleanup must not replace the request's primary safe failure.
+            pass
+
+    def _open_turn(
+        self, session_id: UUID | None,
+    ) -> tuple[ConversationSnapshot, ConversationLease, bool]:
+        created = session_id is None
         lease = acquire_conversation(session_id) if session_id is not None else None
+        snapshot: ConversationSnapshot | None = None
         try:
             settings = self._history_settings
             snapshot = self._memory.open_session(session_id)
             lease = lease or acquire_conversation(snapshot.session_id)
             history = truncate_history(snapshot.history, max_turns=settings.max_turns,
                                        max_tokens=settings.max_tokens, encoding_name=settings.encoding_name)
-            return replace(snapshot, history=history), lease
+            return replace(snapshot, history=history), lease, created
         except BaseException:
+            if snapshot is not None:
+                self._discard_created_empty_session(snapshot.session_id, created=created)
             if lease is not None:
                 lease.close()
             raise
@@ -270,12 +285,15 @@ class RAGService:
             return self._runner.complete(question)
         from backend.app.agent.state import initial_agent_state
         original = initial_agent_state(question)["query"]
-        snapshot, lease = self._open_turn(session_id)
+        snapshot, lease, created = self._open_turn(session_id)
         try:
             result = self._runner.complete(original, history=snapshot.history)
             self._memory.append_turn(session_id=snapshot.session_id, user_message=original,
                                      assistant_message=result.answer, sources=result.sources)
             return replace(result, session_id=snapshot.session_id)
+        except BaseException:
+            self._discard_created_empty_session(snapshot.session_id, created=created)
+            raise
         finally:
             lease.close()
 
@@ -283,11 +301,14 @@ class RAGService:
         """Prefetch graph retrieval before the HTTP response is established."""
         from backend.app.agent.state import initial_agent_state
         original = initial_agent_state(question)["query"]
-        snapshot, lease = self._open_turn(session_id)
+        snapshot, lease, created = self._open_turn(session_id)
         try:
             run = self._runner.start_stream(original, history=snapshot.history)
             run.session_id = snapshot.session_id
             run.on_close = lease.close
+            run.on_failure = lambda: self._discard_created_empty_session(
+                snapshot.session_id, created=created,
+            )
 
             def save(answer: str) -> None:
                 assert run.prepared is not None
@@ -298,6 +319,7 @@ class RAGService:
             run.on_success = save
             return run
         except BaseException:
+            self._discard_created_empty_session(snapshot.session_id, created=created)
             lease.close()
             raise
 

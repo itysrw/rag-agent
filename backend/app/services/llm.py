@@ -39,6 +39,7 @@ class QueryRewriteError(LLMServiceError):
 ToolName = Literal["search_knowledge_base", "get_document_detail", "list_documents"]
 TOOL_NAMES = frozenset({"search_knowledge_base", "get_document_detail", "list_documents"})
 MAX_TOOL_ARGUMENT_BYTES = 65536
+_QUERY_REWRITE_MAX_TOKENS = 4096
 
 
 class LLMFunctionDefinition(TypedDict):
@@ -198,7 +199,11 @@ class LLMClient:
                     "model", "response_format", "max_tokens", "max_completion_tokens"):
             extra.pop(key, None)
         extra["thinking"] = {"type": "disabled"}
-        options.update(extra_body=extra, response_format={"type": "json_object"}, max_tokens=256)
+        options.update(
+            extra_body=extra,
+            response_format={"type": "json_object"},
+            max_tokens=_QUERY_REWRITE_MAX_TOKENS,
+        )
         try:
             response = self._client.with_options(max_retries=0).chat.completions.create(**options)
             choices = getattr(response, "choices", None)

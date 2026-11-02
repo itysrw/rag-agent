@@ -1,13 +1,18 @@
-## Day16 当前状态（2026-11-01 Asia/Shanghai）
+## Day16 完成确认与提交检查点（2026-11-02 Asia/Shanghai）
 
-本节为本轮新增状态，下文Day15交接正文逐字节保留为历史快照，不代表当前功能范围。
-Day16多轮记忆已实现并通过完整标准：644 passed / 14 skipped（18.83s），0失败/0警告；.env读取/真实连接/付费调用均0。
-分支codex/day16-conversation-memory，父检查点a006139；本轮形成独立本地提交，不推送/合并。
-已实现PostgreSQL业务消息表、最近5轮/默认2000 token、先改写再单工具、JSON session_id/SSE X-Session-ID、原子保存、进程内409互斥和提交前取消回滚。
-PLAN保持只读，Day16勾选等待用户确认；Day17未开始。真实PG与DeepSeek改写未运行，服务健康待确认。
-原六份文档既有修改仍保留未暂存，只收录本轮新增说明。
+用户确认Day16已通过审查、测试与修复；本轮按授权完成PLAN五项勾选、完成确认和开发日志。Day13及Day17以后标记不改，Day17未开始。
+分支codex/day16-conversation-memory，Day16实现为74949214e8f163fbdfa2e035993a640ab866026e；本轮完成提交的父提交为该实现，实际SHA以git log -1核对。
+本次收录6个已审查源码/测试路径的修复与对应完成状态：改写输出上限为4096 token；首轮选择、生成或保存异常时补偿清理本次新建且仍为空的会话。
+提交前完整backend/tests：652 passed / 14 skipped（45.43s），0失败/0警告，Python3.11.15；.env读取尝试0、真实服务连接尝试0、付费0。
+92个已审查源码/测试/规范/配置/依赖文件本轮起止哈希不变；本轮不再修改这些已审查文件。
+多轮记忆仍为最近5轮/默认2000 token、先改写再单工具、当前结果约束回答及来源；JSON session_id/SSE X-Session-ID、原子保存、进程内409互斥与取消回滚保留。
+真实PostgreSQL/DeepSeek集成未运行；本轮不操作服务、下载模型、推送或合并，也没有复查远端。当前运行资源/代理/其他PR状态待确认。
+六份文档原有正文改动完整保留未暂存；本轮只收录Day16完成状态增量。D-001至D-069原文保留，D-070说明本次已审查修复。
+本节是当前恢复入口；下文Day15 A/B/C及早期未确认状态属于历史快照，不能替代本节或用来推断当前发布状态。
 
-当前实现与恢复见[Day16说明](docs/day16-conversation-memory.md)和[机器验收](docs/day16-conversation-results.json)。
+- [x] Day16五项及日志已按用户确认完成，审查修复随本轮本地提交收录。
+
+当前实现与完成验收见[Day16说明](docs/day16-conversation-memory.md)和[机器记录](docs/day16-conversation-results.json)。
 
 ---
 

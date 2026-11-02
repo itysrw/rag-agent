@@ -121,7 +121,7 @@ def test_rewrite_uses_bounded_json_output_without_tools_or_retries() -> None:
     assert client.rewrite_query([{"role": "user", "content": "json question"}]) == "完整问题？"
     assert sdk.retry_options == [0] and len(calls) == 1
     options = calls[0]
-    assert options["stream"] is False and options["max_tokens"] == 256
+    assert options["stream"] is False and options["max_tokens"] == 4096
     assert options["response_format"] == {"type": "json_object"}
     assert "tools" not in options and "tool_choice" not in options
     assert options["extra_body"] == {"vendor_option": True, "thinking": {"type": "disabled"}}

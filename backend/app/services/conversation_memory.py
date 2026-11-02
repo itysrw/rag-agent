@@ -238,6 +238,26 @@ class ConversationMemoryService:
                 raise ConversationMemoryError("The conversation history is invalid.") from exc
             return ConversationSnapshot(session_id, history)
 
+    def delete_empty_session(self, session_id: UUID) -> bool:
+        """Delete one still-empty session without touching any persisted turn."""
+        if not isinstance(session_id, UUID):
+            raise ValueError("session_id must be a UUID")
+        with self._session() as session, session.begin():
+            conversation = session.scalar(
+                select(Conversation).where(Conversation.id == session_id).with_for_update()
+            )
+            if conversation is None:
+                return False
+            message_id = session.scalar(
+                select(ConversationMessage.id)
+                .where(ConversationMessage.conversation_id == session_id)
+                .limit(1)
+            )
+            if message_id is not None:
+                return False
+            session.delete(conversation)
+            return True
+
     def append_turn(
         self, *, session_id: UUID, user_message: str, assistant_message: str,
         sources: Sequence["RAGSource"],
