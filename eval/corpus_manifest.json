@@ -1,0 +1,61 @@
+{
+  "version": "day17-v1",
+  "source_policy_url": "https://www.ready.gov/publications",
+  "source_policy": "FEMA Ready publications may be reproduced without changing the original content, photos, graphics or figures and without implying FEMA or U.S. Government endorsement. Original PDF bytes are retained.",
+  "documents": [
+    {
+      "filename": "earthquake.pdf",
+      "sha256": "08a970a1439b329c11cc197a976a8e77fa7ef8dd506d753dd81e750539a4b2af",
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "source_url": "https://www.ready.gov/sites/default/files/2024-03/ready.gov_earthquake_hazard-info-sheet.pdf",
+      "publisher": "Federal Emergency Management Agency (Ready.gov)",
+      "language": "en"
+    },
+    {
+      "filename": "flood.pdf",
+      "sha256": "24caeb55976d2e0aca2926e0757a8af1285557ff86839e42017312b0313c3365",
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "source_url": "https://www.ready.gov/sites/default/files/2024-07/ready.gov_flood_info-sheet.pdf",
+      "publisher": "Federal Emergency Management Agency (Ready.gov)",
+      "language": "en"
+    },
+    {
+      "filename": "hurricane.pdf",
+      "sha256": "8c1ce13ca829752e92b149a6e02a66bc238843464046ea0d7a2ae5961d472e8a",
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "source_url": "https://www.ready.gov/sites/default/files/2024-03/ready.gov_hurricane_hazard-info-sheet.pdf",
+      "publisher": "Federal Emergency Management Agency (Ready.gov)",
+      "language": "en"
+    },
+    {
+      "filename": "tornado.pdf",
+      "sha256": "571700b8e6bce2e5d83847184c4a27aba26fac72d7d86fca556ff84cef63784a",
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "source_url": "https://www.ready.gov/sites/default/files/2024-03/ready.gov_tornado_hazard-info-sheet.pdf",
+      "publisher": "Federal Emergency Management Agency (Ready.gov)",
+      "language": "en"
+    },
+    {
+      "filename": "wildfire.pdf",
+      "sha256": "5f1a733b469ad6f45584642a93152cf699d257d2db8c5f77ed78db17231412dc",
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "source_url": "https://www.ready.gov/sites/default/files/2024-03/ready.gov_wildfire_hazard-info-sheet.pdf",
+      "publisher": "Federal Emergency Management Agency (Ready.gov)",
+      "language": "en"
+    },
+    {
+      "filename": "winter-storm.pdf",
+      "sha256": "503b0d44f7ff4337551e96371fed686b34f6d3f5e4bc032a2c8b703e0e3ccb61",
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "source_url": "https://www.ready.gov/sites/default/files/2024-03/ready.gov_winter-storm_hazard-info-sheet.pdf",
+      "publisher": "Federal Emergency Management Agency (Ready.gov)",
+      "language": "en"
+    }
+  ]
+}
