@@ -45,6 +45,6 @@
 {"id":"qa_045","category":"unanswerable","question":"洪水指南有没有列出加州某一具体房屋的年度洪水保险费金额？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
 {"id":"qa_046","category":"unanswerable","question":"龙卷风指南是否提供任一具体街道地址的下一次龙卷风警报准确开始时刻？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
 {"id":"qa_047","category":"unanswerable","question":"野火指南要求 N95 呼吸防护口罩每隔多少分钟更换一次？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
-{"id":"qa_048","category":"unanswerable","question":"地震指南规定震后乘电梯到楼顶避险；应该先按哪一层？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
-{"id":"qa_049","category":"unanswerable","question":"洪水指南允许开车绕过路障的具体条件是什么？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
-{"id":"qa_050","category":"unanswerable","question":"冬季风暴指南允许用燃气灶给房间取暖时，人与炉灶至少应保持几米？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
+{"id":"qa_048","category":"unanswerable","question":"按地震指南的建议固定电视时，如果墙面是石膏板，应选什么规格的锚栓、至少用几个固定点？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
+{"id":"qa_049","category":"unanswerable","question":"按洪水指南的建议给集水坑泵配备用电池时，电池至少应有多大容量，停电后至少应能运行多久？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}
+{"id":"qa_050","category":"unanswerable","question":"为防冬季风暴期间室外水管冻裂，给水管加保温套时应选多厚的材料，接缝要搭接多长？","expected_answer":"知识库中没有相关信息","expected_source":[],"difficulty":"hard"}

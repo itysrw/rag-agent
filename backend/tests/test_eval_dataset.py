@@ -130,3 +130,44 @@ def test_questions_and_answers_contain_no_internal_identifiers(
         content = case["question"] + case["expected_answer"]
         assert not identity.search(content)
         assert not re.search(r"(?i)(?:[a-z]:\\|/home/|/users/|api[_-]?key|chunk[_-]?id|doc[_-]?id)", content)
+
+
+@pytest.mark.parametrize(
+    ("question", "filename", "evidence"),
+    [
+        pytest.param(
+            "地震指南规定震后乘电梯到楼顶避险；应该先按哪一层？",
+            "earthquake.pdf",
+            "Do not use elevators.",
+            id="earthquake-elevator",
+        ),
+        pytest.param(
+            "洪水指南允许开车绕过路障的具体条件是什么？",
+            "flood.pdf",
+            "Never drive around barricades.",
+            id="flood-barricades",
+        ),
+        pytest.param(
+            "冬季风暴指南允许用燃气灶给房间取暖时，人与炉灶至少应保持几米？",
+            "winter-storm.pdf",
+            "Never heat your home with a gas stovetop or oven.",
+            id="winter-storm-gas-stove",
+        ),
+    ],
+)
+def test_false_premise_with_explicit_corpus_rebuttal_is_not_unanswerable(
+    cases: list[dict[str, object]], question: str, filename: str, evidence: str,
+) -> None:
+    """Reviewed false-premise questions need a grounded correction or replacement."""
+    source = {"filename": filename, "page": 2}
+    page_text = PdfReader(ROOT / "corpus" / filename).pages[1].extract_text()
+    assert evidence in " ".join(page_text.split())
+
+    matching_cases = [case for case in cases if case["question"] == question]
+    if not matching_cases:
+        return  # Replacing the flawed question is also a valid dataset correction.
+
+    case = matching_cases[0]
+    assert case["category"] != "unanswerable", f"{case['id']} ignores {source}"
+    assert case["expected_answer"] != REFUSAL
+    assert source in case["expected_source"]
