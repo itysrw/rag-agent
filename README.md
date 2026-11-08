@@ -1,283 +1,241 @@
-> **当前完成状态（2026-11-07）**：Day17 评测数据集 `day17-v1.1` 已按用户确认通过审查、测试与修复；50 条 QA 与六份原版 PDF 已冻结。[PLAN.md](PLAN.md)的 Day17 四项已勾，完整标准 660 passed、14 skipped；本机六文档入库并索引 25 个 Point。详见[Day17 完成记录](docs/day17-eval-completion.md)和[数据集说明](eval/README.md)。Day13 未补勾，Day18 未开始。
-> 下方 2026-11-02 的分支、HEAD、暂停与“Day17 未开始”属于历史交接快照；接口和架构说明仍按各自日期阅读。
+> **当前检查点（2026-11-09）**：Day17 `day17-v1.1` 的 50 条 QA 和六份原版 PDF 已冻结，四项 PLAN 已勾；Day17 提交 `6f252c2` 已推送，Day18 完成标记与实现已形成本地提交，分支仍为 `codex/day17-eval-dataset`，未合并 `master`。Day17 离线验收为 660 passed/14 skipped、退出0；本机11月7日六文档入库并索引 25 个 Point。Day13 未勾，[Day18 真实评测基线](#day18-真实评测基线)已完成。当前 Git 状态见[交接包](HANDOFF.md)，Day17 记录见[完成记录](docs/day17-eval-completion.md)和[数据集说明](eval/README.md)。
+> 下方 2026-11-02 的分支、HEAD 和“Day17 未开始”属于历史交接快照；运行命令与接口说明按当前源码核对。
 
 ---
 
-## Day16 完成确认与提交检查点（2026-11-02 Asia/Shanghai）
+# 企业知识库 RAG Agent
 
-用户确认Day16已通过审查、测试与修复；本轮按授权完成PLAN五项勾选、完成确认和开发日志。Day13及Day17以后标记不改，Day17未开始。
-分支codex/day16-conversation-memory，Day16实现为74949214e8f163fbdfa2e035993a640ab866026e；本轮完成提交的父提交为该实现，实际SHA以git log -1核对。
-本次收录6个已审查源码/测试路径的修复与对应完成状态：改写输出上限为4096 token；首轮选择、生成或保存异常时补偿清理本次新建且仍为空的会话。
-提交前完整backend/tests：652 passed / 14 skipped（45.43s），0失败/0警告，Python3.11.15；.env读取尝试0、真实服务连接尝试0、付费0。
-92个已审查源码/测试/规范/配置/依赖文件本轮起止哈希不变；本轮不再修改这些已审查文件。
-多轮记忆仍为最近5轮/默认2000 token、先改写再单工具、当前结果约束回答及来源；JSON session_id/SSE X-Session-ID、原子保存、进程内409互斥与取消回滚保留。
-真实PostgreSQL/DeepSeek集成未运行；本轮不操作服务、下载模型、推送或合并，也没有复查远端。当前运行资源/代理/其他PR状态待确认。
-六份文档原有正文改动完整保留未暂存；本轮只收录Day16完成状态增量。D-001至D-069原文保留，D-070说明本次已审查修复。
-本节是当前恢复入口；下文Day15 A/B/C及早期未确认状态属于历史快照，不能替代本节或用来推断当前发布状态。
+FastAPI + LangGraph + PostgreSQL + Qdrant，使用本地CPU BGE、BM25/RRF/Rerank和DeepSeek compatible LLM，
+提供知识库问答、可信当前来源、单工具选择及短期多轮记忆。
+项目后续目标包括完整 trace、Streamlit 与完整 Docker Compose。
 
-- [x] Day16五项及日志已按用户确认完成，审查修复随本轮本地提交收录。
+## Day18 真实评测基线
 
-当前实现与完成验收见[Day16说明](docs/day16-conversation-memory.md)和[机器记录](docs/day16-conversation-results.json)。
+2026-11-08 使用 DeepSeek `deepseek-v4-flash` 在六份英文 PDF（语料 `day17-v1`）上执行 `day17-v1.1` 的 50 道中文单轮问题。评测前后均核对了 PostgreSQL 和 Qdrant 中的 25 个 Chunk 和对应索引点。50 题均正常返回，实际发起 65 次模型请求，预算为 100 次。
 
----
+| 指标 | 实测 |
+|---|---:|
+| 整体规则准确率 | 11/50（22.0%） |
+| 有答案题候选来源全命中率 | 30/40（75.0%） |
+| 有答案题最终引用全命中率 | 6/40（15.0%） |
+| 有答案题答案与引用联合通过率 | 3/40（7.5%） |
+| 无答案题正确拒答率 | 8/10（80.0%） |
+| 有答案题固定拒答率 | 29/40（72.5%） |
 
-<!-- DAY15 CHECKPOINT BEGIN -->
-## Day15 完成检查点（2026-10-31）
+延迟覆盖 LangGraph 单轮工具选择、检索、重排和生成，HTTP 与会话落库耗时在计时范围外。首题 97.50 秒，后续 49 题 P50 为 6.82 秒，P95 为 8.39 秒。关键词规则提供近似判分。例如 `qa_022` 已回答物资、药物和宠物准备要求，规则仍将该组标为缺失。这道题也漏答了交通影响。
 
-用户于2026-10-31确认Day15审查、测试与修复通过，授权勾选完成状态并提交。
-分支 `codex/day15-agent-tools`，实现基线为 `4ce29aa634ae4deaf975dc6380746686b0d78469`；
-本次独立本地提交收录已审查修复、测试入口、PLAN Day15四项/完成确认/日志及相关状态文档。
-提交前完整标准：**571 passed / 13 skipped，34.70s，0失败/0警告**；dotenv读取/服务连接尝试0，付费调用0。
-13项跳过含原12项可选真实集成和新增真实工具选择测试；后者显式关闭，本轮未执行付费探测。
-PLAN只更新Day15，Day13和Day16以后原样保留；未开始Day16。
-精确提交hash以 `git log -1` 为准；本轮不推送或合并，未复核远端。
-原六份Day14交接整理继续留在工作区，本次只提交这些文件的Day15状态增量。
-本节为当前恢复入口；下方Day14正文及其日期/哈希/测试记录均保留为历史快照。
+Day18 提交前完整离线 pytest 为 697 passed、14 skipped（24.59 秒），退出码 0；用户确认审查、测试与修复通过，Day18 五个 PLAN 复选框及进度表已勾，代码与文档形成本地提交。本机正式报告为 `eval/eval_report.md`，逐题记录和运行清单位于 `data/eval/day18/20261108T095705Z-real-625c1f7c53b2/`；这些原始产物被 Git 忽略，未随提交发布。执行命令和指标口径见[评测说明](eval/README.md)，Windows 服务启动见[Docker 恢复记录](docs/docker-desktop-recovery.md)。后续开发动作待指定，精确工作区状态与新会话入口见[当前交接包](HANDOFF.md)。
 
-公共/chat现由模型在三个只读工具中选择并执行一个：
-“有哪些文档？”→list_documents；带UUID详情问题→get_document_detail；知识问题→search_knowledge_base。
-目录结果仅有安全元数据且sources=[]；搜索继续Hybrid20→Rerank5→原始向量证据门。
-JSON与SSE不变，无会话/记忆；本轮标准测试不用于推断模型真实选择准确率。
-实现、测试与实际图见 [Day15验收](docs/day15-agent-tools.md)。
+## 历史档案：2026-11-02 Day16 检查点
 
-<!-- DAY15 CHECKPOINT END -->
+下列原始记录保留当时的分支、测试与范围，以上方 Day18 基线及当前交接包为准。
 
----
+**当前完成到Day16，功能开发暂停，Day17未开始。**
+恢复入口是[HANDOFF.md](HANDOFF.md)的完整A/B/C，其次[STATUS.md](STATUS.md)、[DECISIONS.md](DECISIONS.md)、[TODO.md](TODO.md)。
+新会话先只读核对/复述，等状态确认和唯一动作；本轮只整理六文档，不重跑测试/服务或提交推送。
 
-# 企业知识库 RAG Agent 系统
+## 当前检查点
 
-企业知识库 RAG 问答系统。当前检查点：2026-10-30（Asia/Shanghai），
-**Day14 已由用户确认审查、测试与修复通过，PLAN 五项任务及开发日志已标记完成**。
-本提交在 `codex/day14-langgraph` 收录 Day14 完整代码、测试和文档；
-精确 HEAD 提交后用 `git log -1 --format=%H` 核验，父提交为 Day12 的 3471277。
-未推送或合并，Day15 未开始；Day13 的计划标记保留原样。
-2026-10-29 曾实时确认 Day12 远端分支为 3471277、master 为 b68b590，本次未复查远端。
+| 项目 | 状态 |
+|---|---|
+| 仓库/分支 | D:\2019\rag-agent / codex/day16-conversation-memory |
+| HEAD | 115d9a228cae8580a1d7ab1ca5d23ab5e41ea49d，feat: complete Day 16 conversation memory |
+| 父提交 | 74949214e8f163fbdfa2e035993a640ab866026e，feat: implement Day 16 conversation memory |
+| 完成确认 | Day16五项、完成确认/日志于2026-11-02按用户确认完成；Day14五项、Day15四项/日志已勾 |
+| 发布 | Day16及Day15各两提交仅本地、无上游；本轮只读GitHub未见这两分支 |
+| master/Day14 | master仍b68b590c8262eb568a371c895e4f7033456d045c；Day14 b76987934663f7d90603dbc4abb2432d52baf91f已发布 |
+| PR | 本轮open PR=0；closed/merged历史待确认 |
+| 工作区 | 仅上述五份根文档和docs/architecture.md六文档未暂存，暂存区空；无关.agents/和用户PDF保留未读 |
+| 最新完整标准 | **652 passed / 14 skipped，45.43s，0失败/0警告，dotenv/服务连接尝试0、付费0** |
 
-当前问答由 LangGraph 的 retrieve_node → generate_node 编排，
-保留向量/BM25 各20 → RRF Hybrid20 → 固定 CPU BGE Rerank5 →
-原始向量分数0.46证据门 → LLM答案及后端来源。
-公共请求固定检索，JSON/SSE不变，无相关证据固定拒答且不调用LLM。
-流式先完成检索再建立响应，随后消费同一图迭代器。
+Day13学习证据此前已验但四项/日志未勾，不自动补标。[PLAN.md](PLAN.md)本轮只读；开发规则见[AGENTS.md](AGENTS.md)。
+后端/Docker/PG/Qdrant、新会话表、词表/模型/缓存、代理及目录外材料当前可用性待确认。
+用户确认审查、测试和修复通过不等于真实DeepSeek准确率测量。
 
-2026-10-30 提交前完整标准：**453 passed / 12 skipped，23.34s**，无付费调用。
-2026-10-29 真实局部 **3 passed，160.84s**，使用本地检索与 LLM 替身；
-同 24 Chunk/12 正样本/3 负样本的 Rerank 指标为 0.917/1.000/0.958。
-最新全部真实仍为 2026-10-28 的 413 passed，本次未重跑真实集成。
-实现、图与证据见 [Day14 迁移报告](docs/day14-langgraph-migration.md)。
+## 目录与当前功能
 
-工具调用、记忆、前端和完整一键部署仍是后续目标。
-恢复先阅读 [完整交接包](HANDOFF.md)，只读核对提交与工作区，等待唯一动作；
-不自动推送、修改其他日计划或开始 Day15。
+~~~text
+backend/app/
+  api/                  health / upload / retrieval / chat
+  agent/                state / graph / nodes / tools / service
+  core/                 config / database / logging
+  models/               Document / Chunk / Conversation / ConversationMessage / init_db
+  services/             parsing/storage/splitter/embedding/qdrant/bm25/hybrid/reranker
+                        llm/rag/document_catalog/conversation_memory
+backend/tests/          pytest，默认替身/SQLite，真实集成需显式开关
+docs/                   分日验收、JSON原始结果、MMD图、architecture
+PLAN.md                 每日任务；未获明确授权不得修改
+~~~
 
-## 项目状态文档
+当前[架构](docs/architecture.md)：
 
-- [完整交接包](HANDOFF.md)
-- [当前状态](STATUS.md)
-- [技术决策](DECISIONS.md)
-- [后续任务](TODO.md)
-- [架构说明](docs/architecture.md)
-- [Day 8 RAG 验收记录](docs/day8-rag-smoke.md)
-- [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)
-- [Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)
-- [Day 11 三路 Hybrid 对比](docs/day11-hybrid-comparison.md)
-- [Day 12 本地 Rerank 对比](docs/day12-rerank-comparison.md)
-- [Day 14 LangGraph 迁移与验收](docs/day14-langgraph-migration.md)
-- [本机 Docker Desktop 恢复记录](docs/docker-desktop-recovery.md)
+~~~text
+首轮：原问题 -> 选择单工具 -> 执行 -> 生成/拒答
+后续：原问题 + 截断历史 -> 独立问题改写 -> 选择单工具 -> 执行 -> 生成/拒答
+搜索：Hybrid(vector20+BM25 20，RRF60) -> CPU BGE Rerank5 -> 原vector_score>=0.46
+目录：ready安全SQL元数据，50+1/详情chunk_count，不读正文，sources=[]
+完成：原始user + 完整assistant + 当前安全sources，同一PG事务
+~~~
 
-## 技术栈
+图注册rewrite_query_node/select_tool_node/tool_node/generate_node四个业务节点。
+内部合法PreparedRAG直接进入generate，不读写会话、不改写/选择/执行工具。
+无checkpointer、长期记忆、历史总结、向量记忆、循环/并行工具或会话管理HTTP API。
 
-| 层级 | 技术 |
-|------|------|
-| 后端框架 | Python 3.11 · FastAPI · Uvicorn |
-| Agent 编排 | LangGraph 1.2.16 · retrieve/generate 双节点 |
-| 向量数据库 | Qdrant |
-| 关系数据库 | PostgreSQL · SQLAlchemy 2.x · psycopg 3 |
-| 文本向量 | SentenceTransformers · BAAI/bge-small-zh-v1.5 · CPU |
-| 关键词检索 | rank-bm25 0.2.2 · 进程内 BM25Okapi |
-| 排名融合 | 标准 RRF · 向量与 BM25 各召回 20 |
-| 精排 | 本地 BAAI/bge-reranker-base · CPU · 固定 revision |
-| 前端 | Streamlit |
-| 部署 | Docker · Docker Compose |
+## 环境与启动命令
 
-## 架构图
+Python **3.11**；已有.env/.venv不得覆盖，禁止读取、输出或提交凭据。
+这些是操作手册，不是暂停状态下的执行许可；新会话第一轮只读。
 
-以下是最终目标架构；当前实现进度以“当前接口”和 TODO 为准。
+~~~powershell
+Set-Location -LiteralPath 'D:\2019\rag-agent'
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
+~~~
 
-```mermaid
-flowchart TB
-    user["用户"] --> ui["Streamlit 前端"]
-    ui -->|"上传文档 / 发起问答"| api["FastAPI API"]
+默认接口文档http://127.0.0.1:8000/docs；GET /health只表示进程存活，不检查数据库/模型/其他服务。
+应用启动和health不建表、不加载模型、不连接PG/Qdrant。
+配置字段公开模板见[.env.example](.env.example)；配置前缀APP_/LLM_/POSTGRES_/EMBEDDING_/QDRANT_/RERANKER_/RAG_/MEMORY_。
+源码默认LLM=https://api.deepseek.com、deepseek-v4-flash、timeout60s；实际进程配置及供应商可用性待确认。
+openai包只是compatible SDK，不代表调用OpenAI服务或需要OpenAI Key。
+上传/模型相对目录锚定PROJECT_ROOT，默认data/uploads、data/models。
 
-    subgraph ingest["文档入库链路"]
-        parser["PDF / Markdown / TXT 解析"] --> splitter["Chunk 切分"]
-        splitter --> embedding["Embedding"]
-        embedding --> vector_store["Qdrant 向量索引"]
-        splitter --> metadata_store["PostgreSQL 文档与 Chunk 元数据"]
-    end
+显式服务/建表/索引入口（另获对应任务授权后使用）：
 
-    api --> parser
-    api --> agent["LangGraph Agent"]
-
-    subgraph tools["Agent 工具"]
-        search_tool["search_knowledge_base"]
-        detail_tool["get_document_detail"]
-        list_tool["list_documents"]
-    end
-
-    agent --> search_tool
-    agent --> detail_tool
-    agent --> list_tool
-    detail_tool --> metadata_store
-    list_tool --> metadata_store
-
-    subgraph retrieval["检索与生成链路"]
-        vector_search["Qdrant 向量检索"]
-        bm25["BM25 关键词检索"]
-        rrf["RRF 融合"]
-        rerank["Rerank"]
-        llm["OpenAI-compatible LLM"]
-
-        vector_search --> rrf
-        bm25 --> rrf
-        rrf --> rerank
-        rerank --> llm
-    end
-
-    search_tool --> vector_search
-    search_tool --> bm25
-    vector_store --> vector_search
-    metadata_store --> bm25
-    llm -->|"答案、引用来源、工具轨迹"| api
-    api --> ui
-```
-
-问答链路：用户问题 → Agent 选择工具 → Hybrid Search → Rerank → LLM 生成带引用答案。
-
-入库链路：上传文件 → 文本解析 → Chunk 切分 → 生成 Embedding → 写入 Qdrant 与 PostgreSQL。
-
-## 目标功能
-
-- **文档管理**：支持上传 PDF / Markdown / TXT，自动解析入库
-- **Hybrid Search**：向量检索 + BM25 关键词检索，RRF 融合排序
-- **Rerank**：对 top-20 结果重排，输出 top-5，提升精准度
-- **RAG 问答**：基于检索结果生成答案，带来源引用
-- **LangGraph Agent**：根据问题类型自主选择工具，支持多轮对话
-- **评测系统**：50 条 QA 数据集，自动评测 source_hit rate 和答案质量
-
-## 效果评测
-
-> TODO: 填写评测结果
-
-Day 5 已完成 300/500/800 token 的结构性对比，结果见
-[Chunk Size 结构对比](docs/day5-chunk-size-comparison.md)。该实验不包含检索质量结论。
-Day 9 已在真实 BGE + Qdrant 上完成同一组配置的检索质量对比，见上方
-「检索优化实验」小节和 [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)。
-Day 10 使用相同的 24 个 Chunk 对比纯向量与纯 BM25，见
-[Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)。
-Day 11 在相同语料上加入标准 RRF，真实三路结果见
-[Day 11 三路 Hybrid 对比](docs/day11-hybrid-comparison.md)。
-
-| 指标 | 数值 |
-|------|------|
-| Source Hit Rate | - |
-| 平均延迟 | - |
-| 评测集大小 | 50 条为 Day17 目标，尚未建立 |
-
-## 快速启动
-
-> 完整的一键启动将在 Day 21 完成。当前只编排 PostgreSQL。
-
-```powershell
-Copy-Item .env.example .env
-# 编辑 .env，设置 LLM_API_KEY 和本地 PostgreSQL 密码
+~~~powershell
 docker compose up -d postgres
 .\.venv\Scripts\python.exe -m backend.app.models.init_db
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
-```
-
-## 本地开发
-
-所有命令均从仓库根目录执行：
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
-Copy-Item .env.example .env
-# 编辑 .env，只把真实 DeepSeek Key 写入 LLM_API_KEY
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
-```
-
-启动后访问 `http://127.0.0.1:8000/docs` 查看接口文档，运行测试：
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests -v
-```
-
-## 本地 Embedding 验证
-
-Day 6 使用固定 revision 的 `BAAI/bge-small-zh-v1.5`，不需要 OpenAI API Key，
-也不会使用 DeepSeek Key。默认在 CPU 上每批最多处理 32 个 Chunk，输出 512 维归一化
-向量。文档 Chunk 会直接编码，不添加查询指令。
-
-首次运行会把模型下载到被 Git 忽略的 `data/models/`。使用已有 Document UUID 执行：
-
-```powershell
-.\.venv\Scripts\python.exe -m backend.app.commands.embed_document --document-id <UUID>
-```
-
-命令按 `chunk_index` 读取 PostgreSQL 中的 Chunk，在推理前使用 BGE tokenizer 检查
-512 token 上限，并只打印模型、revision、Chunk 数量、维度和状态。它不会打印正文或完整
-向量，也不会写回 PostgreSQL 或 Qdrant。真实模型测试默认跳过，可显式执行：
-
-```powershell
-$env:RUN_LOCAL_EMBEDDING_INTEGRATION='1'
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_embedding_integration.py -v
-```
-
-## 本地 Qdrant 索引与检索
-
-Day 7 固定使用 `qdrant/qdrant:v1.18.1` 和 `qdrant-client==1.18.0`。Qdrant 仅绑定
-本机 REST 端口 6333，并使用命名卷持久化：
-
-```powershell
-docker pull qdrant/qdrant:v1.18.1
-docker volume create rag-agent-qdrant-data
-docker run -d --name rag-agent-qdrant `
-  -p 127.0.0.1:6333:6333 `
-  -v rag-agent-qdrant-data:/qdrant/storage `
-  qdrant/qdrant:v1.18.1
-```
-
-显式初始化 collection，并索引一个已有 PostgreSQL Document：
-
-```powershell
 .\.venv\Scripts\python.exe -m backend.app.commands.init_qdrant
+.\.venv\Scripts\python.exe -m backend.app.commands.embed_document --document-id <UUID>
 .\.venv\Scripts\python.exe -m backend.app.commands.index_document --document-id <UUID>
-```
+~~~
 
-Collection 使用 unnamed 512 维 Cosine 向量；Point ID 等于 Chunk UUID。索引命令在关闭
-PostgreSQL Session 后才执行模型推理和 Qdrant upsert，每批最多 32 条并使用 `wait=True`。
-重复运行依靠稳定 UUID 幂等覆盖。真实 Qdrant 测试需显式开启：
+当前docker-compose.yml仅PostgreSQL；Qdrant历史镜像qdrant/qdrant:v1.18.1、命名卷rag-agent-qdrant-data，
+绑定127.0.0.1:6333，尚未做完整backend/frontend/qdrant一键编排。
+init_db显式注册四个模型，只create_all缺失表，不迁移旧表；真实PG记忆表是否已经建好待确认。
+上传不自动Embedding或索引；embed_document只产内存结果，index_document才upsert Qdrant。
+PG会话在模型推理/upsert前关闭；不自动重建collection，PG/Qdrant不是跨库事务。
 
-```powershell
-$env:RUN_QDRANT_INTEGRATION='1'
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_qdrant_integration.py -v
-```
+## API与多轮用法
 
-## 基础 RAG 问答
+| 路径 | 输入/结果 |
+|---|---|
+| GET /health | 200 {"status":"ok"}，本轮未探测 |
+| POST /documents/upload | multipart file，PDF/MD/TXT，成功201；实际≤20MiB、PDF≤500页 |
+| POST /retrieval/search | query、strict top_k默认5/1..20、可选单UUID doc_id；原Cosine score |
+| POST /retrieval/bm25/search | 同上；原BM25 score，token无重合返回空 |
+| POST /retrieval/hybrid/search | 同上；两路各20融合，返回RRF score |
+| POST /retrieval/rerank/search | 仅query、可选doc_id；固定20→5，原logit及名次 |
+| POST /chat | message、stream默认false、可选session_id UUID/null；JSON/SSE |
 
-Day8历史基础链路为固定向量Top5及生成层`0.46`门控。Day12已升级为Hybrid20→Rerank5，
-再以保留的原始`vector_score`执行同一`0.46`证据门；BM25-only候选不作为生成依据。
-该值来自三条知识库内问题和三条知识库外问题的真实 BGE/Qdrant 校准，详细分数与限制见
-[Day 8 RAG 验收记录](docs/day8-rag-smoke.md)。门槛不是可调 API 参数，也不是概率。
+检索query strip后1..4096字符，extra禁止，top_k不接受bool/字符串/浮点/null。
+Rerank不接受top_k/candidate_k/mode。合法doc_id无匹配返回200空结果。
+Chat保留extra忽略规则，但不能用needs_*额外字段绕过业务。
 
-通过门槛的 Chunk 以 JSON 放入 user message，system message 只保存 RAG 安全规则。无相关
-Context 时后端直接返回 `知识库中没有相关信息`，不调用 DeepSeek。普通响应包含
-`answer`、`model` 和后端生成的 `sources`；SSE 成功流在 delta 后发送 sources event，
-再发送 `[DONE]`。模型自由文本中的文件名/页码来源标记会被清理，客户端只应信任结构化
-`sources`。上传后仍必须显式执行 `index_document`，不会自动索引。
+首轮：
 
-## 检索优化实验（Day 9）
+~~~json
+{"message":"有哪些文档？","stream":false}
+~~~
+
+完整响应：
+
+~~~json
+{"answer":"...","model":"...","sources":[],"session_id":"后端生成的UUID"}
+~~~
+
+后续将实际返回的UUID传入session_id，并把message改为新问题；省略/null会创建新会话。
+搜索sources为本次结果的filename/page去重，目录sources=[]；不从历史答案复制来源。
+SSE通过X-Session-ID返回UUID，响应头Cache-Control=no-cache、X-Accel-Buffering=no。
+
+~~~text
+data: {"delta":"..."}
+
+event: sources
+data: {"sources":[]}
+
+data: [DONE]
+~~~
+
+同一图迭代器在HTTP建立前完成必要改写、选择和工具执行；delta逐段背压，完整成功并保存后才sources/DONE。
+流开始后错误用event:error且不发sources/DONE；异常原文/SQL/工具参数/State不公开。
+已有会话不存在404、同会话进程内忙409；记忆不可用503/内部500；LLM缺配置503/选择改写生成502。
+其他严格错误文案、检索分层、预取关闭边界见HANDOFF第8节。
+
+记忆存于PG conversations/messages：最多5个完整轮次/10条消息；Prompt默认o200k_base/2000 token，
+可配128..16000；优先保留最新完整轮，仅最新轮单独超限时裁内容，保留Unicode及完整来源条目。
+数据库保留全文，user metadata={}、assistant仅当前安全sources，不存Prompt/工具参数/Chunk/用量/延迟。
+有历史才改写：非流式JSON、thinking关闭、SDK retry0、max_tokens=4096；结果仍1..4096字符，不静默降级。
+原问题不变、独立问题用于搜索；详情UUID须来自原问题或本次截断历史，不能仅由改写模型生成。
+
+完整轮同事务保存，取消发生在提交前则回滚；同进程跨实例lease互斥409，不是多worker分布式锁或身份认证。
+首轮选择/生成/保存异常时尝试删除本次新建且仍为空的会话；已有/非空不删；正常断开不保证空会话清理。
+已提交完整轮次后网络失败不能撤回；不宣称DB提交和客户端收到DONE原子。
+Prompt把当前工具结果规定为事实依据；实际模型遵循准确率待确认。
+公共拒答仍先选择，有历史再有改写，只省最终生成；内部PreparedRAG拒答总LLM0。
+
+## 固定检索与模型参数
+
+- 按页o200k_base切分500/100；BGE另有512 token预检，不能将两个tokenizer口径混用。
+- BAAI/bge-small-zh-v1.5，revision 4bf3c54884c552e68da7eb27f3e9bdc5a32e32d4，CPU/512维归一化/batch≤32；
+  查询仅一次前缀“为这个句子生成表示以用于检索相关文章：”，文档无此前缀。
+- Qdrant默认documents、unnamed 512/Cosine、localhost:6333、timeout10s，显式upsert/wait=True。
+- Hybrid顺序两路各20，按chunk UUID等权RRF60；重复/冲突安全失败，任一路失败不降级。
+- BAAI/bge-reranker-base，revision 2cfc18c9415c912f9d8155881c133215df768a70，CPU/512、batch默认4/范围1..8；
+  safetensors/local_files_only/trust_remote_code=False，query不截断、passage only_second，score为原logit。
+- 原始vector_score默认0.46才是搜索生成证据门；BM25-only不生成，RRF/logit不能套用这个阈值。
+- 三工具白名单、严格单调用/64KiB/重复键/字段/类型/UUID验证，目录ready安全列/SQL最多51返回50。
+
+固定依赖sentence-transformers==5.3.0、qdrant-client==1.18.0、rank-bm25==0.2.2、langgraph==1.2.16；
+Day16无新依赖；安装了checkpoint/prebuilt依赖不等于启用对应运行功能。
+
+## 测试、验收与运行边界
+
+[AGENTS.md](AGENTS.md)标准命令：
+
+~~~powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests -v
+~~~
+
+11月2日实际接受标准通过目录外隔离run_checks.py执行pytest.main：652 passed / 14 skipped（45.43s），
+Python3.11.15、0失败/0警告，dotenv/真实连接尝试0、付费0；裸命令不自带这些守卫。
+最新见[Day16 MD](docs/day16-conversation-memory.md)与[JSON](docs/day16-conversation-results.json)的completion_checkpoint.standard_test。
+JSON顶层644/14、256 token、PLAN未变是11月1日历史；当前改写4096 token、PLAN Day16已完成。
+本轮交接不重跑测试，不用历史通过代替服务健康。
+
+默认关闭的7个真实开关：
+
+~~~text
+RUN_POSTGRES_INTEGRATION
+RUN_QDRANT_INTEGRATION
+RUN_LOCAL_EMBEDDING_INTEGRATION
+RUN_RAG_INTEGRATION
+RUN_RERANKER_INTEGRATION
+RUN_LLM_TOOL_SELECTION_INTEGRATION
+RUN_CONVERSATION_POSTGRES_INTEGRATION
+~~~
+
+14跳过=原12项可选真实+付费选择1+真实PG记忆1。
+真实PG记忆入口会显式建新表/写入并清理自建会话，只用进程配置、不读.env；当前未执行。
+真实工具选择入口已收录未执行，成功一次3次付费选择，不执行工具/生成；真实DeepSeek选择/改写准确率无结论。
+隔离运行器、词表、精确复验命令及单独授权边界见HANDOFF第12–13节，不能在暂停恢复时自动运行。
+
+| 历史范围 | 结果与局限 |
+|---|---|
+| 11月1日原Day16 | 644/14，18.83s |
+| 10月31日Day15完成 / 10月30日实现 | 571/13，34.70s / 563/12，44.52s |
+| 10月29日最近真实局部 | 3 passed，160.84s；PG/Qdrant/BGE/Reranker真实，LLM替身 |
+| 10月28日历史全部本地真实 | 413 passed，158.94s；Day12历史，LLM替身，不是当前Day16全真实 |
+
+没有当前Day16全真实组合结论，不能加总历史计数。
+长独立问题回归含CharacterEncoding/SDK/检索替身，不证明真实DeepSeek/BGE长问题质量或容量。
+历史失败、已否决方案、代理/Docker错误原文和恢复文件路径均在HANDOFF，不在此重复操作。
+
+## 历史受控检索实验
+
+以下保留分阶段方法与结果，不代表当前自然语料、50QA、真实模型选择/改写或全链路性能。
+其中Day12“拒答LLM零调用”仅指当时生成链路；Day16公共首轮有选择，有历史还有改写。
+
+### 检索优化实验（Day9，历史）
 
 使用随测试提交的 8 页确定性、自撰制度语料和 8 个带 `expected_phrase` 的固定问题，在
 真实本地 BGE 与真实 Qdrant 上对比三种 chunk 配置。命中只按 NFKC + strip 后的
@@ -301,7 +259,7 @@ Context 时后端直接返回 `知识库中没有相关信息`，不调用 DeepS
 
 完整方法、数据与局限性见 [Day 9 检索优化实验](docs/day9-retrieval-tuning.md)。
 
-## BM25 关键词检索与向量对比（Day 10）
+### BM25 关键词检索与向量对比（Day 10）
 
 `POST /retrieval/bm25/search` 复用 Day 9 的严格 `query/top_k/doc_id` 请求和 Chunk 响应
 结构，但 `score` 是原始 BM25 分数，不是概率、不限制在 `0..1`，也不能与 Cosine score
@@ -322,7 +280,7 @@ Top 5 对比 12 个正样本：向量 Hit@1/Hit@5/MRR@5 为 `0.750/0.917/0.812`�
 完整逐题排名、方法和局限见
 [Day 10 纯向量与纯 BM25 对比](docs/day10-vector-vs-bm25.md)。
 
-## Hybrid 排名融合（Day 11）
+### Hybrid 排名融合（Day 11）
 
 `POST /retrieval/hybrid/search` 复用严格的 `query/top_k/doc_id` 请求和 Chunk 响应结构。
 先同步执行向量检索，再执行 BM25，两路均固定召回最多 20 条；按 `chunk_id` 聚合并计算
@@ -350,7 +308,7 @@ Day12已按独立授权升级为Hybrid→Rerank→生成，见下节。
 query 哈希/长度、参数、候选数、结果身份、两路 rank 和 RRF score，不记录 query、正文、
 tokens、metadata、向量或原始分支 score。
 
-## 本地 Rerank 与三阶段问答（Day12）
+### 本地 Rerank 与三阶段问答（Day12）
 
 `POST /retrieval/rerank/search`只接受`query`与可选`doc_id`，固定Hybrid Top20→Rerank Top5。
 使用CPU `BAAI/bge-reranker-base`，revision为
@@ -366,69 +324,11 @@ query完整保留，超出模型容量安全422；只显式截断passage并记�
 固定拒答，LLM零调用。实例首次装载约2.83s、热推理约6.29s/20候选，属于已缓存的同进程
 测量。完整逐题、至少三个名次变化、测试和局限见[实验报告](docs/day12-rerank-comparison.md)。
 
-## 当前接口
+## 后续与恢复验收
 
-| 方法与路径 | 输入 | 当前响应 |
-|------------|------|----------|
-| `GET /health` | 无 | `200 {"status": "ok"}` |
-| `POST /chat` | `{"message": "...", "stream": false}` | RAG JSON：answer、model、sources |
-| `POST /chat` | `{"message": "...", "stream": true}` | RAG SSE：delta、sources、`[DONE]` |
-| `POST /documents/upload` | `multipart/form-data`，字段 `file` | 成功返回 `201` 文档元数据；支持 PDF / MD / TXT |
-| `POST /retrieval/search` | `{"query": "...", "top_k": 8, "doc_id": "UUID"}`（后两项可选） | 返回最多 `top_k` 个 Chunk、来源和 score，不返回向量 |
-| `POST /retrieval/bm25/search` | 同上 | 返回有词项重合的 Chunk 和 raw BM25 score；无重合为空数组 |
-| `POST /retrieval/hybrid/search` | 同上 | 两路各取 20，按 Chunk UUID 做标准 RRF，返回最终 top_k；score 为 RRF score |
-| `POST /retrieval/rerank/search` | query、可选单 UUID doc_id；不接受 top_k | Hybrid20→Rerank5，返回原始logit与前后名次 |
+自然50QA/LLM-as-judge、完整trace、Streamlit、完整Compose、会话管理/身份认证尚未实现。
+多worker锁、BM25全扫描、跨库一致性、自然长文/表格/多跳、CPU p50/p95/QPS及Docker根因待后续指定范围。
 
-LLM 使用 OpenAI-compatible 接口。当前默认配置为 `deepseek-v4-flash`，
-并通过 `LLM_EXTRA_BODY` 关闭思考模式；真实 `LLM_API_KEY` 只写入本地 `.env`。
-
-文档上传按 1 MiB 分块写入临时文件，实际大小上限为 20 MiB；PDF 最多 500 页。
-PDF 按页提取并以 `\f` 保存页边界，Markdown/TXT 使用 UTF-8 并视为第 1 页。
-每个非空页面使用 `o200k_base` tokenizer 独立切分，默认上限为 500 token、overlap 为
-100 token；空白页不生成 Chunk，后续页面保留原页码。Document 与有序 Chunk 在同一
-事务中写入 PostgreSQL，上传成功响应字段保持不变。
-数据库表必须通过 `python -m backend.app.models.init_db` 显式创建，应用启动和
-`GET /health` 不依赖 PostgreSQL、Qdrant、BGE 或 LLM。搜索 Query 使用 BGE 查询
-instruction；文档 Chunk 保持直接编码。检索接口的 `top_k` 使用严格整数校验（拒绝
-布尔、字符串和浮点），范围 1～20，默认 5；`doc_id` 过滤在 Qdrant 查询内部执行，
-返回结果会再做一次文档一致性防御校验。合法但无匹配的 `doc_id` 返回 200 空数组。
-每次成功检索输出一条单行 JSON 日志（query 摘要哈希、top_k、结果名次/Chunk ID/页码/
-分数），不记录 query 原文、Chunk 正文、metadata 或向量。score threshold 仍不开放；
-RAG门槛只在服务内部使用；`/chat`固定Hybrid20→Rerank5，再用原始向量证据门控。
-
-BM25 API 不依赖 BGE、Qdrant 或 LLM。它只索引 PostgreSQL `ready` 文档的 Chunk 正文，
-使用全局 BM25 IDF；可选 `doc_id` 只在排名截断前过滤，不改变全局计分体系。每次成功
-BM25 搜索输出 `bm25_search_completed` JSONL，额外记录 query token 数、corpus 大小和
-本次是否重建索引，但不记录 query tokens、正文、metadata、SQL 或凭据。
-
-JSONL 事件由 `backend/app/core/logging.py` 的 `JSONL_LOG_MARKER` 标记。普通 human handler
-排除该标记，独立 `{message}` handler 只处理标记事件，因此机器日志保持完整单行 JSON，
-同一事件不会在两类 handler 中重复输出。
-
-## TODO
-
-- [x] 项目初始化，目录结构
-- [x] FastAPI 后端骨架
-- [x] 接入 LLM API（流式输出）
-- [x] 文档上传与解析（PDF / MD / TXT）
-- [x] 文本切分（RecursiveCharacterTextSplitter）
-- [x] 本地 Embedding 生成（BGE · 批量 · 下载重试 · 不持久化）
-- [x] Qdrant 向量存储与检索（显式索引 · 固定 Top 5）
-- [x] 基础 RAG 链路（固定 Top 5 → 门控 → 生成 → 结构化来源）
-- [x] 检索优化（top_k · doc_id filter · 检索日志 · chunk size 真实对比）
-- [x] BM25 关键词检索（独立 API · PostgreSQL 指纹刷新 · 真实向量对比）
-- [x] Hybrid Search（标准 RRF · 两路各 20 · 独立 API · 三路真实对比）
-- [x] Rerank（固定本地CrossEncoder · Hybrid20→Rerank5 · Chat证据门与真实对比）
-- [x] LangGraph RAG 编排（双节点 · 条件边 · invoke/stream · 预取与关闭）
-- [ ] Agent 工具调用（search / detail / list）
-- [ ] 多轮对话记忆
-- [ ] 评测数据集（50 条 QA）
-- [ ] 评测脚本（LLM-as-judge）
-- [ ] 请求日志与可观测性
-- [ ] Streamlit 前端
-- [ ] Docker Compose 一键部署
-- [ ] README 完善 + 简历话术
-
-## 开发日志
-
-见 [PLAN.md](PLAN.md)
+新会话唯一目标：读HANDOFF A/B/C及相关文件，只读核对Day16已完成/已勾/本地未发布、六文档未暂存/空暂存区、
+最新652/14与历史644/14、571/13、563/12、真实3和历史413；复述缺失/矛盾及最多5步，等待状态确认和唯一动作。
+下一步最小改动0，不自动测试、发布、补勾Day13或开始Day17。
