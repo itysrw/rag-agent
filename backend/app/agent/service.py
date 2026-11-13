@@ -22,6 +22,7 @@ from backend.app.services.qdrant_store import QdrantStoreError
 from backend.app.services.rag import PreparedRAG, RAGAnswer, RAGGraphError
 from backend.app.services.reranker import RerankerError
 from backend.app.services.conversation_memory import ConversationHistoryMessage, ConversationMemoryError
+from backend.app.services.request_trace import TraceRecorder
 
 _KNOWN_FAILURES = (
     BM25Error, EmbeddingError, HybridError, QdrantStoreError, RerankerError,
@@ -118,13 +119,14 @@ class RAGGraphRunner:
 
     def complete(
         self, question: str | PreparedRAG, *, history: tuple[ConversationHistoryMessage, ...] = (),
+        trace: TraceRecorder | None = None,
     ) -> RAGAnswer:
         """Run the complete graph once, preserving all known service exceptions."""
         initial = _initial_state(question, history)
         try:
             with tracing_context(enabled=False):
                 state = self.graph.invoke(
-                    initial, context={"response_mode": "complete"},
+                    initial, context={"response_mode": "complete", "trace": trace},
                     config={"callbacks": []},
                 )
             prepared = state.get("prepared")
@@ -159,12 +161,12 @@ class RAGGraphRunner:
             raise RAGGraphError("The RAG graph failed.") from exc
 
     def _events(
-        self, initial: AgentState, control: StreamControl
+        self, initial: AgentState, control: StreamControl, trace: TraceRecorder | None,
     ) -> Iterator[Any]:
         try:
             with tracing_context(enabled=False):
                 yield from self.graph.stream(
-                    initial, context={"response_mode": "stream"},
+                    initial, context={"response_mode": "stream", "trace": trace},
                     config={"callbacks": []}, control=control,
                     stream_mode=["updates", "custom"], version="v2",
                 )
@@ -177,12 +179,13 @@ class RAGGraphRunner:
 
     def start_stream(
         self, question: str | PreparedRAG, *, history: tuple[ConversationHistoryMessage, ...] = (),
+        trace: TraceRecorder | None = None,
     ) -> PreparedRAGStream:
         """Prefetch selection and execution, before generation or StreamingResponse."""
         initial = _initial_state(question, history)
         control = StreamControl()
         run = PreparedRAGStream(
-            self._events(initial, control),
+            self._events(initial, control, trace),
             prepared=initial["prepared"], control=control,
         )
         if not initial["needs_tool_selection"]:

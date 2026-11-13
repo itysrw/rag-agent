@@ -8,7 +8,7 @@ from openai import OpenAIError
 from pydantic import SecretStr
 
 from backend.app.core.config import LLMSettings
-from backend.app.services.llm import LLMClient, LLMMessage, LLMServiceError
+from backend.app.services.llm import LLMClient, LLMMessage, LLMServiceError, ModelUsage
 from backend.app.services.llm import LLMToolCallError, MAX_TOOL_ARGUMENT_BYTES
 from backend.app.services.llm import QueryRewriteError
 from backend.app.agent.tools import tool_definitions
@@ -299,6 +299,62 @@ def selector_client(response: Any) -> tuple[LLMClient, FakeSDKClient]:
         return response
     sdk.completions.create = create
     return client, sdk
+
+
+def test_actual_provider_usage_is_reported_for_all_nonstream_stages() -> None:
+    """No token estimate substitutes for the three provider response fields."""
+    client, sdk = make_client()
+    recorded: list[ModelUsage] = []
+    response = rewrite_response()
+    response.usage = SimpleNamespace(prompt_tokens=10, completion_tokens=3)
+    sdk.completions.create = lambda **_: response
+    assert client.rewrite_query([{"role": "user", "content": "q"}], usage_callback=recorded.append)
+
+    response = tool_response()
+    response.usage = SimpleNamespace(prompt_tokens=20, completion_tokens=4)
+    sdk.completions.create = lambda **_: response
+    client.select_tool([{"role": "user", "content": "q"}], tool_definitions(), usage_callback=recorded.append)
+
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="answer"))],
+        usage=SimpleNamespace(prompt_tokens=30, completion_tokens=5),
+    )
+    sdk.completions.create = lambda **_: response
+    client.complete_messages([{"role": "user", "content": "q"}], usage_callback=recorded.append)
+    assert recorded == [ModelUsage(10, 3), ModelUsage(20, 4), ModelUsage(30, 5)]
+
+
+def test_stream_ignores_usage_only_final_chunk_and_leaves_missing_usage_unknown() -> None:
+    """The final usage chunk has no choice and must not change answer deltas."""
+    client, sdk = make_client()
+    sdk.completions.stream_response = FakeStream([
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="A"))], usage=None),
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="B"))], usage=None),
+        SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=7, completion_tokens=2)),
+    ])
+    recorded: list[ModelUsage] = []
+    assert list(client.stream_messages([{"role": "user", "content": "q"}], usage_callback=recorded.append)) == ["A", "B"]
+    assert recorded == [ModelUsage(7, 2)]
+    assert sdk.completions.calls[0]["stream_options"] == {"include_usage": True}
+    assert sdk.completions.stream_response.closed
+
+    client, sdk = make_client()
+    missing: list[ModelUsage] = []
+    assert list(client.stream_messages([{"role": "user", "content": "q"}], usage_callback=missing.append)) == ["A", "B"]
+    assert missing == []
+
+    client, sdk = make_client()
+    sdk.completions.stream_response = FakeStream([
+        SimpleNamespace(
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="A"))],
+            usage=SimpleNamespace(prompt_tokens=3, completion_tokens=1),
+        ),
+    ])
+    interrupted: list[ModelUsage] = []
+    deltas = client.stream_messages([{"role": "user", "content": "q"}], usage_callback=interrupted.append)
+    assert next(deltas) == "A"
+    deltas.close()
+    assert interrupted == [] and sdk.completions.stream_response.closed
 
 
 @pytest.mark.parametrize(("name", "arguments", "parsed"), [

@@ -21,7 +21,7 @@ def configure_logging(debug: bool) -> None:
         ),
         filter=_exclude_jsonl,
         backtrace=debug,
-        diagnose=debug,
+        diagnose=False,
     )
     logger.add(
         sys.stderr,
@@ -29,7 +29,7 @@ def configure_logging(debug: bool) -> None:
         format="{message}",
         filter=_include_jsonl,
         backtrace=debug,
-        diagnose=debug,
+        diagnose=False,
     )
 
 

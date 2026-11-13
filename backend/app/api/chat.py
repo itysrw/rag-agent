@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
+import asyncio
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +15,7 @@ from loguru import logger
 from pydantic import BaseModel, StringConstraints, ValidationError
 from starlette.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.requests import ClientDisconnect
 from starlette.types import Receive, Scope, Send
 
 from backend.app.services.embedding import (
@@ -44,6 +47,7 @@ from backend.app.services.rag import (
     RAGSource,
     get_rag_service,
 )
+from backend.app.services.request_trace import TraceRecorder, RequestTraceStore, get_request_trace_store
 
 if TYPE_CHECKING:
     from backend.app.agent.service import PreparedRAGStream
@@ -99,7 +103,24 @@ def require_rag_service() -> RAGService:
         ) from exc
 
 
-def stream_sse(service: RAGService, run: PreparedRAGStream) -> Iterator[str]:
+@dataclass(slots=True)
+class _StreamTraceState:
+    done: bool = False
+    error_code: str | None = None
+
+
+def _is_client_disconnect(exc: BaseException) -> bool:
+    if isinstance(exc, (OSError, asyncio.CancelledError, ClientDisconnect)):
+        return True
+    if isinstance(exc, BaseExceptionGroup):
+        return bool(exc.exceptions) and all(_is_client_disconnect(item) for item in exc.exceptions)
+    return False
+
+
+def stream_sse(
+    service: RAGService, run: PreparedRAGStream,
+    trace_state: _StreamTraceState | None = None,
+) -> Iterator[str]:
     """Encode RAG deltas and backend-derived sources as SSE events."""
     deltas = service.stream(run)
     try:
@@ -114,7 +135,11 @@ def stream_sse(service: RAGService, run: PreparedRAGStream) -> Iterator[str]:
         )
         yield f"event: sources\ndata: {sources_payload}\n\n"
         yield "data: [DONE]\n\n"
+        if trace_state is not None:
+            trace_state.done = True
     except LLMServiceError as exc:
+        if trace_state is not None:
+            trace_state.error_code = "llm_stream_failed"
         logger.error("RAG language model stream failed: {}", type(exc).__name__)
         payload = json.dumps(
             {"detail": "The language model stream failed."},
@@ -122,10 +147,14 @@ def stream_sse(service: RAGService, run: PreparedRAGStream) -> Iterator[str]:
         )
         yield f"event: error\ndata: {payload}\n\n"
     except RAGGraphError:
+        if trace_state is not None:
+            trace_state.error_code = "graph_stream_failed"
         logger.error("RAG graph stream failed")
         payload = json.dumps({"detail": "The RAG stream failed."}, ensure_ascii=False)
         yield f"event: error\ndata: {payload}\n\n"
     except ConversationMemoryError:
+        if trace_state is not None:
+            trace_state.error_code = "conversation_save_failed"
         logger.error("Conversation memory stream save failed")
         payload = json.dumps({"detail": "The conversation could not be saved."})
         yield f"event: error\ndata: {payload}\n\n"
@@ -139,10 +168,16 @@ def stream_sse(service: RAGService, run: PreparedRAGStream) -> Iterator[str]:
 class _RAGStreamingResponse(StreamingResponse):
     """Close the prefetched graph even when ASGI delivery is cancelled."""
 
-    def __init__(self, service: RAGService, run: PreparedRAGStream) -> None:
+    def __init__(
+        self, service: RAGService, run: PreparedRAGStream,
+        trace: TraceRecorder | None = None, store: RequestTraceStore | None = None,
+    ) -> None:
         self._run = run
+        self._trace = trace
+        self._store = store
+        self._trace_state = _StreamTraceState()
         super().__init__(
-            stream_sse(service, run),
+            stream_sse(service, run, self._trace_state),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
                      "X-Session-ID": str(run.session_id)},
@@ -151,8 +186,12 @@ class _RAGStreamingResponse(StreamingResponse):
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        failure: BaseException | None = None
         try:
             await super().__call__(scope, receive, send)
+        except BaseException as exc:
+            failure = exc
+            raise
         finally:
             self._run.cancel()
             with anyio.CancelScope(shield=True):
@@ -160,19 +199,40 @@ class _RAGStreamingResponse(StreamingResponse):
                     await run_in_threadpool(self._run.close)
                 except RAGGraphError:
                     logger.error("RAG graph stream cleanup failed")
+                if self._trace is not None and self._store is not None:
+                    error_code = self._trace_state.error_code
+                    if error_code is not None:
+                        outcome = "error"
+                    elif failure is None and self._trace_state.done:
+                        outcome = "success"
+                    elif failure is not None and not _is_client_disconnect(failure):
+                        outcome, error_code = "error", "stream_failed"
+                    else:
+                        outcome, error_code = "cancelled", "client_disconnected"
+                    await run_in_threadpool(
+                        self._trace.finish, self._store,
+                        outcome=outcome, http_status=200, error_code=error_code,
+                    )
 
 
-@router.post("/chat", response_model=None)
-def chat(
+def _handle_chat(
     request: ChatRequest,
-    service: Annotated[RAGService, Depends(require_rag_service)],
+    service: RAGService,
+    trace: TraceRecorder,
+    store: RequestTraceStore,
 ) -> ChatResponse | StreamingResponse:
     """Retrieve before returning either a complete answer or SSE stream."""
     try:
         if request.stream:
-            run = service.start_stream(request.message, session_id=request.session_id)
+            if isinstance(service, RAGService):
+                run = service.start_stream(request.message, session_id=request.session_id, trace=trace)
+            else:
+                run = service.start_stream(request.message, session_id=request.session_id)
         else:
-            answer = service.complete(request.message, session_id=request.session_id)
+            if isinstance(service, RAGService):
+                answer = service.complete(request.message, session_id=request.session_id, trace=trace)
+            else:
+                answer = service.complete(request.message, session_id=request.session_id)
     except ConversationNotFoundError as exc:
         raise HTTPException(404, "The conversation does not exist.") from exc
     except ConversationBusyError as exc:
@@ -233,7 +293,7 @@ def chat(
         ) from exc
 
     if request.stream:
-        return _RAGStreamingResponse(service, run)
+        return _RAGStreamingResponse(service, run, trace, store)
 
     return ChatResponse(
         answer=answer.answer,
@@ -244,6 +304,32 @@ def chat(
             for source in answer.sources
         ],
     )
+
+
+@router.post("/chat", response_model=None)
+def chat(
+    request: ChatRequest,
+    service: Annotated[RAGService, Depends(require_rag_service)],
+) -> ChatResponse | StreamingResponse:
+    """Record one validated business request without changing its public schema."""
+    trace = TraceRecorder(
+        request.message, mode="sse" if request.stream else "json",
+        session_id=request.session_id, model=service.model,
+    )
+    store = get_request_trace_store()
+    try:
+        result = _handle_chat(request, service, trace, store)
+    except HTTPException as exc:
+        cause = exc.__cause__
+        code = type(cause).__name__ if cause is not None else f"http_{exc.status_code}"
+        trace.finish(store, outcome="error", http_status=exc.status_code, error_code=code)
+        raise
+    except BaseException:
+        trace.finish(store, outcome="error", http_status=500, error_code="internal_error")
+        raise
+    if not request.stream:
+        trace.finish(store, outcome="success", http_status=200)
+    return result
 
 
 def _source_dict(source: RAGSource) -> dict[str, str | int]:

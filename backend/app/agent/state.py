@@ -1,6 +1,6 @@
 """Business state and immutable-per-run mode; service objects stay outside state."""
 
-from typing import Literal
+from typing import Literal, NotRequired
 
 from typing_extensions import TypedDict
 
@@ -8,6 +8,7 @@ from backend.app.services.rag import PreparedRAG
 from backend.app.services.llm import AgentToolCall
 from backend.app.services.reranker import RerankedChunk
 from backend.app.services.conversation_memory import ConversationHistoryMessage, validate_history
+from backend.app.services.request_trace import TraceRecorder
 
 
 class AgentState(TypedDict):
@@ -40,6 +41,7 @@ class AgentContext(TypedDict):
     """Mode is runtime configuration, not persisted business state."""
 
     response_mode: Literal["complete", "stream"]
+    trace: NotRequired[TraceRecorder | None]
 
 
 def initial_agent_state(

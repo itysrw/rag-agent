@@ -10,6 +10,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from backend.app.api.bm25 import router as bm25_router
+from backend.app.api.admin_traces import router as admin_traces_router
 from backend.app.api.chat import router as chat_router
 from backend.app.api.documents import router as documents_router
 from backend.app.api.health import router as health_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
 
     application.include_router(health_router)
     application.include_router(chat_router)
+    application.include_router(admin_traces_router)
     application.include_router(documents_router)
     application.include_router(retrieval_router)
     application.include_router(bm25_router)
@@ -57,9 +59,12 @@ def create_app() -> FastAPI:
         started_at = perf_counter()
         try:
             response = await call_next(request)
-        except Exception:
-            logger.exception("{} {} failed", request.method, request.url.path)
+        except Exception as exc:
+            logger.error("{} {} failed: {}", request.method, request.url.path, type(exc).__name__)
             raise
+
+        if request.url.path == "/admin/traces":
+            response.headers["Cache-Control"] = "no-store"
 
         elapsed_ms = (perf_counter() - started_at) * 1000
         logger.info(

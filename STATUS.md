@@ -1,19 +1,21 @@
-# 当前状态：Day18 真实基线完成，后续开发暂停
+# 当前状态：Day19 已确认完成，准备本地提交
 
-更新时间：2026-11-09（Asia/Shanghai）。以 [HANDOFF.md](HANDOFF.md) 最上方 A/B/C 为恢复入口。
+更新时间：2026-11-14（Asia/Shanghai）。用户确认 Day19 审查、测试与修复通过，授权同步状态并本地提交；随后授权的完整 50 题分块对照已完成。实现与部署边界见 [可观测性记录](docs/day19-observability.md)；下方 2026-11-09 及更早暂停说明为历史快照。
 
 | 类型 | 当前事实 |
 |---|---|
-| 最终目标 | 企业知识库 RAG Agent；后续尚有完整 trace、Streamlit 与完整 Docker Compose |
-| 已完成 | Day17 六份原版 PDF 与 `day17-v1.1` 的 50 条 QA；Day18 评测脚本、离线模拟和 DeepSeek 真实基线 |
+| 最终目标 | 企业知识库 RAG Agent；后续尚有 Streamlit 与完整 Docker Compose |
+| 已完成 | Day17 冻结语料与 50 条 QA；Day18 真实评测基线；Day19 本地请求 trace、`request_logs`、受保护查询；另完成不付费的[向量对照](docs/day19-chunk-comparison.md)及授权的[完整 RAG 对照](docs/day19-full-comparison.md) |
 | 真实结果 | `20261108T095705Z-real-625c1f7c53b2`，50/50 正常、0 执行错误、65/100 请求；规则准确率 11/50、候选来源 30/40、最终引用 6/40、正确拒答 8/10 |
-| 测试 | Day18 提交前完整离线 pytest 为 697 passed / 14 skipped（24.59 秒），退出码 0；日志在本机 `data/eval/day18/pytest-day18-commit-20261108.log` |
+| 测试 | 本次完整后端 pytest 724 passed / 14 skipped / 0 failed，退出码 0；14 项真实集成等测试被跳过，不计为通过 |
 | 本机服务 | 使用 D 盘启动脚本恢复 Docker Engine 29.9.2；2026-11-08 18:19 左右 PG healthy、Qdrant /readyz 200；新会话实时健康待确认 |
-| Git | `codex/day17-eval-dataset`；Day18 本地提交的父提交为 `6f252c24dd42bdd1fc52e4dc7f7beb822ec999de`，当前 HEAD 以 `git rev-parse HEAD` 为准；本地上游仍指向父提交，未推送、建 PR 或合并 master；提交后暂存区空，仅保留 2 项无关未跟踪条目 |
-| 待确认 | Day13 计划未勾；Day18 五项和进度表已勾；Day19 未开始；远端实时状态和新会话服务健康待确认 |
-| 当前阶段 | 用户确认 Day18 审查、测试与修复通过，并授权标记完成和本地提交；后续开发动作待指定 |
+| Git | `codex/day17-eval-dataset`；Day19 本地提交的父提交为 `a3f791bbc5c8116db2b67c7e0b6719c2513b39c0`，当前 HEAD 以 `git rev-parse HEAD` 为准；未推送或合并；两项无关未跟踪条目保留 |
+| 待确认 | Day13 计划未勾；Day19 四项及完成确认证据已更新；真实 PostgreSQL 建表与 Day19 在线运行未验；远端实时状态和服务健康未验 |
+| 当前阶段 | Day19 本地实现与实验已完成，用户已授权本地提交；生产 trace 尚未在线验收，Day20 未开始 |
 
-正式报告见 [eval/eval_report.md](eval/eval_report.md)，原始逐题记录在被 Git 忽略的 `data/eval/day18/20261108T095705Z-real-625c1f7c53b2/`；两者未纳入本地提交，换机时须核实可用性。关键词规则是近似评分，具体误判见当前 HANDOFF。唯一下一步是新会话先只读核对、复述状态并等用户指定一个动作。
+Day18 正式报告见 [eval/eval_report.md](eval/eval_report.md)，原始逐题记录在被 Git 忽略的 `data/eval/day18/20261108T095705Z-real-625c1f7c53b2/`；关键词规则是近似评分。Day19 对同一冻结 50 题另做三方案完整 RAG 对照，未覆盖 Day18 原始基线或报告；`PLAN.md` 将 Day19 四项改为真实完成状态和事实表述。
+
+不付费向量对照中，原 o200k-token 500/100 有 7 个块超过 BGE 输入上限；合格组 200/40、250/50、300/60 的纯向量 Top5 全页命中为 21/40、16/40、22/40。另一次授权的完整 RAG 对照中，200/40（o200k）与 500/100（BGE token）最终来源均为 7/40，300/60（o200k）为 6/40；500 并未独占最高，两种 500/100 不可混称。150/150 逐题完成，至少 207 次付费请求，精确费用未知；隔离实验数据已清理，原有 Qdrant collection 保留。
 
 ---
 

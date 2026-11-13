@@ -1,4 +1,4 @@
-> **当前检查点（2026-11-09）**：Day17 `day17-v1.1` 的 50 条 QA 和六份原版 PDF 已冻结，四项 PLAN 已勾；Day17 提交 `6f252c2` 已推送，Day18 完成标记与实现已形成本地提交，分支仍为 `codex/day17-eval-dataset`，未合并 `master`。Day17 离线验收为 660 passed/14 skipped、退出0；本机11月7日六文档入库并索引 25 个 Point。Day13 未勾，[Day18 真实评测基线](#day18-真实评测基线)已完成。当前 Git 状态见[交接包](HANDOFF.md)，Day17 记录见[完成记录](docs/day17-eval-completion.md)和[数据集说明](eval/README.md)。
+> **当前检查点（2026-11-14）**：Day17 冻结题集与六份 PDF、Day18 真实 50 题基线已完成；Day19 请求 trace、不付费向量对照及授权的付费完整 RAG 对照已完成，四项 PLAN 与进度表按实测更新并形成本地提交。本次完整后端测试为 724 passed/14 skipped/0 failed，退出码 0。分支仍为 `codex/day17-eval-dataset`，未推送 Day19 或合并 `master`，Day13 未勾，Day20 未开始。当前 Git 状态见[状态](STATUS.md)。
 > 下方 2026-11-02 的分支、HEAD 和“Day17 未开始”属于历史交接快照；运行命令与接口说明按当前源码核对。
 
 ---
@@ -6,8 +6,16 @@
 # 企业知识库 RAG Agent
 
 FastAPI + LangGraph + PostgreSQL + Qdrant，使用本地CPU BGE、BM25/RRF/Rerank和DeepSeek compatible LLM，
-提供知识库问答、可信当前来源、单工具选择及短期多轮记忆。
-项目后续目标包括完整 trace、Streamlit 与完整 Docker Compose。
+提供知识库问答、可信当前来源、单工具选择、短期多轮记忆及请求级 trace。
+项目后续目标包括 Streamlit 与完整 Docker Compose。
+
+## Day19 请求 trace
+
+已在本地实现 `POST /chat` 的请求级持久化 trace，以及受独立管理员密钥保护的 `GET /admin/traces?limit=20`。记录同次检索候选与证据门、工具、供应商实际 token 用量、答案、来源、耗时和 JSON/SSE 终态；缺失用量保留为未知。启用前须运行显式建表入口创建 `request_logs`，并在进程环境中设置 `ADMIN_TRACE_TOKEN`；密钥不从项目 `.env` 读取。实现、边界、查询方法见 [Day19 可观测性记录](docs/day19-observability.md)。真实 PostgreSQL 的 Day19 trace 仍未在线验收；本次完整后端测试为 724 passed、14 skipped、0 failed。Day19 代码和文档已形成本地提交，尚未推送。
+
+补充的[离线分块对照](docs/day19-chunk-comparison.md)使用冻结六份 PDF 与本机 BGE：500/100 有 7 个块超过 512-token 上限；可用的 200/40、250/50、300/60 三组纯向量 Top5 全页命中为 21/40、16/40、22/40。它不代表生产 `source_hit`，也不能支持“500 最高”的话术。
+
+另经授权完成[完整 RAG 50 题对照](docs/day19-full-comparison.md)：200/40（o200k token）、300/60（o200k token）、500/100（BGE token）的最终来源命中分别为 7/40、6/40、7/40，150 条结果均正常。500/100 与 200/40 持平，且 BGE-token 方案不是上述超限的原 o200k-token 500/100。记录至少 207 次付费请求，不能据此报精确费用；隔离实验数据已清理，原有 Qdrant collection 保留。
 
 ## Day18 真实评测基线
 
@@ -94,7 +102,7 @@ Set-Location -LiteralPath 'D:\2019\rag-agent'
 
 默认接口文档http://127.0.0.1:8000/docs；GET /health只表示进程存活，不检查数据库/模型/其他服务。
 应用启动和health不建表、不加载模型、不连接PG/Qdrant。
-配置字段公开模板见[.env.example](.env.example)；配置前缀APP_/LLM_/POSTGRES_/EMBEDDING_/QDRANT_/RERANKER_/RAG_/MEMORY_。
+配置字段公开模板见[.env.example](.env.example)；配置前缀APP_/LLM_/POSTGRES_/EMBEDDING_/QDRANT_/RERANKER_/RAG_/MEMORY_。Day19 的 `ADMIN_TRACE_TOKEN` 仅从进程环境读取。
 源码默认LLM=https://api.deepseek.com、deepseek-v4-flash、timeout60s；实际进程配置及供应商可用性待确认。
 openai包只是compatible SDK，不代表调用OpenAI服务或需要OpenAI Key。
 上传/模型相对目录锚定PROJECT_ROOT，默认data/uploads、data/models。
@@ -111,7 +119,7 @@ docker compose up -d postgres
 
 当前docker-compose.yml仅PostgreSQL；Qdrant历史镜像qdrant/qdrant:v1.18.1、命名卷rag-agent-qdrant-data，
 绑定127.0.0.1:6333，尚未做完整backend/frontend/qdrant一键编排。
-init_db显式注册四个模型，只create_all缺失表，不迁移旧表；真实PG记忆表是否已经建好待确认。
+init_db显式注册五个模型（含 Day19 的 `request_logs`），只create_all缺失表，不迁移旧表；真实PG中的 Day19 表尚未核验。
 上传不自动Embedding或索引；embed_document只产内存结果，index_document才upsert Qdrant。
 PG会话在模型推理/upsert前关闭；不自动重建collection，PG/Qdrant不是跨库事务。
 
@@ -126,6 +134,7 @@ PG会话在模型推理/upsert前关闭；不自动重建collection，PG/Qdrant�
 | POST /retrieval/hybrid/search | 同上；两路各20融合，返回RRF score |
 | POST /retrieval/rerank/search | 仅query、可选doc_id；固定20→5，原logit及名次 |
 | POST /chat | message、stream默认false、可选session_id UUID/null；JSON/SSE |
+| GET /admin/traces | `limit` 默认20、范围1..100；仅持正确 `X-Admin-Token` 可读最近请求 trace，响应禁缓存 |
 
 检索query strip后1..4096字符，extra禁止，top_k不接受bool/字符串/浮点/null。
 Rerank不接受top_k/candidate_k/mode。合法doc_id无匹配返回200空结果。

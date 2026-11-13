@@ -12,7 +12,7 @@ def test_state_contains_only_request_data_and_context_only_mode() -> None:
         "query", "retrieved_docs", "prepared", "answer", "tool_calls", "needs_tool_selection",
         "standalone_query", "history", "needs_query_rewrite",
     }
-    assert set(get_type_hints(AgentContext)) == {"response_mode"}
+    assert set(get_type_hints(AgentContext)) == {"response_mode", "trace"}
     state = initial_agent_state("  报销时间？  ")
     assert state == {
         "query": "报销时间？", "retrieved_docs": (), "prepared": None,

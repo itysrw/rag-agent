@@ -34,6 +34,7 @@ from backend.app.services.reranker import (
 
 if TYPE_CHECKING:
     from backend.app.agent.service import PreparedRAGStream, RAGGraphRunner
+    from backend.app.services.request_trace import TraceRecorder
 
 NO_RELEVANT_KNOWLEDGE = "知识库中没有相关信息"
 RAG_SYSTEM_PROMPT = """你是企业知识库问答助手。
@@ -279,17 +280,25 @@ class RAGService:
             raise RAGGraphError("The RAG graph returned no prepared context.")
         return prepared
 
-    def complete(self, question: str | PreparedRAG, *, session_id: UUID | None = None) -> RAGAnswer:
+    def complete(
+        self, question: str | PreparedRAG, *, session_id: UUID | None = None,
+        trace: TraceRecorder | None = None,
+    ) -> RAGAnswer:
         """Public chat invokes the whole graph; internal prepared callers skip retrieval."""
         if isinstance(question, PreparedRAG):
             return self._runner.complete(question)
         from backend.app.agent.state import initial_agent_state
         original = initial_agent_state(question)["query"]
         snapshot, lease, created = self._open_turn(session_id)
+        if trace is not None:
+            trace.record_session(snapshot.session_id)
         try:
-            result = self._runner.complete(original, history=snapshot.history)
+            result = self._runner.complete(original, history=snapshot.history, trace=trace)
             self._memory.append_turn(session_id=snapshot.session_id, user_message=original,
                                      assistant_message=result.answer, sources=result.sources)
+            if trace is not None:
+                trace.mark_committed()
+                trace.record_answer(result.answer, result.sources)
             return replace(result, session_id=snapshot.session_id)
         except BaseException:
             self._discard_created_empty_session(snapshot.session_id, created=created)
@@ -297,13 +306,18 @@ class RAGService:
         finally:
             lease.close()
 
-    def start_stream(self, question: str, *, session_id: UUID | None = None) -> PreparedRAGStream:
+    def start_stream(
+        self, question: str, *, session_id: UUID | None = None,
+        trace: TraceRecorder | None = None,
+    ) -> PreparedRAGStream:
         """Prefetch graph retrieval before the HTTP response is established."""
         from backend.app.agent.state import initial_agent_state
         original = initial_agent_state(question)["query"]
         snapshot, lease, created = self._open_turn(session_id)
+        if trace is not None:
+            trace.record_session(snapshot.session_id)
         try:
-            run = self._runner.start_stream(original, history=snapshot.history)
+            run = self._runner.start_stream(original, history=snapshot.history, trace=trace)
             run.session_id = snapshot.session_id
             run.on_close = lease.close
             run.on_failure = lambda: self._discard_created_empty_session(
@@ -315,6 +329,9 @@ class RAGService:
                 self._memory.append_turn(session_id=snapshot.session_id, user_message=original,
                                          assistant_message=answer, sources=run.prepared.sources,
                                          is_cancelled=lambda: run.control.drain_requested)
+                if trace is not None:
+                    trace.mark_committed()
+                    trace.record_answer(answer, run.prepared.sources)
 
             run.on_success = save
             return run

@@ -70,6 +70,7 @@ class AgentToolExecution:
 
     prepared: PreparedRAG
     retrieved_docs: tuple[RerankedChunk, ...] = ()
+    context_chunk_ids: frozenset[UUID] = frozenset()
 
 
 def _metadata(item: DocumentListItem) -> dict[str, str | int]:
@@ -107,7 +108,7 @@ class AgentTools:
         return AgentToolExecution(PreparedRAG(
             query, build_rag_messages(query, relevant) if relevant else (),
             build_sources(relevant), bool(relevant),
-        ), retrieved)
+        ), retrieved, frozenset(chunk.chunk_id for chunk in relevant))
 
     def get_document_detail(self, doc_id: UUID, *, question: str) -> AgentToolExecution:
         """Return safe metadata with an empty source list, including on absence."""
@@ -163,4 +164,4 @@ class AgentTools:
                     "standalone_query": independent, "current_tool_result": messages[-1]["content"],
                 }, ensure_ascii=False, separators=(",", ":"))},
             ))
-        return AgentToolExecution(prepared, execution.retrieved_docs)
+        return AgentToolExecution(prepared, execution.retrieved_docs, execution.context_chunk_ids)

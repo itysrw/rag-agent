@@ -285,12 +285,14 @@ rag-agent/
 
 ### Day 19 — 日志与可观测性
 
-- [ ] 每次请求记录：query · retrieved_docs · tool_calls · prompt_tokens · completion_tokens · latency · answer
-- [ ] 存入 `request_logs` 表
-- [ ] 实现 `GET /admin/traces` 接口，可查最近 N 条 trace
-- [ ] 准备面试话术："我通过 trace 发现 chunk size 500 时 source_hit 最高"
+- [x] 每次请求记录：query · retrieved_docs · tool_calls · prompt_tokens · completion_tokens · latency · answer
+- [x] 存入 `request_logs` 表
+- [x] 实现 `GET /admin/traces` 接口，可查最近 N 条 trace
+- [x] 准备基于实测的面试说明：完整 50 题对照中 200/40（o200k）与 500/100（BGE token）最终来源均为 7/40，300/60（o200k）为 6/40；500/100 并未独占最高，且不是超限的原 o200k 方案
 
 **产出**：每次请求有完整 trace，能查询
+
+**完成确认**：2026-11-13，用户确认 Day19 审查、测试与修复通过并授权同步状态、本地提交。请求级 trace、`request_logs`、受保护的 `GET /admin/traces` 和不付费离线分块对照已实现；另经用户授权完成三方案、每组 50 题的付费完整 RAG 对照。200/40（o200k）和 500/100（BGE token）的最终来源命中同为 7/40，300/60（o200k）为 6/40；BGE 方案不等于超限的原 o200k 500/100。完整后端 pytest 为 724 passed、14 skipped、0 failed。真实 PostgreSQL 的 Day19 trace 在线验收未执行；trace 持久化在数据库故障时为尽力而为。Day18 冻结题集与报告、生产默认分块和 0.46 证据门未改，Day13 仍未勾，Day20 未开始。
 
 ---
 
@@ -408,7 +410,7 @@ rag-agent/
 | Day 16 | 已完成 | 2026-11-02用户确认审查、测试与修复通过，授权同步五项任务及完成日志并本地提交；PostgreSQL业务会话、最近5轮/2000 token、独立问题改写、JSON/SSE会话ID、原子保存与进程内409互斥已完成；已审查的改写max_tokens=4096及首轮失败空会话清理修复和回归一并收录；提交前标准652 passed、14 skipped（45.43s），0失败/0警告；dotenv/真实连接/付费0，未推送或合并，Day17未开始 |
 | Day 17 | 已完成 | 2026-11-07 用户确认审查、测试与修复通过；六份 Ready.gov 原版 PDF 与 SHA-256 清单支撑 50 条 `day17-v1.1` QA，四类分布 18/12/10/10；三道错误前提拒答题已修正；完整标准 660 passed、14 skipped（122.69s）；本机六文档 ready、Qdrant 25 个 Point；Day13 未补勾，Day18 未开始 |
 | Day 18 | 已完成 | 2026-11-08 用户确认审查、测试与修复通过并授权更新状态、本地提交；冻结 50 题真实 DeepSeek 单轮评测 50/50 正常、65/100 次请求，关键词规则准确率 11/50、候选来源 30/40、最终引用 6/40、正确拒答 8/10；完整离线 pytest 697 passed、14 skipped、退出 0；本机报告和逐题原始记录被 Git 忽略，Day13 未补勾，Day19 未开始 |
-| Day 19 | | |
+| Day 19 | 已完成 | 2026-11-13 用户确认审查、测试与修复通过并授权同步状态、本地提交；JSON/SSE 请求级 trace、`request_logs`、受保护查询、不付费向量对照及授权的付费完整 50 题对照已完成；完整后端 pytest 724 passed、14 skipped、0 failed；200/40（o200k）与 500/100（BGE token）最终来源均 7/40，后者不是超限的原 o200k 方案，不能宣称 500 独占最高；真实 PG 的 trace 在线验收待后续单独执行，Day20 未开始 |
 | Day 20 | | |
 | Day 21 | | |
 | Day 22 | | |

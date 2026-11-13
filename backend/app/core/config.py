@@ -74,6 +74,14 @@ class DatabaseSettings(BaseSettings):
     )
 
 
+class AdminTraceSettings(BaseSettings):
+    """Separate read access for stored chat content, loaded from the process environment."""
+
+    token: SecretStr | None = None
+
+    model_config = SettingsConfigDict(env_file=None, env_prefix="ADMIN_TRACE_", extra="ignore")
+
+
 class DocumentSettings(BaseSettings):
     """Document storage and parser resource limits."""
 
@@ -293,6 +301,12 @@ def get_llm_settings() -> LLMSettings:
 def get_database_settings() -> DatabaseSettings:
     """Return cached PostgreSQL connection settings."""
     return DatabaseSettings()
+
+
+@lru_cache
+def get_admin_trace_settings() -> AdminTraceSettings:
+    """Resolve the optional admin token without reading the project dotenv file."""
+    return AdminTraceSettings()
 
 
 @lru_cache

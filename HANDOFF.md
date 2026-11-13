@@ -1,6 +1,16 @@
-# 完整交接包：Day18 已确认完成并本地提交
+# 当前检查点：Day19 已确认完成并本地提交
 
-更新时间：2026-11-09（Asia/Shanghai）。仓库 D:\2019\rag-agent。本页最上方 A/B/C 是当前恢复入口；下方 Day17 和 2026-11-02 Day16 交接是历史档案，旧文的“Day18 未开始”只描述当时状态。
+更新时间：2026-11-14（Asia/Shanghai）。仓库 `D:\2019\rag-agent`，分支 `codex/day17-eval-dataset`。用户已确认 Day19 审查、测试与修复通过，授权更新完成状态并本地提交；提交的父提交为 `a3f791bbc5c8116db2b67c7e0b6719c2513b39c0`，当前 HEAD 以 `git rev-parse HEAD` 为准，未推送或合并。`POST /chat` 请求级 trace、`request_logs`、受保护的 `GET /admin/traces`、不付费向量对照及授权的完整 50 题 RAG 对照已完成；Day19 `PLAN.md` 四项与进度表按真实结果更新。本次完整后端 pytest 为 724 passed / 14 skipped / 0 failed，退出码 0。完整对照的最终来源命中依次为 200/40（o200k）7/40、300/60（o200k）6/40、500/100（BGE token）7/40，后者不独占最高、也不是超限的原 o200k 方案；至少 207 次付费请求，精确费用未知。隔离实验数据已清理，原有 Qdrant collection 保留。真实 PostgreSQL 的 Day19 trace 建表和在线运行、服务健康及远端实时状态未在本轮验证。Day13 未勾、Day18 冻结评测未改，Day20 未开始。两项无关未跟踪条目保留。部署要求和边界见 [Day19 可观测性记录](docs/day19-observability.md)，实验见[完整 RAG 对照](docs/day19-full-comparison.md)，当前状态见 [STATUS.md](STATUS.md)。
+
+下方 Day18 A/B/C 和 Day17/Day16 交接保留为历史检查点；旧文“Day19 未开始”只描述当时状态。
+
+用户补充指定不付费离线分块对照，已用冻结六份 PDF 和本地 BGE 完成；原 o200k-token 500/100、800/160 分别有 7、6 个块超输入上限，合格组 200/40、250/50、300/60 的纯向量 Top5 全页命中为 21/40、16/40、22/40。脚本和限制见 [离线分块对照](docs/day19-chunk-comparison.md)。该指标不是完整 RAG `source_hit`；随后另获授权运行完整 RAG 对照，结果与限制见上文。`PLAN.md` 中原本不成立的“500 最高”已改为事实表述。
+
+---
+
+# 历史交接包：Day18 已确认完成并本地提交
+
+更新时间：2026-11-09（Asia/Shanghai）。仓库 D:\2019\rag-agent。本节 A/B/C 是当时的 Day18 恢复入口；下方 Day17 和 2026-11-02 Day16 交接也是历史档案。
 
 ## A. 详细交接文档
 

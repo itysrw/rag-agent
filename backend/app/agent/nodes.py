@@ -11,7 +11,8 @@ from langgraph.runtime import RunControl, Runtime
 from backend.app.agent.state import AgentContext, AgentState, AgentUpdate
 from backend.app.agent.tools import AgentTools, TOOL_SELECTION_PROMPT, tool_definitions
 from backend.app.core.config import ConversationMemorySettings, RAGSettings
-from backend.app.services.llm import LLMClient, LLMServiceError, QueryRewriteError, validate_tool_call
+from backend.app.services.llm import LLMClient, LLMServiceError, ModelUsage, QueryRewriteError, validate_tool_call
+from backend.app.services.request_trace import TraceRecorder
 from backend.app.services.conversation_memory import history_payload, history_token_count, validate_history
 from backend.app.services.rag import (
     NO_RELEVANT_KNOWLEDGE,
@@ -59,6 +60,11 @@ class StreamControl(RunControl):
         return not self.drain_requested
 
 
+def _usage_callback(trace: TraceRecorder, stage: str) -> Callable[[ModelUsage], None]:
+    index = trace.begin_model_call(stage)
+    return lambda usage: trace.record_model_usage(index, usage)
+
+
 def create_retrieve_node(
     retrieval_service: RerankedRetrievalService,
     settings: RAGSettings,
@@ -101,13 +107,19 @@ def create_rewrite_query_node(
                 or state.get("standalone_query") != state.get("query")
                 or state.get("tool_calls") != () or state.get("prepared") is not None):
             raise RAGGraphError("The RAG graph rewrite state is invalid.")
-        rewritten = llm_client.rewrite_query((
+        messages = (
             {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(
                 {"history": history_payload(history), "current_query": state["query"]},
                 ensure_ascii=False, separators=(",", ":"),
             )},
-        ))
+        )
+        trace = runtime.context.get("trace") if runtime.context else None
+        callback = _usage_callback(trace, "rewrite") if trace else None
+        if callback is not None and isinstance(llm_client, LLMClient):
+            rewritten = llm_client.rewrite_query(messages, usage_callback=callback)
+        else:
+            rewritten = llm_client.rewrite_query(messages)
         if not isinstance(rewritten, str) or not 1 <= len(rewritten.strip()) <= 4096:
             raise QueryRewriteError("The query rewrite request failed.")
         return AgentUpdate(standalone_query=rewritten.strip(), needs_query_rewrite=False)
@@ -121,10 +133,20 @@ def create_select_tool_node(llm_client: LLMClient) -> AgentNode:
                 or state.get("needs_tool_selection") is not True or state.get("tool_calls") != ()
                 or state.get("prepared") is not None):
             raise RAGGraphError("The RAG graph tool selection state is invalid.")
-        call = validate_tool_call(llm_client.select_tool((
+        messages = (
             {"role": "system", "content": TOOL_SELECTION_PROMPT},
             {"role": "user", "content": state["standalone_query"]},
-        ), tool_definitions()))
+        )
+        trace = runtime.context.get("trace") if runtime.context else None
+        callback = _usage_callback(trace, "tool_selection") if trace else None
+        if callback is not None and isinstance(llm_client, LLMClient):
+            call = validate_tool_call(llm_client.select_tool(
+                messages, tool_definitions(), usage_callback=callback,
+            ))
+        else:
+            call = validate_tool_call(llm_client.select_tool(messages, tool_definitions()))
+        if trace is not None:
+            trace.record_tool_selection(call)
         return AgentUpdate(tool_calls=(call,), needs_tool_selection=False)
     return select_tool_node
 
@@ -138,10 +160,21 @@ def create_tool_node(tools: AgentTools) -> AgentNode:
             raise RAGGraphError("The RAG graph tool execution state is invalid.")
         if state.get("needs_query_rewrite") is not False:
             raise RAGGraphError("The RAG graph rewrite has not finished.")
-        execution = tools.execute(
-            calls[0], original_query=state["query"], standalone_query=state["standalone_query"],
-            history=state["history"],
-        )
+        trace = runtime.context.get("trace") if runtime.context else None
+        if trace is not None:
+            trace.record_standalone_query(state["standalone_query"])
+        try:
+            execution = tools.execute(
+                calls[0], original_query=state["query"], standalone_query=state["standalone_query"],
+                history=state["history"],
+            )
+        except Exception:
+            if trace is not None:
+                trace.record_tool_result(succeeded=False)
+            raise
+        if trace is not None:
+            trace.record_tool_result(succeeded=True)
+            trace.record_retrieval(execution.retrieved_docs, execution.context_chunk_ids)
         return AgentUpdate(prepared=execution.prepared, retrieved_docs=execution.retrieved_docs)
     return tool_node
 
@@ -165,6 +198,7 @@ def create_generate_node(llm_client: LLMClient) -> AgentNode:
         if context is None or context.get("response_mode") not in {"complete", "stream"}:
             raise RAGGraphError("The RAG graph response mode is invalid.")
         streaming = context["response_mode"] == "stream"
+        trace = context.get("trace")
         if not prepared.has_relevant_context:
             if streaming:
                 writer = get_stream_writer()
@@ -176,8 +210,13 @@ def create_generate_node(llm_client: LLMClient) -> AgentNode:
             return AgentUpdate(answer=NO_RELEVANT_KNOWLEDGE)
 
         if not streaming:
+            callback = _usage_callback(trace, "generation") if trace else None
+            if callback is not None and isinstance(llm_client, LLMClient):
+                generated = llm_client.complete_messages(prepared.messages, usage_callback=callback)
+            else:
+                generated = llm_client.complete_messages(prepared.messages)
             answer = _strip_model_source_references(
-                llm_client.complete_messages(prepared.messages), preserve_filenames=preserve_filenames,
+                generated, preserve_filenames=preserve_filenames,
             )
             if not answer.strip():
                 raise LLMServiceError("The language model returned an empty response")
@@ -186,7 +225,11 @@ def create_generate_node(llm_client: LLMClient) -> AgentNode:
         writer = get_stream_writer()
         control = runtime.control
         parts: list[str] = []
-        raw = llm_client.stream_messages(prepared.messages)
+        callback = _usage_callback(trace, "generation") if trace else None
+        if callback is not None and isinstance(llm_client, LLMClient):
+            raw = llm_client.stream_messages(prepared.messages, usage_callback=callback)
+        else:
+            raw = llm_client.stream_messages(prepared.messages)
         sanitized = _sanitized_model_deltas(raw, preserve_filenames=preserve_filenames)
         try:
             for delta in sanitized:

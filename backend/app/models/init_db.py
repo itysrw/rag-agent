@@ -5,11 +5,12 @@ from backend.app.models.chunk import Chunk
 from backend.app.models.document import Document
 from backend.app.models.conversation import Conversation
 from backend.app.models.message import ConversationMessage
+from backend.app.models.request_log import RequestLog
 
 
 def main() -> None:
     """Create known tables without coupling database health to app startup."""
-    _ = (Document, Chunk, Conversation, ConversationMessage)
+    _ = (Document, Chunk, Conversation, ConversationMessage, RequestLog)
     Base.metadata.create_all(bind=get_engine())
 
 

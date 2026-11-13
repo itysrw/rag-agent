@@ -1,6 +1,20 @@
-# 当前架构：Day16 后端与 Day18 评测
+# 当前架构：Day19 请求 trace 与 Day18 评测
 
-更新时间：2026-11-09。后端仍使用 Day16 的 PG 业务会话与四节点 LangGraph。Day17 冻结六份 Ready.gov 原版 PDF 和 `day17-v1.1` 的 50 条 QA，Day18 在独立的 `eval/` 模块复用现有单轮图，已跑出 [真实 50 题报告](../eval/eval_report.md)。后端生产源码未因评测改动。分支和结果的精确状态见 [当前 HANDOFF A/B/C](../HANDOFF.md)。
+更新时间：2026-11-14。后端仍使用 Day16 的 PG 业务会话与四节点 LangGraph。Day17 冻结六份 Ready.gov 原版 PDF 和 `day17-v1.1` 的 50 条 QA，Day18 在独立的 `eval/` 模块复用现有单轮图，已跑出 [真实 50 题报告](../eval/eval_report.md)。Day19 在生产 `/chat` 入口加入请求级 recorder，贯穿图、模型用量、同次检索和 JSON/SSE 结束；独立短事务写 `request_logs`，管理员密钥保护查询。用户确认审查、测试与修复通过后，Day19 计划状态和本地提交已更新；真实 PostgreSQL 的 trace 在线验收仍待执行。另有独立的[完整 RAG 分块对照](day19-full-comparison.md)，不代表生产 trace 实测。详细边界见 [Day19 记录](day19-observability.md)。
+
+~~~mermaid
+flowchart LR
+    Chat[POST /chat] --> Trace[请求级 TraceRecorder]
+    Chat --> Graph[LangGraph 四节点]
+    Graph -->|改写/选择/生成| Usage[同次供应商 usage]
+    Graph -->|工具执行| Candidates[同次 Top5 与 0.46 证据门]
+    Graph --> Memory[(会话整轮事务)]
+    Usage --> Trace
+    Candidates --> Trace
+    Memory --> Trace
+    Trace -->|JSON 返回或 SSE 终结| Logs[(request_logs 独立事务)]
+    Admin[GET /admin/traces + 管理员密钥] --> Logs
+~~~
 
 ~~~mermaid
 flowchart LR
@@ -17,7 +31,7 @@ flowchart LR
 
 `eval/scoring.py:197 load_inputs` 验证题集和规则，`eval/real.py:90 verify_corpus` 检查全部 `ready` 文档和目标集合，`eval/agent.py:164 EvalAgent` 调用 `RAGGraphRunner.complete(question, history=())`，`eval/eval.py:263 run_evaluation` 写逐题结果与报告。真实调用前强制显式付费开关及最多 100 次请求预算，SDK 自动重试 0；本次 50/50 正常、65 次实际请求、规则准确率 11/50、候选来源 30/40、最终引用 6/40。完整指标、哈希与范围见 [报告](../eval/eval_report.md)。
 
-当前服务于 2026-11-08 18:19 左右只读核对 PG healthy、Qdrant /readyz 200。Windows 默认 Docker socket 故障仍在，本次通过 `D:\Docker\Start-DockerDesktop.ps1` 恢复原有数据卷；未来健康须重新确认。用户已确认 Day18 审查、测试与修复通过，五项 PLAN 标记已勾并形成本地提交；Day13 仍未勾，Day19 trace 未开始，后续开发动作待指定。
+服务健康的最近快照仍为 2026-11-08 18:19 左右 PG healthy、Qdrant /readyz 200；未来健康须重新确认。Windows 默认 Docker socket 故障仍在，本机曾用 `D:\Docker\Start-DockerDesktop.ps1` 恢复原有数据卷。Day18 与 Day19 的 PLAN 标记和本地提交已完成；Day19 真实 PG 部署未验，Day13 仍未勾，Day20 未开始。
 
 ---
 

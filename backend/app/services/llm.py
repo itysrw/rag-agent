@@ -1,7 +1,8 @@
 """Provider-neutral client for OpenAI-compatible chat APIs."""
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import lru_cache
 import json
 from typing import Any, Literal, Protocol, TypedDict, cast
@@ -34,6 +35,24 @@ class LLMToolCallError(LLMServiceError):
 
 class QueryRewriteError(LLMServiceError):
     """A rewrite request or its bounded JSON output failed validation."""
+
+
+@dataclass(frozen=True, slots=True)
+class ModelUsage:
+    """Actual provider token counts, with missing fields left unknown."""
+
+    prompt_tokens: int | None
+    completion_tokens: int | None
+
+
+def _provider_usage(response: Any) -> ModelUsage:
+    usage = getattr(response, "usage", None)
+    prompt = getattr(usage, "prompt_tokens", None)
+    completion = getattr(usage, "completion_tokens", None)
+    return ModelUsage(
+        prompt if type(prompt) is int and prompt >= 0 else None,
+        completion if type(completion) is int and completion >= 0 else None,
+    )
 
 
 ToolName = Literal["search_knowledge_base", "get_document_detail", "list_documents"]
@@ -146,7 +165,8 @@ class LLMClient:
         return self.complete_messages([{"role": "user", "content": message}])
 
     def select_tool(
-        self, messages: Sequence[LLMMessage], tools: Sequence[LLMToolDefinition]
+        self, messages: Sequence[LLMMessage], tools: Sequence[LLMToolDefinition],
+        *, usage_callback: Callable[[ModelUsage], None] | None = None,
     ) -> AgentToolCall:
         """Request exactly one function without streaming or automatic SDK retries."""
         options = self._request_options(messages=_validated_messages(messages), stream=False)
@@ -166,6 +186,8 @@ class LLMClient:
             response = self._client.with_options(max_retries=0).chat.completions.create(**options)
         except OpenAIError as exc:
             raise LLMServiceError("The language model request failed") from exc
+        if usage_callback is not None:
+            usage_callback(_provider_usage(response))
         choices = getattr(response, "choices", None)
         if not isinstance(choices, (list, tuple)) or len(choices) != 1:
             raise LLMToolCallError("The language model returned an invalid tool call.")
@@ -191,7 +213,10 @@ class LLMClient:
         except (ValueError, TypeError, UnicodeError, RecursionError) as exc:
             raise LLMToolCallError("The language model returned an invalid tool call.") from exc
 
-    def rewrite_query(self, messages: Sequence[LLMMessage]) -> str:
+    def rewrite_query(
+        self, messages: Sequence[LLMMessage], *,
+        usage_callback: Callable[[ModelUsage], None] | None = None,
+    ) -> str:
         """Resolve references once through bounded JSON output, without tools/retries."""
         options = self._request_options(messages=_validated_messages(messages), stream=False)
         extra = deepcopy(options.get("extra_body", {}))
@@ -206,6 +231,8 @@ class LLMClient:
         )
         try:
             response = self._client.with_options(max_retries=0).chat.completions.create(**options)
+            if usage_callback is not None:
+                usage_callback(_provider_usage(response))
             choices = getattr(response, "choices", None)
             if not isinstance(choices, (list, tuple)) or len(choices) != 1:
                 raise ValueError("invalid choices")
@@ -228,7 +255,10 @@ class LLMClient:
         except (OpenAIError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
             raise QueryRewriteError("The query rewrite request failed.") from exc
 
-    def complete_messages(self, messages: Sequence[LLMMessage]) -> str:
+    def complete_messages(
+        self, messages: Sequence[LLMMessage], *,
+        usage_callback: Callable[[ModelUsage], None] | None = None,
+    ) -> str:
         """Return one complete assistant response for structured messages."""
         validated_messages = _validated_messages(messages)
         try:
@@ -237,6 +267,9 @@ class LLMClient:
             )
         except OpenAIError as exc:
             raise LLMServiceError("The language model request failed") from exc
+
+        if usage_callback is not None:
+            usage_callback(_provider_usage(response))
 
         content = response.choices[0].message.content
         if not isinstance(content, str) or not content:
@@ -247,18 +280,28 @@ class LLMClient:
         """Yield deltas for a legacy single-user message."""
         yield from self.stream_messages([{"role": "user", "content": message}])
 
-    def stream_messages(self, messages: Sequence[LLMMessage]) -> Iterator[str]:
+    def stream_messages(
+        self, messages: Sequence[LLMMessage], *,
+        usage_callback: Callable[[ModelUsage], None] | None = None,
+    ) -> Iterator[str]:
         """Yield text deltas for structured messages and close the upstream."""
         validated_messages = _validated_messages(messages)
         response: Any | None = None
         try:
+            options = self._request_options(messages=validated_messages, stream=True)
+            if usage_callback is not None:
+                options["stream_options"] = {"include_usage": True}
             response = self._client.chat.completions.create(
-                **self._request_options(messages=validated_messages, stream=True)
+                **options
             )
             for chunk in response:
-                content = chunk.choices[0].delta.content
-                if isinstance(content, str) and content:
-                    yield content
+                choices = getattr(chunk, "choices", ())
+                if choices:
+                    content = choices[0].delta.content
+                    if isinstance(content, str) and content:
+                        yield content
+                if usage_callback is not None and getattr(chunk, "usage", None) is not None:
+                    usage_callback(_provider_usage(chunk))
         except OpenAIError as exc:
             raise LLMServiceError("The language model stream failed") from exc
         finally:
