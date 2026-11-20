@@ -320,6 +320,8 @@ def run(*, allow_paid: bool, max_requests: int, max_cases: int = 50) -> dict[str
         "status": "complete" if complete else "incomplete", "run_id": run_id,
         "model_alias": llm.model, "paid_requests": budget.attempts,
         "requested_cases": max_cases,
+        "relevance_threshold": rag.min_relevance_score,
+        "reranker_relevance_threshold": rag.min_reranker_score,
         "corpus_variant": "day17-v1", "dataset_variant": "day17-v1.1",
         "note": "bge_500_100 is a new BGE-token variant, not the original o200k 500/100",
         "variants": {},

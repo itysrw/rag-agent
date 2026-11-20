@@ -16,14 +16,14 @@ from backend.app.services.rag import NO_RELEVANT_KNOWLEDGE, RAGGraphError
 from backend.tests.test_rag import StubLLMClient, StubRetrievalService, retrieved_chunk
 
 
-def test_retrieve_preserves_top_five_but_prepares_only_vector_evidence() -> None:
+def test_retrieve_preserves_top_five_when_vector_only_is_configured() -> None:
     strong = replace(retrieved_chunk(score=0.8), score=-99.0)
     low = replace(retrieved_chunk(score=0.2, page=2), score=99.0)
     bm25_only = replace(retrieved_chunk(score=0.9, page=3), vector_score=None)
     retrieval = StubRetrievalService([strong, low, bm25_only])
     state = initial_agent_state("  question  ")
     before = dict(state)
-    update = create_retrieve_node(retrieval, RAGSettings(_env_file=None))(
+    update = create_retrieve_node(retrieval, RAGSettings(_env_file=None, min_reranker_score=None))(
         state, Runtime(context={"response_mode": "complete"})
     )
     assert state == before

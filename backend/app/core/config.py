@@ -17,6 +17,7 @@ EMBEDDING_DIMENSION = 512
 EMBEDDING_MAX_BATCH_SIZE = 32
 QDRANT_MAX_BATCH_SIZE = 32
 RAG_MIN_RELEVANCE_SCORE = 0.46
+RAG_MIN_RERANKER_SCORE = -2.0
 RERANKER_MODEL_NAME = "BAAI/bge-reranker-base"
 RERANKER_MODEL_REVISION = "2cfc18c9415c912f9d8155881c133215df768a70"
 
@@ -269,18 +270,20 @@ class ConversationMemorySettings(BaseSettings):
 
 
 class RAGSettings(BaseSettings):
-    """Generation-layer relevance gate for the Day 8 RAG flow."""
+    """Evidence thresholds applied after reranking and before generation."""
 
     min_relevance_score: float = Field(
         default=RAG_MIN_RELEVANCE_SCORE,
         ge=0.0,
         le=1.0,
     )
+    min_reranker_score: float | None = Field(default=RAG_MIN_RERANKER_SCORE, allow_inf_nan=False)
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         env_prefix="RAG_",
+        env_parse_none_str="disabled",
         extra="ignore",
     )
 

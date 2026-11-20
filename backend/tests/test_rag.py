@@ -27,6 +27,7 @@ from backend.app.services.rag import (
 def retrieved_chunk(
     *,
     score: float,
+    reranker_score: float = -10.0,
     filename: str = "policy.pdf",
     page: int = 1,
     content: str = "报销票据每月二十五日前提交。",
@@ -41,7 +42,7 @@ def retrieved_chunk(
         page=page,
         filename=filename,
         metadata={"token_count": 12},
-        score=score,
+        score=reranker_score,
         hybrid_score=0.02, hybrid_rank=index+1, rerank_rank=index+1,
         rank_change=0, vector_score=score, vector_rank=index+1, bm25_rank=index+1,
     )
@@ -133,6 +134,18 @@ def test_relevance_gate_includes_boundary_and_preserves_order() -> None:
     selected = select_relevant_chunks([high, low, boundary], min_score=0.46)
 
     assert selected == (high, boundary)
+
+
+def test_reranker_evidence_reaches_generation_when_vector_score_is_low() -> None:
+    strong = retrieved_chunk(score=0.41, reranker_score=-2.0, page=2)
+    weak = retrieved_chunk(score=0.41, reranker_score=-2.01, page=3, content="weak passage")
+    rag, _, llm = build_service([strong, weak])
+
+    answer = rag.complete(rag.prepare("报销时间？"))
+
+    assert [source.page for source in answer.sources] == [2]
+    prompt = llm.complete_calls[0][1]["content"]
+    assert strong.content in prompt and weak.content not in prompt
 
 
 def test_sources_deduplicate_filename_and_page_in_first_seen_order() -> None:
@@ -262,10 +275,12 @@ def test_empty_model_stream_is_a_service_failure() -> None:
 @pytest.mark.parametrize(("vector_score", "logit", "allowed"), [
     (None, 100.0, False), (0.2, 100.0, False), (0.46, -100.0, True),
 ])
-def test_generation_gate_uses_only_original_vector_evidence(
+def test_vector_only_gate_can_be_restored(
     vector_score: float | None, logit: float, allowed: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     chunk = replace(retrieved_chunk(score=0.8), score=logit, vector_score=vector_score)
+    monkeypatch.setenv("RAG_MIN_RERANKER_SCORE", "disabled")
     rag, _, llm = build_service([chunk])
     prepared = rag.prepare("question")
     assert prepared.has_relevant_context is allowed
@@ -293,6 +308,46 @@ def test_rag_runs_hybrid_twenty_then_rerank_five_before_generation() -> None:
     context = json.loads(prepared.messages[1]["content"].split("\n", 1)[1].split("\n\n", 1)[0])
     assert [item["page"] for item in context] == [20, 19, 18, 17, 16]
     assert len(llm.complete_calls) == 1
+
+
+def test_search_recovers_a_qualified_page_below_the_first_five() -> None:
+    first = retrieved_chunk(score=0.8, reranker_score=-1.0, page=1)
+    rejected = [retrieved_chunk(score=0.2, index=index) for index in range(1, 5)]
+    repeat = replace(first, chunk_id=uuid4(), rerank_rank=6)
+    other_page = replace(retrieved_chunk(score=0.50, page=2, index=6), doc_id=first.doc_id)
+    rag, retrieval, _ = build_service([first, *rejected, repeat, other_page])
+
+    prepared = rag.prepare("报销流程有什么前提？")
+
+    context = json.loads(prepared.messages[1]["content"].split("\n", 1)[1].split("\n\n", 1)[0])
+    assert [row["page"] for row in context] == [1, 2]
+    assert [source.page for source in prepared.sources] == [1, 2]
+    assert len(retrieval.questions) == 1
+
+
+def test_search_refuses_when_only_lower_ranks_have_vector_support() -> None:
+    rejected = [retrieved_chunk(score=0.2, index=index) for index in range(5)]
+    lower = retrieved_chunk(score=0.8, index=5)
+    rag, _, llm = build_service([*rejected, lower])
+
+    answer = rag.complete("库外问题")
+
+    assert answer.answer == NO_RELEVANT_KNOWLEDGE
+    assert answer.sources == ()
+    assert llm.complete_calls == []
+
+
+def test_search_uses_agreeing_scores_and_only_adds_weaker_pages_from_the_same_document() -> None:
+    first = retrieved_chunk(score=0.41, reranker_score=-2.9, page=1)
+    neighbor = replace(retrieved_chunk(score=0.41, page=2, index=1), doc_id=first.doc_id)
+    other = retrieved_chunk(score=0.41, filename="other.pdf", page=2, index=2)
+    rag, _, _ = build_service([first, neighbor, other])
+
+    answer = rag.complete("报销制度？")
+
+    assert [(source.filename, source.page) for source in answer.sources] == [
+        ("policy.pdf", 1), ("policy.pdf", 2),
+    ]
 
 
 def test_default_rag_factory_uses_reranked_retrieval(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,10 +1,12 @@
 # Day19：请求 trace 与查询
 
+> **2026-11-20 补记。** 已在真实 PostgreSQL 补建缺表，按同一 SSE 会话核对两条消息与成功 `request_logs`，来源与模型阶段一致。`GET /admin/traces` 真实鉴权读取待确认。详见 [Day20 联调记录](day20-streamlit.md)。下方 2026-11-14 为历史检查点。
+
 更新时间：2026-11-14。生产 `POST /chat` 的已校验业务请求在入口创建独立 trace，JSON 返回或 SSE 真正终结时，尽力写入 PostgreSQL `request_logs`。Day19 本地实现与离线测试已完成；真实 PostgreSQL 的 trace 建表及在线验收尚未执行。另有获授权的付费完整 RAG 分块对照，结果单列在[实验记录](day19-full-comparison.md)。
 
 ## 记录内容与边界
 
-一条 trace 使用同一个 UUID 关联原问题、独立检索问题、已验证工具调用、同次搜索的重排候选、原向量证据门结果、最终答案和可信 `sources`、每次模型调用的阶段及 provider token 用量、UTC 起止时间、端到端耗时、HTTP 状态、业务结果、错误类别和整轮会话是否已提交。候选中的 `included_in_context` 表示是否通过现有 `vector_score >= 0.46` 门槛；候选和最终引用是两份不同证据。
+一条 trace 使用同一个 UUID 关联原问题、独立检索问题、已验证工具调用、同次搜索的重排候选、证据筛选结果、最终答案和可信 `sources`、每次模型调用的阶段及 provider token 用量、UTC 起止时间、端到端耗时、HTTP 状态、业务结果、错误类别和整轮会话是否已提交。新记录中的候选包含 `vector_score` 和 `reranker_score`。`included_in_context` 表示该候选实际进入生成上下文。默认阈值及离线对照见[证据过滤实验](day19-evidence-gate.md)。
 
 不保存 Chunk 正文、完整 Prompt、向量、原始异常文本或密钥。`prompt_tokens` 和 `completion_tokens` 仅汇总实际供应商响应；任一次调用用量缺失或流被中断，两项合计均为 `null`，`usage_complete=false`。固定拒答没有生成阶段 token，但仍可能有工具选择及多轮改写调用。
 

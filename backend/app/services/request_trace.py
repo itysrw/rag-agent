@@ -111,12 +111,12 @@ class TraceRecorder:
     def record_retrieval(
         self, chunks: tuple[RerankedChunk, ...], included_ids: frozenset[UUID],
     ) -> None:
-        """Persist only identities and scores from the tool's actual Top 5."""
+        """Persist only identities and scores from the tool's ranked candidates."""
         with self._lock:
             self.retrieved_docs = [
                 {"chunk_id": str(chunk.chunk_id), "doc_id": str(chunk.doc_id),
                  "filename": chunk.filename, "page": chunk.page, "rank": chunk.rerank_rank,
-                 "vector_score": chunk.vector_score,
+                 "vector_score": chunk.vector_score, "reranker_score": chunk.score,
                  "included_in_context": chunk.chunk_id in included_ids}
                 for chunk in chunks
             ]

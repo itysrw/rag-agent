@@ -254,7 +254,7 @@ def open_real_run(corpus: Sequence[CorpusDocument], budget: RequestBudget) -> It
         def guarded_search(question: str) -> RerankOutcome:
             outcome = retrieval.search(question)
             if any(_canonical_payload(_chunk_payload(chunk)) != checked_payloads.get(chunk.chunk_id)
-                   for chunk in outcome.results):
+                   for chunk in outcome.ranked_candidates):
                 raise EvalStop("retrieval_corpus_changed")
             return outcome
 
@@ -273,6 +273,7 @@ def open_real_run(corpus: Sequence[CorpusDocument], budget: RequestBudget) -> It
             "embedding_model": embedding.model_name, "embedding_revision": embedding.model_revision,
             "reranker_model": reranker.model_name, "reranker_revision": reranker.model_revision,
             "relevance_threshold": rag.min_relevance_score,
+            "reranker_relevance_threshold": rag.min_reranker_score,
             "collection": qdrant.collection, "documents": list(snapshot.documents),
             "pg_chunk_count": len(snapshot.chunks), "qdrant_point_count": len(snapshot.chunks),
             "bm25_corpus_fingerprint": snapshot.fingerprint,

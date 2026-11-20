@@ -1,4 +1,4 @@
-"""Reranked RAG preserving vector evidence, prompts, sources, and refusal."""
+"""Reranked RAG evidence selection, prompts, sources, and refusal."""
 
 from __future__ import annotations
 
@@ -27,6 +27,8 @@ from backend.app.services.llm import (
 )
 from backend.app.services.qdrant_store import RetrievedChunk
 from backend.app.services.reranker import (
+    RERANK_FINAL_K,
+    RerankOutcome,
     RerankedChunk,
     RerankedRetrievalService,
     get_reranked_retrieval_service,
@@ -120,20 +122,80 @@ def select_relevant_chunks(
     chunks: Sequence[RerankedChunk],
     *,
     min_score: float,
+    min_reranker_score: float | None = None,
 ) -> tuple[RerankedChunk, ...]:
-    """Gate only on retained vector Cosine evidence, never RRF or logits."""
+    """Accept vector evidence or a separately qualified reranker score."""
     if not math.isfinite(min_score) or not 0.0 <= min_score <= 1.0:
         raise ValueError("min_score must be between zero and one")
+    if min_reranker_score is not None and not math.isfinite(min_reranker_score):
+        raise ValueError("min_reranker_score must be finite")
 
     relevant: list[RerankedChunk] = []
     for chunk in chunks:
-        if chunk.vector_score is None:
-            continue
-        if isinstance(chunk.vector_score, bool) or not math.isfinite(chunk.vector_score):
+        vector = chunk.vector_score
+        if vector is not None and (isinstance(vector, bool) or not math.isfinite(vector)):
             raise ValueError("retrieval scores must be finite")
-        if chunk.vector_score >= min_score:
+        if vector is not None and vector >= min_score:
             relevant.append(chunk)
+        elif min_reranker_score is not None:
+            if isinstance(chunk.score, bool) or not math.isfinite(chunk.score):
+                raise ValueError("reranker scores must be finite")
+            if chunk.score >= min_reranker_score:
+                relevant.append(chunk)
     return tuple(relevant)
+
+
+def select_context_chunks(outcome: RerankOutcome, settings: RAGSettings) -> tuple[RerankedChunk, ...]:
+    """Require initial evidence, then prefer distinct pages within the context limit."""
+    vector_threshold = settings.min_relevance_score
+    reranker_threshold = settings.min_reranker_score
+    primary = select_relevant_chunks(
+        outcome.results, min_score=vector_threshold, min_reranker_score=reranker_threshold,
+    )
+    if reranker_threshold is None:
+        return primary
+
+    supporting_vector = max(0.0, vector_threshold - 0.06)
+    supporting_reranker = reranker_threshold - 1.0
+    if not primary:
+        # Two moderate scores can corroborate one another when neither reaches the main gate.
+        primary = tuple(
+            chunk for chunk in outcome.results
+            if chunk.vector_score is not None and chunk.vector_score >= supporting_vector
+            and chunk.score >= supporting_reranker
+        )
+    if not any(chunk.score >= supporting_reranker for chunk in primary):
+        return primary
+
+    strong_later = select_relevant_chunks(
+        outcome.ranked_candidates[RERANK_FINAL_K:], min_score=vector_threshold,
+        min_reranker_score=reranker_threshold,
+    )
+    neighbor_pages = {
+        (chunk.doc_id, chunk.page + offset) for chunk in primary for offset in (-1, 1)
+    }
+    neighbors = (
+        chunk for chunk in outcome.ranked_candidates
+        if (chunk.doc_id, chunk.page) in neighbor_pages
+        and chunk.vector_score is not None and chunk.vector_score >= supporting_vector
+    )
+
+    distinct: list[RerankedChunk] = []
+    same_page: list[RerankedChunk] = []
+    pages = set()
+    for chunk in primary:
+        page = (chunk.doc_id, chunk.page)
+        (same_page if page in pages else distinct).append(chunk)
+        pages.add(page)
+    for candidates in (strong_later, neighbors):
+        for chunk in candidates:
+            if len(distinct) >= RERANK_FINAL_K:
+                return tuple(distinct)
+            page = (chunk.doc_id, chunk.page)
+            if page not in pages:
+                distinct.append(chunk)
+                pages.add(page)
+    return tuple((distinct + same_page)[:RERANK_FINAL_K])
 
 
 def build_sources(chunks: Sequence[RerankedChunk | RetrievedChunk]) -> tuple[RAGSource, ...]:

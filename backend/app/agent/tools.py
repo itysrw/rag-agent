@@ -15,7 +15,7 @@ from backend.app.services.llm import (
     AgentToolCall, LLMMessage, LLMToolCallError, LLMToolDefinition, validate_tool_call,
 )
 from backend.app.services.rag import (
-    PreparedRAG, build_rag_messages, build_sources, select_relevant_chunks,
+    PreparedRAG, build_rag_messages, build_sources, select_context_chunks,
 )
 from backend.app.services.reranker import RerankedChunk, RerankedRetrievalService
 from backend.app.services.conversation_memory import ConversationHistoryMessage, history_payload, serialize_history
@@ -66,7 +66,7 @@ def tool_definitions() -> tuple[LLMToolDefinition, ...]:
 
 @dataclass(frozen=True, slots=True)
 class AgentToolExecution:
-    """Prepared generation data and the original search Top5, when applicable."""
+    """Prepared generation data and, for search, the ranked retrieval candidates."""
 
     prepared: PreparedRAG
     retrieved_docs: tuple[RerankedChunk, ...] = ()
@@ -102,13 +102,13 @@ class AgentTools:
         self._catalog_factory = catalog_factory
 
     def search_knowledge_base(self, query: str) -> AgentToolExecution:
-        """Reuse Hybrid20/Rerank5 and the original vector evidence gate once."""
-        retrieved = tuple(self._retrieval_service.search(query).results)
-        relevant = select_relevant_chunks(retrieved, min_score=self._settings.min_relevance_score)
+        """Select evidence from one search, including any supporting pages."""
+        outcome = self._retrieval_service.search(query)
+        relevant = select_context_chunks(outcome, self._settings)
         return AgentToolExecution(PreparedRAG(
             query, build_rag_messages(query, relevant) if relevant else (),
             build_sources(relevant), bool(relevant),
-        ), retrieved, frozenset(chunk.chunk_id for chunk in relevant))
+        ), outcome.ranked_candidates, frozenset(chunk.chunk_id for chunk in relevant))
 
     def get_document_detail(self, doc_id: UUID, *, question: str) -> AgentToolExecution:
         """Return safe metadata with an empty source list, including on absence."""

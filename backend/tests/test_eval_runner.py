@@ -176,15 +176,16 @@ def test_same_call_capture_gate_tool_mismatch_and_reset(inputs: EvalInputs) -> N
         chunks = () if question == "无候选" else (low, high)
         return RerankOutcome(chunks, (), len(chunks), 0)
 
-    agent = EvalAgent(llm, search, RAGSettings(_env_file=None, min_relevance_score=0.46),
+    agent = EvalAgent(llm, search, RAGSettings(_env_file=None, min_relevance_score=0.46,
+                                               min_reranker_score=None),
                       catalog_factory=_catalog, clock=lambda: next(ticks))
     observed = agent.run(case.question)
     scored = score_observation(case, observed)
     assert scored.answer_pass and scored.candidate_source_hit is True and scored.source_hit is False
     assert observed.latency_ms == 125
     assert observed.retrieved_chunks == (
-        Candidate(str(low.chunk_id), "earthquake.pdf", 2, 1, False),
-        Candidate(str(high.chunk_id), "flood.pdf", 1, 2, True),
+        Candidate(str(low.chunk_id), "earthquake.pdf", 2, 1, False, 0.2, 1.0),
+        Candidate(str(high.chunk_id), "flood.pdf", 1, 2, True, 0.8, 1.0),
     )
     assert observed.answer.sources == (RAGSource("flood.pdf", 1),)
     wrong = score_observation(case, agent.run("目录"))

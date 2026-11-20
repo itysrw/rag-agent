@@ -67,10 +67,10 @@ def test_schema_whitelist_is_strict_and_isolated_per_request() -> None:
     assert tool_definitions()[0]["function"]["name"] == "search_knowledge_base"
 
 
-def test_search_keeps_original_question_top_five_vector_gate_and_sources() -> None:
+def test_search_keeps_original_question_top_five_and_applies_both_evidence_thresholds() -> None:
     high = retrieved_chunk(score=0.46, filename="trusted.pdf", page=2)
     low = retrieved_chunk(score=0.2, filename="private-low.pdf")
-    only_bm25 = replace(retrieved_chunk(score=0.9), vector_score=None, score=999)
+    only_bm25 = replace(retrieved_chunk(score=0.9, reranker_score=-1.0, page=3), vector_score=None)
     retrieval = StubRetrievalService([high, low, only_bm25])
     def forbidden_catalog() -> Any:
         raise AssertionError("Search must not resolve catalog configuration.")
@@ -80,7 +80,7 @@ def test_search_keeps_original_question_top_five_vector_gate_and_sources() -> No
     assert retrieval.questions == ["报销流程是什么？"]
     assert result.retrieved_docs == (high, low, only_bm25)
     assert result.prepared.messages[0]["content"] == RAG_SYSTEM_PROMPT
-    assert [(s.filename, s.page) for s in result.prepared.sources] == [("trusted.pdf", 2)]
+    assert [(s.filename, s.page) for s in result.prepared.sources] == [("trusted.pdf", 2), ("policy.pdf", 3)]
     assert "private-low" not in result.prepared.messages[1]["content"]
 
 

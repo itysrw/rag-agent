@@ -146,9 +146,9 @@ def test_stream_usage_in_final_chunk_is_aggregated_through_the_graph(
 @pytest.mark.parametrize("stream", [False, True])
 def test_chat_trace_records_same_search_candidates_gate_and_public_sources(stream: bool) -> None:
     high = retrieved_chunk(score=0.85, filename="policy.pdf", page=1, content="private-high")
-    duplicate = retrieved_chunk(score=0.7, filename="policy.pdf", page=1, content="private-duplicate")
-    low = replace(retrieved_chunk(score=0.2, filename="other.pdf", page=9,
-                                  content="private-low"), vector_score=0.2)
+    duplicate = retrieved_chunk(score=0.4, reranker_score=-2.0, filename="policy.pdf", page=1,
+                                content="private-duplicate")
+    low = retrieved_chunk(score=0.2, filename="other.pdf", page=9, content="private-low")
     service, retrieval = make_service([high, duplicate, low])
     with client_for(service) as client:
         response = client.post("/chat", json={"message": "  规则？  ", "stream": stream})
@@ -161,7 +161,8 @@ def test_chat_trace_records_same_search_candidates_gate_and_public_sources(strea
     assert row.business_committed and row.outcome == "success" and row.http_status == 200
     assert [item["chunk_id"] for item in row.retrieved_docs] == [str(high.chunk_id), str(duplicate.chunk_id), str(low.chunk_id)]
     assert [item["included_in_context"] for item in row.retrieved_docs] == [True, True, False]
-    assert [item["vector_score"] for item in row.retrieved_docs] == [0.85, 0.7, 0.2]
+    assert [item["vector_score"] for item in row.retrieved_docs] == [0.85, 0.4, 0.2]
+    assert [item["reranker_score"] for item in row.retrieved_docs] == [-10.0, -2.0, -10.0]
     assert row.sources == [{"filename": "policy.pdf", "page": 1}]
     assert row.tool_calls == [{"name": "search_knowledge_base", "call_id": "test-call", "status": "success"}]
     assert [call["stage"] for call in row.model_calls] == ["tool_selection", "generation"]

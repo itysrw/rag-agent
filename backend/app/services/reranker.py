@@ -102,14 +102,19 @@ class RankMovement:
 
 @dataclass(frozen=True, slots=True)
 class RerankOutcome:
-    """Top five plus the complete movement and timing summary."""
+    """Ranked candidates and their movement and timing summary."""
 
-    results: tuple[RerankedChunk, ...]
+    ranked_candidates: tuple[RerankedChunk, ...]
     movements: tuple[RankMovement, ...]
     candidate_count: int
     truncated_candidate_count: int
     model_load_seconds: float = 0.0
     inference_seconds: float = 0.0
+
+    @property
+    def results(self) -> tuple[RerankedChunk, ...]:
+        """Return the five results exposed by the rerank API."""
+        return self.ranked_candidates[:RERANK_FINAL_K]
 
 
 def _snapshot_complete(path: Path) -> bool:
@@ -291,7 +296,7 @@ def rank_candidates(
         for item in ranked
     )
     return RerankOutcome(
-        ranked[:RERANK_FINAL_K], movements, len(candidates),
+        ranked, movements, len(candidates),
         truncated_candidate_count, model_load_seconds, inference_seconds,
     )
 

@@ -20,7 +20,7 @@ from backend.app.services.qdrant_store import QdrantCollectionMismatchError, Qdr
 from backend.app.services.llm import (
     AgentToolCall, LLMClient, LLMMessage, LLMServiceError, LLMToolCallError, LLMToolDefinition,
 )
-from backend.app.services.rag import RAGAnswer, RAGSource, build_sources, select_relevant_chunks
+from backend.app.services.rag import RAGAnswer, RAGSource, build_sources, select_context_chunks
 from backend.app.services.reranker import (
     RerankOutcome, RerankedChunk, RerankedRetrievalService, RerankerError, RerankerUnavailableError,
 )
@@ -62,6 +62,8 @@ class Candidate:
     page: int
     rank: int
     included_in_context: bool
+    vector_score: float | None = None
+    reranker_score: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,12 +117,13 @@ class _Capture:
         if self.chunks is not None:
             raise EvalStop("repeated_retrieval")
         outcome = self.retrieve(query)
-        relevant = select_relevant_chunks(outcome.results, min_score=self.settings.min_relevance_score)
+        relevant = select_context_chunks(outcome, self.settings)
         included_ids = {chunk.chunk_id for chunk in relevant}
         self.chunks = tuple(
             Candidate(str(chunk.chunk_id), chunk.filename, chunk.page, chunk.rerank_rank,
-                      chunk.chunk_id in included_ids)
-            for chunk in outcome.results
+                      chunk.chunk_id in included_ids,
+                      vector_score=chunk.vector_score, reranker_score=chunk.score)
+            for chunk in outcome.ranked_candidates
         )
         self.context_sources = build_sources(relevant)
         return outcome
@@ -263,6 +266,6 @@ def build_mock_agent(responses: Mapping[str, MockResponse]) -> EvalAgent:
 
     return EvalAgent(
         _MockLLM(responses), search,
-        RAGSettings(_env_file=None, min_relevance_score=RAG_MIN_RELEVANCE_SCORE),
+        RAGSettings(_env_file=None, min_relevance_score=RAG_MIN_RELEVANCE_SCORE, min_reranker_score=None),
         catalog_factory=_disabled_catalog,
     )
