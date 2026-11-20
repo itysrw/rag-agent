@@ -176,11 +176,18 @@ class _RAGStreamingResponse(StreamingResponse):
         self._trace = trace
         self._store = store
         self._trace_state = _StreamTraceState()
+        headers = {
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Session-ID": str(run.session_id),
+        }
+        tool_name = trace.successful_tool_name() if trace is not None else None
+        if tool_name is not None:
+            headers["X-Agent-Tool"] = tool_name
         super().__init__(
             stream_sse(service, run, self._trace_state),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
-                     "X-Session-ID": str(run.session_id)},
+            headers=headers,
         )
 
     async def __call__(
@@ -311,7 +318,7 @@ def chat(
     request: ChatRequest,
     service: Annotated[RAGService, Depends(require_rag_service)],
 ) -> ChatResponse | StreamingResponse:
-    """Record one validated business request without changing its public schema."""
+    """Handle a validated business request and collect its request-scoped trace."""
     trace = TraceRecorder(
         request.message, mode="sse" if request.stream else "json",
         session_id=request.session_id, model=service.model,

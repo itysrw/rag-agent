@@ -29,6 +29,8 @@ from backend.app.services.qdrant_store import (
     QdrantUnavailableError,
     RetrievedChunk,
 )
+from backend.app.services.document_catalog import DocumentCatalogUnavailableError
+from backend.app.services.request_trace import TraceRecorder
 from backend.app.services.rag import (
     NO_RELEVANT_KNOWLEDGE,
     PreparedRAG,
@@ -42,6 +44,7 @@ from backend.app.services.reranker import (
     RerankedChunk, RerankOutcome, RerankerInputError, RerankerResultError,
     RerankerUnavailableError,
 )
+from backend.tests.test_agent_tools import DOC_ID, FakeCatalog, tool_call
 from backend.tests.test_rag import StubLLMClient
 
 FABRICATED_REFERENCE = "[fake.pdf page 99] [S99]"
@@ -226,6 +229,67 @@ def test_chat_returns_sse_deltas_sources_and_done(
         "data: [DONE]",
         "",
     ]
+
+
+@pytest.mark.parametrize(("name", "arguments"), [
+    ("search_knowledge_base", {"query": "procedures"}),
+    ("list_documents", {}),
+    ("get_document_detail", {"doc_id": str(DOC_ID)}),
+])
+def test_chat_stream_identifies_only_the_successfully_executed_tool(
+    name: str, arguments: dict[str, str],
+) -> None:
+    catalog = FakeCatalog()
+    service = RAGService(
+        FixedRetrievalService(), StubLLMClient(tool_call=tool_call(name, arguments)),
+        RAGSettings(_env_file=None), catalog_factory=lambda: catalog,
+    )
+    question = f"Show document {DOC_ID}" if name == "get_document_detail" else "procedures"
+    app.dependency_overrides[require_rag_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            streamed = client.post("/chat", json={"message": question, "stream": True})
+            complete = client.post("/chat", json={"message": question})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert streamed.status_code == 200
+    assert streamed.headers["X-Agent-Tool"] == name
+    assert "data: [DONE]" in streamed.text
+    assert "test-call" not in str(streamed.headers)
+    assert complete.status_code == 200 and "X-Agent-Tool" not in complete.headers
+    assert set(complete.json()) == {"answer", "model", "sources", "session_id"}
+
+
+def test_chat_omits_failed_tool_and_never_streams_its_error() -> None:
+    catalog = FakeCatalog(failure=DocumentCatalogUnavailableError("private diagnosis"))
+    service = RAGService(
+        FixedRetrievalService(), StubLLMClient(tool_call=tool_call("list_documents", {})),
+        RAGSettings(_env_file=None), catalog_factory=lambda: catalog,
+    )
+    app.dependency_overrides[require_rag_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            response = client.post("/chat", json={"message": "list files", "stream": True})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503 and catalog.lists == 1
+    assert "X-Agent-Tool" not in response.headers
+    assert response.headers["content-type"] == "application/json"
+
+
+def test_tool_header_reader_ignores_selected_failed_and_unrecognized_names() -> None:
+    trace = TraceRecorder("question", mode="sse")
+    trace.record_tool_selection(tool_call("list_documents", {}))
+    assert trace.successful_tool_name() is None
+    trace.record_tool_result(succeeded=False)
+    assert trace.successful_tool_name() is None
+
+    unrecognized = TraceRecorder("question", mode="sse")
+    unrecognized.record_tool_selection(tool_call("unexpected_tool", {}))
+    unrecognized.record_tool_result(succeeded=True)
+    assert unrecognized.successful_tool_name() is None
 
 
 def test_chat_complete_does_not_expose_model_fabricated_source_reference(

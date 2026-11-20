@@ -8,12 +8,7 @@ from uuid import UUID
 from fastapi import UploadFile
 
 from backend.app.core.config import DocumentSettings
-
-ALLOWED_CONTENT_TYPES: dict[str, frozenset[str]] = {
-    ".pdf": frozenset({"application/pdf"}),
-    ".md": frozenset({"text/markdown", "text/x-markdown", "text/plain"}),
-    ".txt": frozenset({"text/plain"}),
-}
+from backend.app.document_formats import UPLOAD_CONTENT_TYPES
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +60,7 @@ def validate_upload_metadata(upload: UploadFile) -> UploadMetadata:
         raise UnsafeFilenameError("The uploaded filename contains a path")
 
     extension = Path(filename).suffix.lower()
-    allowed_content_types = ALLOWED_CONTENT_TYPES.get(extension)
+    allowed_content_types = UPLOAD_CONTENT_TYPES.get(extension)
     if allowed_content_types is None:
         raise UnsupportedDocumentTypeError("The file extension is not supported")
 
@@ -82,7 +77,7 @@ def build_upload_paths(
 ) -> UploadPaths:
     """Derive all storage paths in one place from a UUID and normalized suffix."""
     normalized_extension = extension.lower()
-    if normalized_extension not in ALLOWED_CONTENT_TYPES:
+    if normalized_extension not in UPLOAD_CONTENT_TYPES:
         raise UnsupportedDocumentTypeError("The file extension is not supported")
     return UploadPaths(
         part=upload_dir / f"{document_id}.part",

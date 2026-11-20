@@ -1,9 +1,11 @@
 """Endpoint tests for transactional document uploads."""
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
@@ -26,9 +28,12 @@ from backend.app.core.database import Base
 from backend.app.main import app
 from backend.app.models.chunk import Chunk
 from backend.app.models.document import Document
+from backend.app.services.document_catalog import DocumentCatalogService, get_document_catalog_service
 from backend.app.services.document_storage import build_upload_paths
 from backend.app.services.text_splitter import TextSplittingError
 from backend.tests.pdf_fixtures import build_text_pdf
+from frontend import api_client
+from frontend.api_client import RagClient
 
 
 @dataclass(slots=True)
@@ -80,6 +85,7 @@ def document_api(tmp_path: Path) -> Iterator[DocumentApiContext]:
             yield session
 
     app.dependency_overrides[require_database_session] = override_session
+    app.dependency_overrides[get_document_catalog_service] = lambda: DocumentCatalogService(session_factory)
     app.dependency_overrides[get_document_settings] = lambda: settings
     app.dependency_overrides[get_chunking_settings] = lambda: chunking
     try:
@@ -89,6 +95,93 @@ def document_api(tmp_path: Path) -> Iterator[DocumentApiContext]:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=engine)
         engine.dispose()
+
+
+def test_list_documents_reports_an_empty_catalog(document_api: DocumentApiContext) -> None:
+    response = document_api.client.get("/documents")
+    assert response.status_code == 200
+    assert response.json() == {"documents": [], "truncated": False}
+
+
+def test_markdown_upload_accepts_md_and_rejects_markdown_suffix(
+    document_api: DocumentApiContext,
+) -> None:
+    content = b"# Sample\n\nMarkdown upload.\n"
+    client = RagClient(document_api.client)
+
+    uploaded = client.upload_document("sample.md", BytesIO(content))
+    rejected = document_api.client.post(
+        "/documents/upload", files={"file": ("sample.markdown", content, "text/markdown")},
+    )
+
+    assert uploaded.filename == "sample.md" and uploaded.status == "ready"
+    assert rejected.status_code == 415
+    (listed,) = client.list_documents().documents
+    assert (listed.id, listed.filename, listed.status) == (uploaded.id, "sample.md", "ready")
+    saved = build_upload_paths(document_api.settings.upload_dir, uploaded.id, ".md").final
+    assert {path.name for path in saved.parent.iterdir()} == {saved.name}
+    assert saved.read_bytes() == content
+
+
+def test_streamlit_upload_picker_offers_md_but_not_markdown_suffix(
+    document_api: DocumentApiContext, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("STREAMLIT_BROWSER_GATHER_USAGE_STATS", "false")
+    streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+
+    @contextmanager
+    def open_local_client() -> Iterator[RagClient]:
+        yield RagClient(document_api.client)
+
+    monkeypatch.setattr(api_client, "open_client", open_local_client)
+    app_path = Path(__file__).resolve().parents[2] / "frontend" / "app.py"
+    ui = streamlit_testing.AppTest.from_file(str(app_path)).run()
+
+    assert not ui.exception
+    (picker,) = ui.get("file_uploader")
+    assert {extension.lstrip(".") for extension in picker.proto.type} == {"pdf", "md", "txt"}
+
+
+def test_list_documents_returns_bounded_ready_metadata_in_stable_order(
+    document_api: DocumentApiContext,
+) -> None:
+    with document_api.session_factory.begin() as session:
+        for number in reversed(range(1, 53)):
+            session.add(Document(
+                id=UUID(int=number), filename=f"doc-{number}.pdf", size=number,
+                status="ready", extracted_text="private body",
+                created_at=datetime(2026, 11, 18 if number in {2, 4} else 17, tzinfo=timezone.utc),
+            ))
+        session.add(Document(
+            id=UUID(int=53), filename="pending.pdf", size=1,
+            status="pending", extracted_text="private body",
+            created_at=datetime(2026, 11, 19, tzinfo=timezone.utc),
+        ))
+
+    response = document_api.client.get("/documents")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["truncated"] is True
+    rows = body["documents"]
+    assert len(rows) == 50
+    assert [row["id"] for row in rows] == [
+        str(UUID(int=number)) for number in (2, 4, 1, 3, *range(5, 51))
+    ]
+    assert all(set(row) == {"id", "filename", "size", "status", "created_at"} for row in rows)
+    assert all(row["status"] == "ready" for row in rows)
+
+
+def test_list_documents_maps_database_outage_to_503(document_api: DocumentApiContext) -> None:
+    def unavailable_session() -> Session:
+        raise OperationalError("select private_column", {}, RuntimeError("private diagnosis"))
+
+    app.dependency_overrides[get_document_catalog_service] = lambda: DocumentCatalogService(unavailable_session)
+
+    response = document_api.client.get("/documents")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "The document catalog is unavailable."}
 
 
 def test_upload_pdf_returns_201_and_preserves_page_boundaries(

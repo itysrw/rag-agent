@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.app.core.database import get_session_factory
 from backend.app.models.document import utc_now
 from backend.app.models.request_log import RequestLog
-from backend.app.services.llm import AgentToolCall, ModelUsage
+from backend.app.services.llm import TOOL_NAMES, AgentToolCall, ModelUsage
 from backend.app.services.rag import RAGSource
 from backend.app.services.reranker import RerankedChunk
 
@@ -99,6 +99,14 @@ class TraceRecorder:
         with self._lock:
             if self.tool_calls:
                 self.tool_calls[-1]["status"] = "success" if succeeded else "error"
+
+    def successful_tool_name(self) -> str | None:
+        """Expose the single successful tool's public name before trace persistence."""
+        with self._lock:
+            if len(self.tool_calls) != 1 or self.tool_calls[0]["status"] != "success":
+                return None
+            name = self.tool_calls[0]["name"]
+            return name if isinstance(name, str) and name in TOOL_NAMES else None
 
     def record_retrieval(
         self, chunks: tuple[RerankedChunk, ...], included_ids: frozenset[UUID],

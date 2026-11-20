@@ -1,4 +1,4 @@
-"""Multipart document upload, parsing, persistence, and safe error mapping."""
+"""Public document metadata and multipart upload endpoints."""
 
 from collections.abc import Iterator
 from datetime import datetime
@@ -24,6 +24,13 @@ from backend.app.core.database import (
 )
 from backend.app.models.document import Document
 from backend.app.models.chunk import Chunk
+from backend.app.services.document_catalog import (
+    DocumentCatalogError,
+    DocumentCatalogService,
+    DocumentCatalogUnavailableError,
+    DocumentListItem,
+    get_document_catalog_service,
+)
 from backend.app.services.document_parser import (
     EncryptedPdfError,
     InvalidPdfError,
@@ -59,6 +66,28 @@ class DocumentUploadResponse(BaseModel):
     size: int
     status: str
     created_at: datetime
+
+
+class DocumentListResponse(BaseModel):
+    """A bounded list of ready document metadata."""
+
+    documents: tuple[DocumentListItem, ...]
+    truncated: bool
+
+
+@router.get("/documents", response_model=DocumentListResponse)
+def list_documents(
+    catalog: Annotated[DocumentCatalogService, Depends(get_document_catalog_service)],
+) -> DocumentListResponse:
+    """Read the most recent ready documents without accessing their contents."""
+    try:
+        result = catalog.list_documents()
+    except DocumentCatalogUnavailableError as exc:
+        raise HTTPException(503, "The document catalog is unavailable.") from exc
+    except DocumentCatalogError as exc:
+        logger.error("Document catalog query failed: {}", type(exc).__name__)
+        raise HTTPException(500, "The document catalog service failed.") from exc
+    return DocumentListResponse(documents=result.documents, truncated=result.truncated)
 
 
 def require_database_session() -> Iterator[Session]:
