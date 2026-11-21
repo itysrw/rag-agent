@@ -105,6 +105,9 @@ def test_sources_are_all_required_and_distinct_from_answer_score(inputs: EvalInp
     assert partial.answer_pass
     assert partial.source_hit is False
     assert partial.source_coverage == pytest.approx(2 / 3)
+    summary = runner.summarize([partial], [case])
+    assert summary.accuracy == runner.Rate(1, 1)
+    assert summary.joint_pass == runner.Rate(0, 1)
     assert score_observation(case, _answer(case.expected_answer, third, second, first, first)).source_hit is True
 
 

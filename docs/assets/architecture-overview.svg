@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="700" viewBox="0 0 1280 700" role="img" aria-labelledby="title description">
+  <title id="title">企业知识库 RAG Agent 架构</title>
+  <desc id="description">入库链路为 Streamlit 和 FastAPI 上传，经解析、分块后保存原文件与 PostgreSQL 元数据，再显式使用 BGE 索引到 Qdrant。问答链路由 LangGraph 按需改写并选一个工具，搜索分支融合向量和 BM25，再重排筛选；目录分支读取 PostgreSQL。结果经 DeepSeek 生成或按规则拒答，通过 SSE 返回，消息与请求 trace 写入 PostgreSQL。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 8 4 0 8z" fill="#65788c"/>
+    </marker>
+    <marker id="log-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 8 4 0 8z" fill="#7a8999"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", "WenQuanYi Micro Hei", sans-serif; }
+      .heading { fill: #152d43; font-size: 31px; font-weight: 700; }
+      .lane-title { fill: #1a3d56; font-size: 20px; font-weight: 700; }
+      .label { fill: #182f45; font-size: 17px; font-weight: 700; }
+      .small { fill: #3b5268; font-size: 13px; }
+      .flow { fill: none; stroke: #65788c; stroke-width: 1.8; marker-end: url(#arrow); }
+      .logged { fill: none; stroke: #7a8999; stroke-width: 1.7; stroke-dasharray: 5 4; marker-end: url(#log-arrow); }
+      .card { fill: #fff; stroke: #a9bdcd; }
+      .storage { fill: #e4f3ef; stroke: #83b4a6; }
+      .model { fill: #eaf0fa; stroke: #a2b5dc; }
+      .step { fill: #fff; stroke: #b0c0d1; }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1278" height="698" rx="24" fill="#f7fafc" stroke="#c8d6e2"/>
+  <text x="40" y="58" class="heading">企业知识库 RAG Agent 架构</text>
+
+  <rect x="30" y="87" width="1220" height="169" rx="16" fill="#edf5f8" stroke="#c8dbe4"/>
+  <text x="49" y="124" class="lane-title">文档入库与索引</text>
+  <g class="flow">
+    <path d="M246 190h27"/>
+    <path d="M464 190h27"/>
+    <path d="M719 190h27"/>
+    <path d="M975 190h27"/>
+  </g>
+  <g>
+    <rect x="49" y="144" width="197" height="93" rx="10" class="card"/>
+    <text x="65" y="177" class="label">上传文档</text>
+    <text x="65" y="202" class="small">Streamlit → FastAPI</text>
+    <text x="65" y="222" class="small">PDF / Markdown / TXT</text>
+
+    <rect x="274" y="144" width="190" height="93" rx="10" class="card"/>
+    <text x="290" y="177" class="label">解析与分块</text>
+    <text x="290" y="202" class="small">记录文件与物理页码</text>
+
+    <rect x="492" y="144" width="227" height="93" rx="10" class="storage"/>
+    <text x="508" y="177" class="label">保存原文件与分块</text>
+    <text x="508" y="202" class="small">文件卷 · PostgreSQL</text>
+    <text x="508" y="222" class="small">解析完成后可查看目录</text>
+
+    <rect x="747" y="144" width="228" height="93" rx="10" class="model"/>
+    <text x="763" y="177" class="label">按文档 UUID 显式索引</text>
+    <text x="763" y="202" class="small">本地 BGE 向量化（CPU）</text>
+
+    <rect x="1003" y="144" width="226" height="93" rx="10" class="storage"/>
+    <text x="1019" y="177" class="label">Qdrant</text>
+    <text x="1019" y="202" class="small">保存可检索的文档向量</text>
+  </g>
+
+  <rect x="30" y="273" width="1220" height="396" rx="16" fill="#f0f4fa" stroke="#cdd7e6"/>
+  <text x="49" y="311" class="lane-title">问答与引用</text>
+  <g class="flow">
+    <path d="M228 378h22"/>
+    <path d="M448 367h25"/>
+    <path d="M448 394h13v99h12"/>
+    <path d="M983 378h29v7h20"/>
+    <path d="M983 493h29v-73h20"/>
+    <path d="M1122 441v112"/>
+  </g>
+  <path d="M1122 540H961v13" class="logged"/>
+  <g>
+    <rect x="49" y="331" width="179" height="94" rx="10" class="card"/>
+    <text x="65" y="363" class="label">提交问题</text>
+    <text x="65" y="388" class="small">Streamlit → FastAPI</text>
+    <text x="65" y="409" class="small">POST /chat</text>
+
+    <rect x="251" y="331" width="197" height="94" rx="10" class="model"/>
+    <text x="267" y="363" class="label">LangGraph</text>
+    <text x="267" y="388" class="small">有历史时改写问题</text>
+    <text x="267" y="409" class="small">每轮选择一个工具</text>
+
+    <rect x="474" y="331" width="509" height="103" rx="10" class="card"/>
+    <text x="490" y="357" class="label">知识检索</text>
+    <rect x="490" y="368" width="185" height="53" rx="7" class="step"/>
+    <text x="500" y="390" class="small">Qdrant 向量 + PG BM25</text>
+    <text x="500" y="409" class="small">RRF 融合候选排名</text>
+    <path d="M675 394h15" class="flow"/>
+    <rect x="691" y="368" width="115" height="53" rx="7" class="step"/>
+    <text x="703" y="390" class="small">本地 BGE 重排</text>
+    <text x="703" y="409" class="small">保留完整排名</text>
+    <path d="M806 394h15" class="flow"/>
+    <rect x="822" y="368" width="145" height="53" rx="7" class="step"/>
+    <text x="833" y="390" class="small">筛选并补齐来源页</text>
+    <text x="833" y="409" class="small">最多 5 个证据片段</text>
+
+    <rect x="474" y="459" width="509" height="68" rx="10" class="card"/>
+    <text x="490" y="487" class="label">文档目录或详情</text>
+    <text x="490" y="510" class="small">从 PostgreSQL 读取文档元数据</text>
+
+    <rect x="1033" y="331" width="196" height="110" rx="10" class="model"/>
+    <text x="1049" y="366" class="label">生成或按规则拒答</text>
+    <text x="1049" y="390" class="small">生成使用工具结果</text>
+    <text x="1049" y="412" class="small">DeepSeek 兼容 API</text>
+
+    <rect x="474" y="554" width="509" height="91" rx="10" class="storage"/>
+    <text x="490" y="585" class="label">PostgreSQL</text>
+    <text x="490" y="609" class="small">完整消息在成功终态前提交</text>
+    <text x="490" y="630" class="small">请求 trace 通过独立事务写入</text>
+
+    <rect x="1033" y="554" width="196" height="91" rx="10" class="card"/>
+    <text x="1049" y="585" class="label">SSE 返回页面</text>
+    <text x="1049" y="610" class="small">逐段显示正文</text>
+    <text x="1049" y="630" class="small">完成后确认工具与引用</text>
+  </g>
+</svg>
