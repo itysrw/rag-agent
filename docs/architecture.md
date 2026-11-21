@@ -1,13 +1,40 @@
-# 当前架构：Day19 请求 trace 与 Day18 评测
+# 当前架构：四服务部署与 RAG 问答
 
-更新时间：2026-11-14。后端仍使用 Day16 的 PG 业务会话与四节点 LangGraph。Day17 冻结六份 Ready.gov 原版 PDF 和 `day17-v1.1` 的 50 条 QA，Day18 在独立的 `eval/` 模块复用现有单轮图，已跑出 [真实 50 题报告](../eval/eval_report.md)。Day19 在生产 `/chat` 入口加入请求级 recorder，贯穿图、模型用量、同次检索和 JSON/SSE 结束；独立短事务写 `request_logs`，管理员密钥保护查询。用户确认审查、测试与修复通过后，Day19 计划状态和本地提交已更新；真实 PostgreSQL 的 trace 在线验收仍待执行。另有独立的[完整 RAG 分块对照](day19-full-comparison.md)，不代表生产 trace 实测。详细边界见 [Day19 记录](day19-observability.md)。
+## Day21 Docker Compose
+
+`docker compose up --build --wait` 构建前后端并等待四个服务健康。PostgreSQL 和 Qdrant 就绪后，后端先执行 `init_db` 再启动 FastAPI。Streamlit 等待后端健康，并通过容器网络访问 `http://backend:8000`。启动命令与端口设置见 [README.md](../README.md#docker-compose-启动day21)。
+
+~~~mermaid
+flowchart LR
+    PG[(PostgreSQL)] -->|健康后启动| API[FastAPI]
+    Q[(Qdrant)] -->|健康后启动| API
+    API -->|健康后启动| UI[Streamlit]
+    Browser[浏览器] --> UI
+    UI -->|HTTP 与 SSE| API
+~~~
+
+PostgreSQL、Qdrant 和后端数据各有命名卷。后端数据卷保存上传、模型及分词缓存。前端、后端和 PostgreSQL 的宿主机端口绑定回环地址，Qdrant 通过容器网络访问。Compose 的数据卷配对和管理员令牌转发已通过配置测试。[Compose 配置](../docker-compose.yml)
+
+## Day20 Streamlit、同轮工具与引用
+
+2026-11-20 检查点。Streamlit 的 `frontend/app.py` 通过服务端 `frontend/api_client.py` 请求 FastAPI。目录走 `GET /documents`，上传走 `POST /documents/upload`，问答走 `POST /chat`。SSE 正文增量直接呈现，`X-Agent-Tool` 和本轮 `sources` 随收到合法 `[DONE]` 一起确认。工具名来自同请求 recorder。Day19 的独立管理员 trace 继续供管理侧使用。
+
+页面会话状态由 `UiSession` 管理。回环替身 `frontend/demo_backend.py` 复用同样的普通接口，用于已通过的无付费浏览器验收。真实单轮 HTTP 验收覆盖 FastAPI、Qdrant、DeepSeek 和 PostgreSQL 同会话 trace，管理员读取另行验证。启动、验收边界和记录见 [Day20 本机演示](day20-streamlit.md) 和 [HANDOFF.md](../HANDOFF.md)。下方 Day19 章节记录检索与 trace 的既有架构。
+
+---
+
+## Day19 请求 trace、来源页筛选与评测
+
+`003e0a1` 发布的补页规则保留同次重排的完整候选，聊天与评测共享证据选择器，生成最多使用 5 个片段。独立重排接口返回前 5。离线 50 题的生成前来源页全命中为 31/40，改良后的全量生成质量待评估。[证据筛选对照](day19-evidence-gate.md)
+
+后端使用 PostgreSQL 业务会话与四节点 LangGraph。Day18 评测复用单轮图，输入为 Day17 冻结的六份 Ready.gov 英文 PDF 和 `day17-v1.1` 的 50 道中文题。Day19 的 `/chat` recorder 记录同轮检索、模型用量及 JSON/SSE 终态，通过独立短事务写入 `request_logs`。管理员查询由独立密钥保护。[评测说明](../eval/README.md) · [Day19 可观测性](day19-observability.md)
 
 ~~~mermaid
 flowchart LR
     Chat[POST /chat] --> Trace[请求级 TraceRecorder]
     Chat --> Graph[LangGraph 四节点]
     Graph -->|改写/选择/生成| Usage[同次供应商 usage]
-    Graph -->|工具执行| Candidates[同次 Top5 与 0.46 证据门]
+    Graph -->|工具执行| Candidates[同次重排候选与入选证据]
     Graph --> Memory[(会话整轮事务)]
     Usage --> Trace
     Candidates --> Trace
@@ -22,16 +49,16 @@ flowchart LR
     Validate --> Stores[只读核对 PG 六文档及 Qdrant 25 点]
     Stores --> Models[核对固定本地 BGE 缓存]
     Models --> Graph[单轮 LangGraph 真实工具选择]
-    Graph --> Capture[同次 search 采集 Top 5 / 最终答案与来源]
+    Graph --> Capture[同次 search 记录重排候选与入选证据]
     Capture --> Score[40/10 固定分母的规则评分]
     Score --> Rows[逐题 eval_results.jsonl]
     Rows --> FinalCheck[末次语料核对]
     FinalCheck --> Report[运行清单与 eval_report.md]
 ~~~
 
-`eval/scoring.py:197 load_inputs` 验证题集和规则，`eval/real.py:90 verify_corpus` 检查全部 `ready` 文档和目标集合，`eval/agent.py:164 EvalAgent` 调用 `RAGGraphRunner.complete(question, history=())`，`eval/eval.py:263 run_evaluation` 写逐题结果与报告。真实调用前强制显式付费开关及最多 100 次请求预算，SDK 自动重试 0；本次 50/50 正常、65 次实际请求、规则准确率 11/50、候选来源 30/40、最终引用 6/40。完整指标、哈希与范围见 [报告](../eval/eval_report.md)。
+[load_inputs](../eval/scoring.py#L197) 验证题集和规则，[verify_corpus](../eval/real.py#L106) 检查全部 ready 文档和目标集合，[EvalAgent](../eval/agent.py#L167) 调用 `RAGGraphRunner.complete(question, history=())`，[run_evaluation](../eval/eval.py#L263) 写逐题结果与报告。历史 Day18 真实基线 50/50 正常、65 次实际请求、规则准确率 11/50、前 5 候选来源 30/40、最终引用 6/40。摘要和本地报告位置见 [Day18 基线](../README.md#day18-真实评测基线)。
 
-服务健康的最近快照仍为 2026-11-08 18:19 左右 PG healthy、Qdrant /readyz 200；未来健康须重新确认。Windows 默认 Docker socket 故障仍在，本机曾用 `D:\Docker\Start-DockerDesktop.ps1` 恢复原有数据卷。Day18 与 Day19 的 PLAN 标记和本地提交已完成；Day19 真实 PG 部署未验，Day13 仍未勾，Day20 未开始。
+2026-11-20 的真实单轮 SSE 已验证向 PostgreSQL 写入同轮会话消息与 trace。管理员查询接口的真实环境读取待单独验收。Day21 的 Compose 启动顺序及配置验证见上文。[真实联调记录](day20-streamlit.md#2026-11-20-真实-http-sse-和-trace-验收通过)
 
 ---
 
@@ -76,8 +103,8 @@ flowchart TD
     PG --> BM25
     Vector --> RRF[等权RRF60取20]
     BM25 --> RRF
-    RRF --> Rerank[CPU BGE Rerank取5]
-    Rerank --> Gate[原vector_score默认0.46证据门]
+    RRF --> Rerank[CPU BGE 重排最多20个候选]
+    Rerank --> Gate[筛选并选取最多5个证据片段]
     Gate --> Generate[当前结果生成或固定拒答]
 ~~~
 
@@ -88,7 +115,7 @@ PG和Qdrant无跨库事务/outbox，删除同步未做；多worker BM25各自维
 BM25读全局ready数据，完整指纹刷新、全局IDF；token overlap门，doc_id在TopK前过滤；刷新失败不返回旧数据。
 Hybrid顺序执行两路各20，按chunk UUID等权Σ1/(60+rank)，稳定排序；重复/冲突失败，不静默降级。
 Rerank对完整最多20候选打原logit，取5；rank_change=hybrid_rank-rerank_rank，query不截断。
-RRF/BM25/logit量纲不同；仅原vector_score默认0.46是Chat生成证据门，BM25-only不生成。
+Chat 先在前五名建立初始证据，再用完整的重排名单补不同来源页。生成仍最多使用五个片段。规则及验证见[证据过滤对照](day19-evidence-gate.md)。
 
 ## 会话与图编排
 
@@ -120,7 +147,7 @@ RAGService负责业务调用和事务回调，RAGGraphRunner负责图事件/预�
 | standalone_query | 首轮同query；改写后供选择/搜索 |
 | history | 截断后不可变DTO，最多10条，仅用于指代，不是当前事实 |
 | needs_query_rewrite | 公共有历史True，改写后False；首轮/内部False |
-| retrieved_docs | 搜索完整Top5，目录为空 |
+| retrieved_docs | 同次搜索的完整重排候选，最多20个，目录为空 |
 | prepared | PreparedRAG或None，含question/messages/sources/has_relevant_context |
 | answer | 完整清理后的答案 |
 | tool_calls | 公共最终1，内部0 |
@@ -163,7 +190,7 @@ max_tokens=4096，严格单choice/stop、无tools调用、UTF-8≤64KiB、仅sta
 
 | 工具 | 执行边界 |
 |---|---|
-| search_knowledge_base | 始终用state.standalone_query，Hybrid20→Rerank5→原向量证据门 |
+| search_knowledge_base | 使用 state.standalone_query，重排混合检索候选并筛选最多5个证据片段 |
 | get_document_detail | doc_id必须出现在原问题或本次截断历史，不接受仅改写新造UUID；ready安全列+chunk_count |
 | list_documents | arguments严格{}；ready，created_at DESC/id ASC，最多51返回50+truncated |
 

@@ -1,6 +1,11 @@
-# 当前待办：Day21 收尾后
+# 当前待办：Day21 发布后
 
-2026-11-21。Day21 本地交付已完成。后续开发入口是 Day22 的 README 打磨，待单独启动。Day13 计划遗留和既有真实评测核对仍按独立任务处理。当前 Compose 启动、验收及恢复步骤见 [HANDOFF.md](HANDOFF.md)。
+2026-11-21。Day21 已推送至 `codex/day17-eval-dataset`（`0e1ee15`）。Compose 启动和接手说明见 [HANDOFF.md](HANDOFF.md)。
+
+- Day22 项目 README 完整打磨及截图待开展。
+- 核对证据筛选改良后的真实回答、最终引用与拒答表现。
+- 验收 `GET /admin/traces` 在真实环境中的鉴权读取。已验证的 SSE 写入记录见 [Day20 本机演示](docs/day20-streamlit.md)。
+- Day13 计划遗留按独立任务处理。[PLAN.md](PLAN.md)
 
 ---
 

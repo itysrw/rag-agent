@@ -1,11 +1,11 @@
 # 当前交接：Day21 Docker Compose
 
-2026-11-21（Asia/Shanghai）。本地分支 `codex/day17-eval-dataset` 已对齐两个上游提交 `06a8885`（Day20 Streamlit）和 `003e0a1`（Day19 证据筛选）。核对两次提交涉及的 36 个文件与工作区内容一致后，快进本地分支和暂存区。Day21 为独立本地提交，父提交为 `003e0a1ad161e23fd25460e364e261a24b80bb6a`。此前的本地文档编辑单独保留。
+2026-11-21（Asia/Shanghai）。Day21 Docker Compose 已推送至 GitHub 的 `codex/day17-eval-dataset`，发布提交为 `0e1ee15`。该分支也包含 `003e0a1`（Day19 证据筛选）和 `06a8885`（Day20 Streamlit）。
 
 - [docker-compose.yml](docker-compose.yml) 编排四个服务。后端等待 PostgreSQL、Qdrant 健康，执行 `python -m backend.app.models.init_db` 后启动 FastAPI。Streamlit 等待后端健康，容器内从 `http://backend:8000` 访问。
 - 宿主机本地入口默认为 FastAPI 8000、Streamlit 8501、PostgreSQL 5432。Qdrant 在 Compose 内部访问。默认项目沿用原 PostgreSQL 与 Qdrant 数据卷名，后端上传和缓存另有命名卷。管理员令牌可选且只转发给后端。
 - 仓库根目录运行 `docker compose up --build --wait`。环境变量、隔离旧栈、显式文档索引和停止命令见 [README.md](README.md#docker-compose-启动day21)。
-- 四服务启动沿用用户指定的已有验收。收尾的 `backend/tests/test_compose_contract.py` 独立运行两项通过，7.40 秒，退出码 0，覆盖默认数据卷配对和管理员令牌转发。收尾未重新启动容器。
+- 四服务启动沿用已有验收。Day21 收尾运行 `backend/tests/test_compose_contract.py`，2 项通过，耗时 7.40 秒，覆盖默认数据卷配对和管理员令牌转发。Day20 的离线回归和真实单轮 SSE 验收见 [STATUS.md](STATUS.md)。
 - Day21 五个计划检查项与进度表已更新。Day22 的 README 打磨待另行开展。[PLAN.md](PLAN.md#day-21--docker-compose)
 
 下方为历史交接，保留对应日期的工作区和服务状态。

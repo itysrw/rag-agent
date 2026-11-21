@@ -1,5 +1,4 @@
-> **历史检查点（2026-11-14）**：Day17 冻结题集与六份 PDF、Day18 真实 50 题基线已完成；Day19 请求 trace、不付费向量对照及授权的付费完整 RAG 对照已完成，四项 PLAN 与进度表按实测更新并形成本地提交。本次完整后端测试为 724 passed/14 skipped/0 failed，退出码 0。分支仍为 `codex/day17-eval-dataset`，未推送 Day19 或合并 `master`，Day13 未勾，Day20 未开始。当前 Git 状态见[状态](STATUS.md)。
-> 下方 2026-11-02 的分支、HEAD 和“Day17 未开始”属于历史交接快照；运行命令与接口说明按当前源码核对。
+> **当前检查点（2026-11-21）**。Day21 四服务 Docker Compose 已发布到 `codex/day17-eval-dataset`（`0e1ee15`）。项目可按下方命令启动。当前验收记录和恢复入口见 [STATUS.md](STATUS.md) 与 [HANDOFF.md](HANDOFF.md)。
 
 ---
 
@@ -7,6 +6,7 @@
 
 FastAPI + LangGraph + PostgreSQL + Qdrant，使用本地CPU BGE、BM25/RRF/Rerank和DeepSeek compatible LLM，
 提供知识库问答、可信当前来源、单工具选择、短期多轮记忆及请求级 trace。
+Streamlit 提供文档上传、流式问答和同轮来源展示。页面演示使用无付费替身，另有真实后端的单轮 SSE 与 PostgreSQL trace 落库验收。[Day20 本机演示](docs/day20-streamlit.md)
 
 ## Docker Compose 启动（Day21）
 
@@ -32,11 +32,13 @@ docker compose exec backend python -m backend.app.commands.index_document --docu
 
 ## Day19 请求 trace
 
-已在本地实现 `POST /chat` 的请求级持久化 trace，以及受独立管理员密钥保护的 `GET /admin/traces?limit=20`。记录同次检索候选与证据门、工具、供应商实际 token 用量、答案、来源、耗时和 JSON/SSE 终态；缺失用量保留为未知。启用前须运行显式建表入口创建 `request_logs`，并在进程环境中设置 `ADMIN_TRACE_TOKEN`；密钥不从项目 `.env` 读取。实现、边界、查询方法见 [Day19 可观测性记录](docs/day19-observability.md)。真实 PostgreSQL 的 Day19 trace 仍未在线验收；本次完整后端测试为 724 passed、14 skipped、0 failed。Day19 代码和文档已形成本地提交，尚未推送。
+`POST /chat` 的请求 trace 记录同次检索候选、证据筛选、工具、答案、来源、耗时、JSON/SSE 终态与供应商实际 token 用量。缺失用量保留为未知。Compose 会在启动 FastAPI 之前创建缺失的 `request_logs` 表。配置后端进程的 `ADMIN_TRACE_TOKEN` 后，可通过 `GET /admin/traces?limit=20` 读取记录。真实单轮 SSE 已验证写入 PostgreSQL，管理员接口的真实环境读取仍待验收。[Day19 可观测性记录](docs/day19-observability.md)
 
 补充的[离线分块对照](docs/day19-chunk-comparison.md)使用冻结六份 PDF 与本机 BGE：500/100 有 7 个块超过 512-token 上限；可用的 200/40、250/50、300/60 三组纯向量 Top5 全页命中为 21/40、16/40、22/40。它不代表生产 `source_hit`，也不能支持“500 最高”的话术。
 
 另经授权完成[完整 RAG 50 题对照](docs/day19-full-comparison.md)：200/40（o200k token）、300/60（o200k token）、500/100（BGE token）的最终来源命中分别为 7/40、6/40、7/40，150 条结果均正常。500/100 与 200/40 持平，且 BGE-token 方案不是上述超限的原 o200k-token 500/100。记录至少 207 次付费请求，不能据此报精确费用；隔离实验数据已清理，原有 Qdrant collection 保留。
+
+2026-11-18 的[证据筛选对照](docs/day19-evidence-gate.md)使用同一批 50 题。最初的向量过滤保留全部标注来源页 6/40，引入重排分数后为 20/40，从完整重排名单补齐不同来源页后为 31/40。10 道无答案题中有上下文的仍为 2 道。该结果测量生成前的证据，真实答案质量待评测。
 
 ## Day18 真实评测基线
 
@@ -63,7 +65,7 @@ Day18 提交前完整离线 pytest 为 697 passed、14 skipped（24.59 秒），
 恢复入口是[HANDOFF.md](HANDOFF.md)的完整A/B/C，其次[STATUS.md](STATUS.md)、[DECISIONS.md](DECISIONS.md)、[TODO.md](TODO.md)。
 新会话先只读核对/复述，等状态确认和唯一动作；本轮只整理六文档，不重跑测试/服务或提交推送。
 
-## 当前检查点
+## Day16 历史检查点
 
 | 项目 | 状态 |
 |---|---|
@@ -101,7 +103,7 @@ PLAN.md                 每日任务；未获明确授权不得修改
 ~~~text
 首轮：原问题 -> 选择单工具 -> 执行 -> 生成/拒答
 后续：原问题 + 截断历史 -> 独立问题改写 -> 选择单工具 -> 执行 -> 生成/拒答
-搜索：Hybrid(vector20+BM25 20，RRF60) -> CPU BGE Rerank5 -> 原vector_score>=0.46
+搜索：Hybrid(vector20+BM25 20，RRF60) -> CPU BGE 重排 -> 筛选证据并优先保留不同页，最多5个片段
 目录：ready安全SQL元数据，50+1/详情chunk_count，不读正文，sources=[]
 完成：原始user + 完整assistant + 当前安全sources，同一PG事务
 ~~~
@@ -110,7 +112,7 @@ PLAN.md                 每日任务；未获明确授权不得修改
 内部合法PreparedRAG直接进入generate，不读写会话、不改写/选择/执行工具。
 无checkpointer、长期记忆、历史总结、向量记忆、循环/并行工具或会话管理HTTP API。
 
-## 环境与启动命令
+## 不使用 Compose 启动应用
 
 Python **3.11**；已有.env/.venv不得覆盖，禁止读取、输出或提交凭据。
 这些是操作手册，不是暂停状态下的执行许可；新会话第一轮只读。
@@ -122,25 +124,22 @@ Set-Location -LiteralPath 'D:\2019\rag-agent'
 ~~~
 
 默认接口文档http://127.0.0.1:8000/docs；GET /health只表示进程存活，不检查数据库/模型/其他服务。
-应用启动和health不建表、不加载模型、不连接PG/Qdrant。
+直接运行 Uvicorn 时，FastAPI 启动及 `GET /health` 不建表、不加载模型，也不连接 PostgreSQL 或 Qdrant。Compose 的后端入口在启动 Uvicorn 前先执行 `init_db`。
 配置字段公开模板见[.env.example](.env.example)；配置前缀APP_/LLM_/POSTGRES_/EMBEDDING_/QDRANT_/RERANKER_/RAG_/MEMORY_。Day19 的 `ADMIN_TRACE_TOKEN` 仅从进程环境读取。
-源码默认LLM=https://api.deepseek.com、deepseek-v4-flash、timeout60s；实际进程配置及供应商可用性待确认。
+源码默认 LLM 为 `https://api.deepseek.com`、`deepseek-v4-flash`、超时 60 秒。最近真实验收仅在 Uvicorn 进程中临时指定 `LLM_MODEL=deepseek-flash`，模型实时可用性待确认。
 openai包只是compatible SDK，不代表调用OpenAI服务或需要OpenAI Key。
 上传/模型相对目录锚定PROJECT_ROOT，默认data/uploads、data/models。
 
-显式服务/建表/索引入口（另获对应任务授权后使用）：
+已有 PostgreSQL 和 Qdrant 服务时，可以在本机显式建表和索引。
 
 ~~~powershell
-docker compose up -d postgres
 .\.venv\Scripts\python.exe -m backend.app.models.init_db
 .\.venv\Scripts\python.exe -m backend.app.commands.init_qdrant
 .\.venv\Scripts\python.exe -m backend.app.commands.embed_document --document-id <UUID>
 .\.venv\Scripts\python.exe -m backend.app.commands.index_document --document-id <UUID>
 ~~~
 
-当前docker-compose.yml仅PostgreSQL；Qdrant历史镜像qdrant/qdrant:v1.18.1、命名卷rag-agent-qdrant-data，
-绑定127.0.0.1:6333，尚未做完整backend/frontend/qdrant一键编排。
-init_db显式注册五个模型（含 Day19 的 `request_logs`），只create_all缺失表，不迁移旧表；真实PG中的 Day19 表尚未核验。
+`init_db` 显式注册五个模型，只创建缺失表。最近真实 PostgreSQL 已核对五张表和同轮 `request_logs` 持久化。
 上传不自动Embedding或索引；embed_document只产内存结果，index_document才upsert Qdrant。
 PG会话在模型推理/upsert前关闭；不自动重建collection，PG/Qdrant不是跨库事务。
 
@@ -212,7 +211,7 @@ Prompt把当前工具结果规定为事实依据；实际模型遵循准确率�
 - Hybrid顺序两路各20，按chunk UUID等权RRF60；重复/冲突安全失败，任一路失败不降级。
 - BAAI/bge-reranker-base，revision 2cfc18c9415c912f9d8155881c133215df768a70，CPU/512、batch默认4/范围1..8；
   safetensors/local_files_only/trust_remote_code=False，query不截断、passage only_second，score为原logit。
-- 原始vector_score默认0.46才是搜索生成证据门；BM25-only不生成，RRF/logit不能套用这个阈值。
+- 生成证据先按向量分数与重排分数筛选，再从完整重排名单补页。默认数值和回退设置见[证据筛选对照](docs/day19-evidence-gate.md)。
 - 三工具白名单、严格单调用/64KiB/重复键/字段/类型/UUID验证，目录ready安全列/SQL最多51返回50。
 
 固定依赖sentence-transformers==5.3.0、qdrant-client==1.18.0、rank-bm25==0.2.2、langgraph==1.2.16；

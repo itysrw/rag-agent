@@ -1,8 +1,12 @@
-# 当前状态：Day21 已完成本地收尾
+# 当前状态：Day21 已发布
 
-2026-11-21。四服务 Docker Compose、两个应用镜像、健康检查与启动说明已齐备。启动验收沿用已有结论。收尾运行 Compose 配置契约测试，两项通过，7.40 秒，退出码 0。
+2026-11-21。Day21 四服务 Compose 已推送至 `codex/day17-eval-dataset`，发布提交为 `0e1ee15`。同一分支包含 Day20 Streamlit（`06a8885`）与 Day19 证据筛选（`003e0a1`）。启动及接手见 [README.md](README.md#docker-compose-启动day21) 与 [HANDOFF.md](HANDOFF.md)。
 
-本地分支 `codex/day17-eval-dataset` 的 Day21 提交基于上游 `003e0a1`，其中已包含 `06a8885`。Day21 仅本地提交。工作区仍保留此前的独立文档编辑和本机工具目录。启动和恢复见 [README.md](README.md#docker-compose-启动day21) 与 [HANDOFF.md](HANDOFF.md)。
+| 阶段 | 已有验收证据 |
+| --- | --- |
+| Day21 | 四服务启动沿用已有验收。收尾的 Compose 配置测试 2 项通过，耗时 7.40 秒，覆盖默认数据卷配对和管理员令牌转发。 |
+| Day20 | 发布快照离线回归 766 项通过、14 项跳过。无付费浏览器演示和 3 项 AppTest 通过。真实单轮 HTTP SSE 返回 34 段正文、同轮工具、5 条引用与 `[DONE]`，并确认同一会话的 PostgreSQL 消息和 trace 落库。[验收记录](docs/day20-streamlit.md) |
+| Day19 | 固定 50 题上，生成前所选上下文的标注来源页全覆盖由 6/40 提升至 31/40。改良后的全量真实生成效果待评估。[离线对照](docs/day19-evidence-gate.md) |
 
 ---
 
