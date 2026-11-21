@@ -1,4 +1,4 @@
-> **当前检查点（2026-11-14）**：Day17 冻结题集与六份 PDF、Day18 真实 50 题基线已完成；Day19 请求 trace、不付费向量对照及授权的付费完整 RAG 对照已完成，四项 PLAN 与进度表按实测更新并形成本地提交。本次完整后端测试为 724 passed/14 skipped/0 failed，退出码 0。分支仍为 `codex/day17-eval-dataset`，未推送 Day19 或合并 `master`，Day13 未勾，Day20 未开始。当前 Git 状态见[状态](STATUS.md)。
+> **历史检查点（2026-11-14）**：Day17 冻结题集与六份 PDF、Day18 真实 50 题基线已完成；Day19 请求 trace、不付费向量对照及授权的付费完整 RAG 对照已完成，四项 PLAN 与进度表按实测更新并形成本地提交。本次完整后端测试为 724 passed/14 skipped/0 failed，退出码 0。分支仍为 `codex/day17-eval-dataset`，未推送 Day19 或合并 `master`，Day13 未勾，Day20 未开始。当前 Git 状态见[状态](STATUS.md)。
 > 下方 2026-11-02 的分支、HEAD 和“Day17 未开始”属于历史交接快照；运行命令与接口说明按当前源码核对。
 
 ---
@@ -7,7 +7,28 @@
 
 FastAPI + LangGraph + PostgreSQL + Qdrant，使用本地CPU BGE、BM25/RRF/Rerank和DeepSeek compatible LLM，
 提供知识库问答、可信当前来源、单工具选择、短期多轮记忆及请求级 trace。
-项目后续目标包括 Streamlit 与完整 Docker Compose。
+
+## Docker Compose 启动（Day21）
+
+Day21 使用 Docker Compose 一次启动 FastAPI、Streamlit、PostgreSQL 和 Qdrant。交付和验收状态见 [HANDOFF.md](HANDOFF.md)。
+
+使用支持 BuildKit 的 Docker 和 Compose 2.17 或更新版本。在仓库根目录运行。首次使用时把 `.env.example` 复制为 `.env`，填写 `POSTGRES_PASSWORD`。已有 PostgreSQL 卷时，使用初始化该卷的数据库名、用户名和密码。需要真实问答时，填写有效的 `LLM_API_KEY` 和供应商支持的 `LLM_MODEL`；只验证启动时可将 `LLM_API_KEY` 留空。
+
+```powershell
+docker compose up --build --wait
+```
+
+如果本机只提供独立的 Compose 命令，运行 `docker-compose up --build --wait`。启动后访问 [Streamlit](http://127.0.0.1:8501) 或 [FastAPI 文档](http://127.0.0.1:8000/docs)。用 `docker compose ps` 查看健康状态。若原有服务占用端口，在启动前通过 `POSTGRES_PORT`、`APP_PORT`、`STREAMLIT_PORT` 调整宿主机映射。保留旧栈时，选择空闲端口并给所有 Compose 命令加同一个 `-p rag-agent-day21`（放在子命令前），为新栈创建独立的数据卷。使用新卷时，请重新上传并索引需要检索的文档。
+
+后端等待 PostgreSQL 和 Qdrant 就绪后执行已有建表命令，再启动 FastAPI。前端等待 FastAPI 健康检查通过。PostgreSQL、Qdrant 和后端数据各有独立命名卷。后端数据卷保存上传、BGE 模型和分词缓存。首次使用检索或上传功能时可能需要下载模型或分词文件。
+
+上传成功表示文档已解析并入库。将页面显示的文档 ID 传给现有索引命令后，文档才参与向量检索。
+
+```powershell
+docker compose exec backend python -m backend.app.commands.index_document --document-id <UUID>
+```
+
+完成验证后，`docker compose down` 停止并移除这组容器，保留命名卷。
 
 ## Day19 请求 trace
 

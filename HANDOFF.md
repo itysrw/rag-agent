@@ -1,4 +1,18 @@
-# 当前检查点：Day19 已确认完成并本地提交
+# 当前交接：Day21 Docker Compose
+
+2026-11-21（Asia/Shanghai）。本地分支 `codex/day17-eval-dataset` 已对齐两个上游提交 `06a8885`（Day20 Streamlit）和 `003e0a1`（Day19 证据筛选）。核对两次提交涉及的 36 个文件与工作区内容一致后，快进本地分支和暂存区。Day21 为独立本地提交，父提交为 `003e0a1ad161e23fd25460e364e261a24b80bb6a`。此前的本地文档编辑单独保留。
+
+- [docker-compose.yml](docker-compose.yml) 编排四个服务。后端等待 PostgreSQL、Qdrant 健康，执行 `python -m backend.app.models.init_db` 后启动 FastAPI。Streamlit 等待后端健康，容器内从 `http://backend:8000` 访问。
+- 宿主机本地入口默认为 FastAPI 8000、Streamlit 8501、PostgreSQL 5432。Qdrant 在 Compose 内部访问。默认项目沿用原 PostgreSQL 与 Qdrant 数据卷名，后端上传和缓存另有命名卷。管理员令牌可选且只转发给后端。
+- 仓库根目录运行 `docker compose up --build --wait`。环境变量、隔离旧栈、显式文档索引和停止命令见 [README.md](README.md#docker-compose-启动day21)。
+- 四服务启动沿用用户指定的已有验收。收尾的 `backend/tests/test_compose_contract.py` 独立运行两项通过，7.40 秒，退出码 0，覆盖默认数据卷配对和管理员令牌转发。收尾未重新启动容器。
+- Day21 五个计划检查项与进度表已更新。Day22 的 README 打磨待另行开展。[PLAN.md](PLAN.md#day-21--docker-compose)
+
+下方为历史交接，保留对应日期的工作区和服务状态。
+
+---
+
+# 历史交接：2026-11-14 Day19 初版
 
 更新时间：2026-11-14（Asia/Shanghai）。仓库 `D:\2019\rag-agent`，分支 `codex/day17-eval-dataset`。用户已确认 Day19 审查、测试与修复通过，授权更新完成状态并本地提交；提交的父提交为 `a3f791bbc5c8116db2b67c7e0b6719c2513b39c0`，当前 HEAD 以 `git rev-parse HEAD` 为准，未推送或合并。`POST /chat` 请求级 trace、`request_logs`、受保护的 `GET /admin/traces`、不付费向量对照及授权的完整 50 题 RAG 对照已完成；Day19 `PLAN.md` 四项与进度表按真实结果更新。本次完整后端 pytest 为 724 passed / 14 skipped / 0 failed，退出码 0。完整对照的最终来源命中依次为 200/40（o200k）7/40、300/60（o200k）6/40、500/100（BGE token）7/40，后者不独占最高、也不是超限的原 o200k 方案；至少 207 次付费请求，精确费用未知。隔离实验数据已清理，原有 Qdrant collection 保留。真实 PostgreSQL 的 Day19 trace 建表和在线运行、服务健康及远端实时状态未在本轮验证。Day13 未勾、Day18 冻结评测未改，Day20 未开始。两项无关未跟踪条目保留。部署要求和边界见 [Day19 可观测性记录](docs/day19-observability.md)，实验见[完整 RAG 对照](docs/day19-full-comparison.md)，当前状态见 [STATUS.md](STATUS.md)。
 

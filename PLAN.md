@@ -312,11 +312,11 @@ rag-agent/
 
 ### Day 21 — Docker Compose
 
-- [ ] 写每个服务的 `Dockerfile`（backend · frontend）
-- [ ] 写 `docker-compose.yml`，包含：backend · frontend · postgres · qdrant
-- [ ] 加健康检查（`healthcheck`），确保 postgres 起来后 backend 再启动
-- [ ] 测试：`docker-compose up` 一条命令启动
-- [ ] README 写启动命令
+- [x] 写每个服务的 `Dockerfile`（backend · frontend）
+- [x] 写 `docker-compose.yml`，包含：backend · frontend · postgres · qdrant
+- [x] 加健康检查（`healthcheck`），确保 postgres 起来后 backend 再启动
+- [x] 测试：`docker-compose up` 一条命令启动（引用已有验收）
+- [x] README 写启动命令
 
 **产出**：一条命令启动完整项目
 
@@ -412,7 +412,7 @@ rag-agent/
 | Day 18 | 已完成 | 2026-11-08 用户确认审查、测试与修复通过并授权更新状态、本地提交；冻结 50 题真实 DeepSeek 单轮评测 50/50 正常、65/100 次请求，关键词规则准确率 11/50、候选来源 30/40、最终引用 6/40、正确拒答 8/10；完整离线 pytest 697 passed、14 skipped、退出 0；本机报告和逐题原始记录被 Git 忽略，Day13 未补勾，Day19 未开始 |
 | Day 19 | 已完成 | 2026-11-13 用户确认审查、测试与修复通过并授权同步状态、本地提交；JSON/SSE 请求级 trace、`request_logs`、受保护查询、不付费向量对照及授权的付费完整 50 题对照已完成；完整后端 pytest 724 passed、14 skipped、0 failed；200/40（o200k）与 500/100（BGE token）最终来源均 7/40，后者不是超限的原 o200k 方案，不能宣称 500 独占最高；真实 PG 的 trace 在线验收待后续单独执行，Day20 未开始 |
 | Day 20 | | |
-| Day 21 | | |
+| Day 21 | 已完成 | 2026-11-21 完成四服务 Docker Compose 收尾。后端等待 PostgreSQL 与 Qdrant 健康后建表并启动，前端等待后端健康。README 记录一键启动、端口、数据卷与索引命令。启动验收沿用已有结论，收尾配置契约测试 2 passed。 |
 | Day 22 | | |
 | Day 23 | | |
 | Day 24 | | |
