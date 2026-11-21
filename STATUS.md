@@ -1,9 +1,11 @@
-# 当前状态：Day21 已发布
+# 当前状态：Day22 已发布
 
-2026-11-21。Day21 四服务 Compose 已推送至 `codex/day17-eval-dataset`，发布提交为 `0e1ee15`。同一分支包含 Day20 Streamlit（`06a8885`）与 Day19 证据筛选（`003e0a1`）。启动及接手见 [README.md](README.md#docker-compose-启动day21) 与 [HANDOFF.md](HANDOFF.md)。
+2026-11-22。Day22 文档与素材已推送至 `codex/day17-eval-dataset`。Day20 计划补记也已发布。启动与接手说明见 [README.md](README.md#快速启动) 和 [HANDOFF.md](HANDOFF.md)。[Day22 发布提交](https://github.com/itysrw/rag-agent/commit/9da410d5845b2772fc1f523fef07fbce74444e48) · [Day20 计划补记](https://github.com/itysrw/rag-agent/commit/8254c38c5bd3a19c2d2e48708b4ceca9fdb2f1c2)
 
 | 阶段 | 已有验收证据 |
 | --- | --- |
+| Day22 | README 七项内容、公开评测摘要与三份素材齐备，GitHub 文件与本地发布提交一致。发布前后端 pytest 740 通过、16 跳过，前端 32 通过。 [评测摘要](docs/evaluation-summary.md) |
+| 隔离卷接管 | 合成 TXT 上传与索引一次。停止旧 PostgreSQL 和 Qdrant 后，新 Compose 四服务健康并挂载原测试卷。目录和向量检索均返回 HTTP 200，命中原文档、原分块和第 1 页，无需重新上传或索引。上轮残留卷及本轮隔离资源已清理。 |
 | Day21 | 四服务启动沿用已有验收。收尾的 Compose 配置测试 2 项通过，耗时 7.40 秒，覆盖默认数据卷配对和管理员令牌转发。 |
 | Day20 | 发布快照离线回归 766 项通过、14 项跳过。无付费浏览器演示和 3 项 AppTest 通过。真实单轮 HTTP SSE 返回 34 段正文、同轮工具、5 条引用与 `[DONE]`，并确认同一会话的 PostgreSQL 消息和 trace 落库。[验收记录](docs/day20-streamlit.md) |
 | Day19 | 固定 50 题上，生成前所选上下文的标注来源页全覆盖由 6/40 提升至 31/40。改良后的全量真实生成效果待评估。[离线对照](docs/day19-evidence-gate.md) |

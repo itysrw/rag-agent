@@ -1,4 +1,11 @@
-# 当前交接：Day21 Docker Compose
+# 当前交接：Day22 文档已发布
+
+2026-11-22（Asia/Shanghai）。分支 `codex/day17-eval-dataset` 已发布 Day22 项目首页、公开评测摘要和前端、评测、架构三份素材。发布内容见 [Day22 提交](https://github.com/itysrw/rag-agent/commit/9da410d5845b2772fc1f523fef07fbce74444e48)，后续事项见 [TODO.md](TODO.md)。
+
+- 全新部署、复用既有卷和并行隔离栈的命令见 [README 快速启动](README.md#快速启动)。隔离验收中旧 PostgreSQL 与 Qdrant 已停止，新栈接管原测试卷。目录和向量检索均返回 HTTP 200，确认原文档及分块可直接检索。测试卷与测试容器已清理。
+- 发布前后端 pytest 740 通过、16 跳过，前端 32 通过。前端截图使用无付费替身。历史真实基线、最终引用和生成前覆盖的定义见 [公开评测摘要](docs/evaluation-summary.md)。 [完整验收状态](STATUS.md)
+
+## Day21 Docker Compose 发布记录
 
 2026-11-21（Asia/Shanghai）。Day21 Docker Compose 已推送至 GitHub 的 `codex/day17-eval-dataset`，发布提交为 `0e1ee15`。该分支也包含 `003e0a1`（Day19 证据筛选）和 `06a8885`（Day20 Streamlit）。
 
@@ -6,7 +13,7 @@
 - 宿主机本地入口默认为 FastAPI 8000、Streamlit 8501、PostgreSQL 5432。Qdrant 在 Compose 内部访问。默认项目沿用原 PostgreSQL 与 Qdrant 数据卷名，后端上传和缓存另有命名卷。管理员令牌可选且只转发给后端。
 - 仓库根目录运行 `docker compose up --build --wait`。环境变量、隔离旧栈、显式文档索引和停止命令见 [README.md](README.md#docker-compose-启动day21)。
 - 四服务启动沿用已有验收。Day21 收尾运行 `backend/tests/test_compose_contract.py`，2 项通过，耗时 7.40 秒，覆盖默认数据卷配对和管理员令牌转发。Day20 的离线回归和真实单轮 SSE 验收见 [STATUS.md](STATUS.md)。
-- Day21 五个计划检查项与进度表已更新。Day22 的 README 打磨待另行开展。[PLAN.md](PLAN.md#day-21--docker-compose)
+- Day21 五个计划检查项与进度表已更新。 [Day21 计划](PLAN.md#day-21--docker-compose)
 
 下方为历史交接，保留对应日期的工作区和服务状态。
 

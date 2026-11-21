@@ -1,8 +1,8 @@
-# 当前待办：Day21 发布后
+# 当前待办：Day22 发布后
 
-2026-11-21。Day21 已推送至 `codex/day17-eval-dataset`（`0e1ee15`）。Compose 启动和接手说明见 [HANDOFF.md](HANDOFF.md)。
+2026-11-22。README、公开评测摘要、三份展示素材和隔离卷接管验收已完成。 [Day22 发布状态](STATUS.md)
 
-- Day22 项目 README 完整打磨及截图待开展。
+- Day23 简历话术待开展。 [Day23 计划](PLAN.md#day-23--简历话术)
 - 核对证据筛选改良后的真实回答、最终引用与拒答表现。
 - 验收 `GET /admin/traces` 在真实环境中的鉴权读取。已验证的 SSE 写入记录见 [Day20 本机演示](docs/day20-streamlit.md)。
 - Day13 计划遗留按独立任务处理。[PLAN.md](PLAN.md)
